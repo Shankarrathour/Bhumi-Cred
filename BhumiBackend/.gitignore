@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+.env.example
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Local uploads (dev)
+uploads/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+.agent/
+
+node_modules/
+
+.agent/
+
+node_modules/
+
+.env
+.env.*
+!.env.example
+.env.example
+
+# Chatbot / RAG generated vector stores (regenerate via app/rag/ingest.py)
+app/database/qdrant_db/
+data/vector_db/
+uploads
+node_modules/

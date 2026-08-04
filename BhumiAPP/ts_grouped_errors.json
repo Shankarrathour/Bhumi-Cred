@@ -1,0 +1,95 @@
+{
+  "auth)/forgot-password.tsx": [
+    {
+      "line": "55",
+      "code": "TS2322",
+      "msg": "Type 'Control<{ mobile: string; }, unknown, { mobile: string; }>' is not assignable to type 'Control<any>'."
+    }
+  ],
+  "auth)/login.tsx": [
+    {
+      "line": "43",
+      "code": "TS2322",
+      "msg": "Type 'number' is not assignable to type 'Timeout'."
+    },
+    {
+      "line": "151",
+      "code": "TS2322",
+      "msg": "Type 'Control<{ mobile: string; password: string; }, unknown, { mobile: string; password: string; }>' is not assignable to type 'Control<any>'."
+    },
+    {
+      "line": "162",
+      "code": "TS2322",
+      "msg": "Type 'Control<{ mobile: string; password: string; }, unknown, { mobile: string; password: string; }>' is not assignable to type 'Control<any>'."
+    }
+  ],
+  "auth)/otp.tsx": [
+    {
+      "line": "176",
+      "code": "TS2769",
+      "msg": "No overload matches this call."
+    }
+  ],
+  "auth)/register.tsx": [
+    {
+      "line": "109",
+      "code": "TS2322",
+      "msg": "Type 'Control<{ name: string; email: string; mobile: string; password: string; }, unknown, { name: string; email: string; mobile: string; password: string; }>' is not assignable to type 'Control<any>'."
+    },
+    {
+      "line": "118",
+      "code": "TS2322",
+      "msg": "Type 'Control<{ name: string; email: string; mobile: string; password: string; }, unknown, { name: string; email: string; mobile: string; password: string; }>' is not assignable to type 'Control<any>'."
+    },
+    {
+      "line": "131",
+      "code": "TS2322",
+      "msg": "Type 'Control<{ name: string; email: string; mobile: string; password: string; }, unknown, { name: string; email: string; mobile: string; password: string; }>' is not assignable to type 'Control<any>'."
+    },
+    {
+      "line": "143",
+      "code": "TS2322",
+      "msg": "Type 'Control<{ name: string; email: string; mobile: string; password: string; }, unknown, { name: string; email: string; mobile: string; password: string; }>' is not assignable to type 'Control<any>'."
+    }
+  ],
+  "tabs)/index.tsx": [
+    {
+      "line": "112",
+      "code": "TS2322",
+      "msg": "Type 'number' is not assignable to type 'Timeout'."
+    }
+  ],
+  "app/_layout.tsx": [
+    {
+      "line": "38",
+      "code": "TS2339",
+      "msg": "Property 'primaryDark' does not exist on type '{ primary: string; secondary: string; primaryLight: string; accent: string; discountGreen: string; background: string; surface: string; border: string; textDark: string; textSecondary: string; ... 12 more ...; textPrimary: string; }'."
+    }
+  ],
+  "app/checkout/cart.tsx": [
+    {
+      "line": "227",
+      "code": "TS2322",
+      "msg": "Type '{ children: Element; visible: boolean; onClose: () => void; title: string; }' is not assignable to type 'IntrinsicAttributes & PremiumBottomSheetProps'."
+    }
+  ],
+  "app/checkout/success.tsx": [
+    {
+      "line": "3",
+      "code": "TS2307",
+      "msg": "Cannot find module 'react-router-native' or its corresponding type declarations."
+    }
+  ],
+  "app/package/[id].tsx": [
+    {
+      "line": "209",
+      "code": "TS2322",
+      "msg": "Type '{ children: Element; visible: boolean; onClose: () => void; title: string; }' is not assignable to type 'IntrinsicAttributes & PremiumBottomSheetProps'."
+    },
+    {
+      "line": "237",
+      "code": "TS2322",
+      "msg": "Type '{ children: Element; visible: boolean; onClose: () => void; title: string; }' is not assignable to type 'IntrinsicAttributes & PremiumBottomSheetProps'."
+    }
+  ]
+}

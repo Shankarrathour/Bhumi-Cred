@@ -1,0 +1,61 @@
+# 1. Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 2. Expo / React Native generated files
+.expo/
+.expo-shared/
+dist/
+web-build/
+
+# 3. Build outputs
+build/
+coverage/
+
+# 4. Environment files
+.env
+.env.*
+!.env.example
+
+# 5. IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 6. OS files
+.DS_Store
+Thumbs.db
+
+# 7. Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# 8. Virtual environments
+.venv/
+venv/
+env/
+
+# 9. Log files
+*.log
+
+# 10. Temporary files
+tmp/
+temp/
+
+
+.agent/
+
+node_modules/
+
+.env
+.env.*
+!.env.example
+.env.example

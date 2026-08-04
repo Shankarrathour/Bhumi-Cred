@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "BhumiCred",
+    "slug": "bhumicred-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/BhumiCred_logo_square.png",
+    "scheme": "bhumicredapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/BhumiCred_logo_square.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.kanha0415.bhumicredapp",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAXNGZOX9jJ7VD8Mjx2uc1YTA5IUYuVmxI"
+        }
+      }
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/BhumiCred_logo.jpeg"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/BhumiCred_logo.jpeg",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#006D6F",
+          "dark": {
+            "backgroundColor": "#005255"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ebcaf771-6ed2-4c91-8a1d-a3dd6dfa6347"
+      }
+    },
+    "owner": "raj_rathore"
+  }
+}
