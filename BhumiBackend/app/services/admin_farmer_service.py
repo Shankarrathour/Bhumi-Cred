@@ -168,7 +168,7 @@ class AdminFarmerService:
         farmer = await self._farmers.get_by_id(p.farmer_id)
         return AdminLandVerificationItem(
             id=str(p.id),
-            farmer_id=p.farmer_id,
+            farmer_id=str(p.farmer_id),
             farmer_public_id=farmer.farmer_id if farmer else None,
             farmer_name=farmer.full_name if farmer else None,
             farmer_mobile=farmer.mobile if farmer else "",

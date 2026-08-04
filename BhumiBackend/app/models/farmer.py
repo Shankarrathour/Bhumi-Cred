@@ -1,7 +1,7 @@
 from typing import Optional, List
 from datetime import datetime, timezone
 from enum import Enum
-from beanie import Document
+from beanie import Document, PydanticObjectId
 from pydantic import BaseModel, Field, EmailStr
 from pymongo import IndexModel, ASCENDING, DESCENDING
 
@@ -112,7 +112,6 @@ class Farmer(Document):
     education: Optional[Education] = None
     occupation: Optional[str] = "Agriculture"
 
-    # Current Address (Flat fields preserved for backward compatibility)
     state: Optional[str] = None
     district: Optional[str] = None
     tehsil: Optional[str] = None
@@ -141,7 +140,7 @@ class Farmer(Document):
     # KYC Status & Verification History
     kyc_status: KYCStatus = KYCStatus.UNVERIFIED
     kyc_remarks: Optional[str] = None
-    kyc_reviewed_by: Optional[str] = None
+    kyc_reviewed_by: Optional[PydanticObjectId] = None
     kyc_reviewed_at: Optional[datetime] = None
 
     # Platform Summaries & Denormalized Metrics
@@ -156,8 +155,26 @@ class Farmer(Document):
     is_active: bool = True
     onboarding_completed: bool = False
 
+    # Audit & Security Fields
+    created_by_id: Optional[PydanticObjectId] = None
+    updated_by_id: Optional[PydanticObjectId] = None
+
+    # Soft Delete Support
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
+    deleted_by_id: Optional[PydanticObjectId] = None
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    async def soft_delete(self, deleted_by: Optional[PydanticObjectId] = None):
+        """Soft delete farmer account."""
+        self.is_deleted = True
+        self.is_active = False
+        self.deleted_at = datetime.now(timezone.utc)
+        self.deleted_by_id = deleted_by
+        self.updated_at = datetime.now(timezone.utc)
+        await self.save()
 
     class Settings:
         name = "farmers"
@@ -166,6 +183,7 @@ class Farmer(Document):
             IndexModel([("farmer_id", ASCENDING)], unique=True, sparse=True),
             IndexModel([("kyc_status", ASCENDING)]),
             IndexModel([("state", ASCENDING), ("district", ASCENDING)]),
+            IndexModel([("is_deleted", ASCENDING), ("is_active", ASCENDING)]),
             IndexModel([("created_at", DESCENDING)]),
-            IndexModel([("is_active", ASCENDING)]),
+            IndexModel([("full_name", "text"), ("mobile", "text"), ("farmer_id", "text")])
         ]

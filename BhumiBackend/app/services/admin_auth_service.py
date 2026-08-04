@@ -81,7 +81,7 @@ class AdminAuthService:
             admin_id=str(admin.id),
             admin_name=admin.name,
             actor_type="admin",
-            actor_role=admin.role.value,
+            actor_role=admin.role.value if hasattr(admin.role, "value") else admin.role,
             ip_address=ip_address,
         )
 
@@ -93,9 +93,11 @@ class AdminAuthService:
                 email=admin.email,
                 role=admin.role,
                 is_active=admin.is_active,
+                status=admin.status.value if hasattr(admin.status, "value") else admin.status,
                 onboarded_date=admin.onboarded_date,
                 last_login=admin.last_login,
                 created_at=admin.created_at,
+                updated_at=admin.updated_at,
             ),
         )
 
@@ -143,7 +145,7 @@ class AdminAuthService:
                     admin_id=str(admin.id),
                     admin_name=admin.name,
                     actor_type="admin",
-                    actor_role=admin.role.value,
+                    actor_role=admin.role.value if hasattr(admin.role, "value") else admin.role,
                     ip_address=ip_address,
                 )
 
@@ -158,9 +160,11 @@ class AdminAuthService:
                 email=a.email,
                 role=a.role,
                 is_active=a.is_active,
+                status=a.status.value if hasattr(a.status, "value") else a.status,
                 onboarded_date=a.onboarded_date,
                 last_login=a.last_login,
                 created_at=a.created_at,
+                updated_at=a.updated_at,
             )
             for a in admins
         ]
@@ -177,9 +181,11 @@ class AdminAuthService:
             email=admin.email,
             role=admin.role,
             is_active=admin.is_active,
+            status=admin.status.value if hasattr(admin.status, "value") else admin.status,
             onboarded_date=admin.onboarded_date,
             last_login=admin.last_login,
             created_at=admin.created_at,
+            updated_at=admin.updated_at,
         )
 
     # ── Seed all default admin accounts (idempotent) ──────────────────────────
@@ -195,6 +201,7 @@ class AdminAuthService:
             admin = AdminUser(
                 name=entry["name"],
                 email=entry["email"],
+                username=entry["email"].split("@")[0],  # Unique username derived from email
                 password_hash=hash_password(entry["password"]),
                 role=entry["role"],
             )
