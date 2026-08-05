@@ -18,15 +18,13 @@ export default function InsuranceLandingScreen() {
   const policies = useInsuranceStore((state) => state.policies);
   const greenFamily = useInsuranceStore((state) => state.greenFamily);
   const isLoading = useInsuranceStore((state) => state.isLoading);
+  const fetchPolicies = useInsuranceStore((state) => state.fetchPolicies);
 
   const [activeTab, setActiveTab] = useState<'active' | 'discover'>('active');
   const [localLoading, setLocalLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLocalLoading(false);
-    }, 1000);
-    return () => clearTimeout(timer);
+    fetchPolicies().then(() => setLocalLoading(false));
   }, []);
 
   // Compute stats

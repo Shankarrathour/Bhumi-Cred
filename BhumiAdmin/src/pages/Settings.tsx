@@ -17,32 +17,30 @@ import {
   Users,
   FileText,
   Check,
-  X,
   Plus,
   Search,
   Shield,
   Clock,
-  UserCheck,
-  Lock
+  UserCheck
 } from 'lucide-react';
 import adminApi from '../api/apiClient';
 
 interface PermissionMatrix {
-  view: bool;
-  create: bool;
-  edit: bool;
-  delete: bool;
-  approve: bool;
-  reject: bool;
-  assign: bool;
-  export: bool;
-  download: bool;
-  print: bool;
-  send_notification: bool;
-  manage_wallet: bool;
-  manage_payments: bool;
-  access_reports: bool;
-  publish: bool;
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+  approve: boolean;
+  reject: boolean;
+  assign: boolean;
+  export: boolean;
+  download: boolean;
+  print: boolean;
+  send_notification: boolean;
+  manage_wallet: boolean;
+  manage_payments: boolean;
+  access_reports: boolean;
+  publish: boolean;
 }
 
 interface RoleItem {
@@ -220,11 +218,9 @@ export const SettingsPage: React.FC = () => {
   // Tab 2: RBAC Roles state (initialized with default system roles)
   const [roles, setRoles] = useState<RoleItem[]>(DEFAULT_SYSTEM_ROLES);
   const [selectedRole, setSelectedRole] = useState<RoleItem | null>(DEFAULT_SYSTEM_ROLES[0]);
-  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
   const [isSavingRole, setIsSavingRole] = useState(false);
 
   // Tab 3: Admin Users state
-  const [adminUsers, setAdminUsers] = useState<any[]>([]);
   const [userSearch, setUserSearch] = useState('');
 
   // Default Audit Logs fallback dataset for visual representation
@@ -307,7 +303,6 @@ export const SettingsPage: React.FC = () => {
 
   // Fetch Roles from Backend API
   const fetchRoles = async () => {
-    setIsLoadingRoles(true);
     try {
       const { data } = await adminApi.get('/admin/roles');
       if (Array.isArray(data) && data.length > 0) {
@@ -318,8 +313,6 @@ export const SettingsPage: React.FC = () => {
       }
     } catch (err) {
       console.warn("Using fallback default system roles dataset.");
-    } finally {
-      setIsLoadingRoles(false);
     }
   };
 
