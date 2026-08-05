@@ -183,51 +183,30 @@ export const DashboardPage: React.FC = () => {
   if (activeVillage && activeVillage !== 'All Villages')    filteredVendors = filteredVendors.filter(v => v.location?.village === activeVillage);
 
   // ── Dynamic State Contributions from Real Registered Farmers & Lands ──
-  const ALLOWED_PROJECT_STATES = ['Punjab', 'Karnataka', 'Madhya Pradesh', 'Maharashtra', 'Uttar Pradesh'];
   const stateMap: Record<string, { acreage: number; trees: number; carbonCredits: number }> = {};
   
   filteredFarmers.forEach(f => {
     const rawState = f.location?.state?.trim();
     if (!rawState) return;
 
-    // Standardize state name matching
-    const stMatch = ALLOWED_PROJECT_STATES.find(s => s.toLowerCase() === rawState.toLowerCase());
-    if (!stMatch) return; // Ignore non-project test states (e.g. Andhra Pradesh, Arunachal Pradesh test entries)
-
-    const st = stMatch;
+    // Use actual state name from live data
+    const st = rawState;
     if (!stateMap[st]) stateMap[st] = { acreage: 0, trees: 0, carbonCredits: 0 };
     
-    // Sum land acreage from farmer profile or land records, capped at max 150 acres per farmer
+    // Sum land acreage from farmer profile or land records
     const farmerLands = lands.filter(l => l.farmerId === f.id || l.farmerId === f.farmerId);
     const landAcreageSum = farmerLands.reduce((acc, curr) => acc + (curr.acreage || 0), 0);
-    let totalAcreage = Math.max(f.totalAcreage || 0, landAcreageSum);
-    if (totalAcreage > 150) totalAcreage = 25; // Sanitize outlier seed entries
+    const totalAcreage = Math.max(f.totalAcreage || 0, landAcreageSum);
 
-    const totalTrees = f.totalTrees && f.totalTrees < 10000 ? f.totalTrees : (totalAcreage > 0 ? Math.round(totalAcreage * 15) : 0);
-    const carbonCredits = f.carbonCreditsGenerated && f.carbonCreditsGenerated < 5000 ? f.carbonCreditsGenerated : (totalTrees > 0 ? Math.round(totalTrees * 0.08) : Math.round(totalAcreage * 1.5));
+    const totalTrees = f.totalTrees || (totalAcreage > 0 ? Math.round(totalAcreage * 15) : 0);
+    const carbonCredits = f.carbonCreditsGenerated || (totalTrees > 0 ? Math.round(totalTrees * 0.08) : Math.round(totalAcreage * 1.5));
 
     stateMap[st].acreage += totalAcreage;
     stateMap[st].trees += totalTrees;
     stateMap[st].carbonCredits += carbonCredits;
   });
 
-  // Ensure default registered state entries are included if missing or unpopulated
-  const defaultStates = [
-    { state: 'Punjab', acreage: 25.0, trees: 2100, carbonCredits: 580 },
-    { state: 'Karnataka', acreage: 18.0, trees: 1450, carbonCredits: 312 },
-    { state: 'Madhya Pradesh', acreage: 138.92, trees: 2084, carbonCredits: 166 },
-    { state: 'Maharashtra', acreage: 17.9, trees: 1090, carbonCredits: 121 },
-    { state: 'Uttar Pradesh', acreage: 31.07, trees: 466, carbonCredits: 37 },
-  ];
-
-  defaultStates.forEach(ds => {
-    if (!stateMap[ds.state] || stateMap[ds.state].carbonCredits === 0) {
-      stateMap[ds.state] = ds;
-    }
-  });
-
   const stateContributions = Object.entries(stateMap)
-    .filter(([st]) => ALLOWED_PROJECT_STATES.includes(st))
     .map(([state, data]) => ({
       state,
       acreage: Number(data.acreage.toFixed(2)),

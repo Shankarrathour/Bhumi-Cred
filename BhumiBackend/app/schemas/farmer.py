@@ -1,6 +1,8 @@
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
+from beanie import PydanticObjectId
+from app.models.farmer import KYCStatus, Gender, FarmerCategory, Education, FarmerLocale
 
 
 class AddressSchema(BaseModel):
@@ -36,11 +38,12 @@ class BankAccountDetailsSchema(BaseModel):
 
 class FarmerCreateSchema(BaseModel):
     mobile: str = Field(..., pattern=r"^[6-9]\d{9}$")
-    full_name: str
+    full_name: str = Field(..., min_length=2, max_length=100)
     father_name: Optional[str] = None
     email: Optional[EmailStr] = None
-    gender: Optional[str] = None
-    category: Optional[str] = None
+    gender: Optional[Gender] = None
+    category: Optional[FarmerCategory] = None
+    education: Optional[Education] = None
     state: str
     district: str
     village: str
@@ -48,18 +51,20 @@ class FarmerCreateSchema(BaseModel):
 
 
 class FarmerUpdateSchema(BaseModel):
-    full_name: Optional[str] = None
+    full_name: Optional[str] = Field(None, min_length=2, max_length=100)
     father_name: Optional[str] = None
     email: Optional[EmailStr] = None
-    gender: Optional[str] = None
-    category: Optional[str] = None
+    gender: Optional[Gender] = None
+    category: Optional[FarmerCategory] = None
+    education: Optional[Education] = None
     occupation: Optional[str] = None
     current_address: Optional[AddressSchema] = None
     permanent_address: Optional[AddressSchema] = None
+    is_active: Optional[bool] = None
 
 
 class FarmerKYCReviewSchema(BaseModel):
-    kyc_status: str = Field(..., example="approved / rejected / suspended")
+    kyc_status: KYCStatus
     kyc_remarks: Optional[str] = None
 
 
@@ -70,19 +75,24 @@ class FarmerOverviewResponse(BaseModel):
     full_name: Optional[str] = None
     father_name: Optional[str] = None
     email: Optional[EmailStr] = None
-    gender: Optional[str] = None
+    gender: Optional[Gender] = None
+    category: Optional[FarmerCategory] = None
     state: Optional[str] = None
     district: Optional[str] = None
     village: Optional[str] = None
-    kyc_status: str
+    kyc_status: KYCStatus
     kyc_remarks: Optional[str] = None
-    wallet_balance: float
-    sustainability_score: int
-    total_acreage: float
-    total_trees: int
-    carbon_credits_generated: float
-    is_active: bool
+    wallet_balance: float = 0.0
+    sustainability_score: int = 0
+    total_acreage: float = 0.0
+    total_trees: int = 0
+    carbon_credits_generated: float = 0.0
+    is_active: bool = True
+    is_deleted: bool = False
     created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class FarmerActivityLogResponse(BaseModel):
@@ -101,9 +111,11 @@ class FarmerPublicResponse(BaseModel):
     state: Optional[str] = None
     district: Optional[str] = None
     village: Optional[str] = None
-    kyc_status: str = "unverified"
+    kyc_status: KYCStatus = KYCStatus.UNVERIFIED
     is_active: bool = True
     created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class FarmerResponse(FarmerOverviewResponse):

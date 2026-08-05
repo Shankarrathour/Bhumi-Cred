@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from '../api/apiClient';
 
 export interface InsurancePolicy {
   id: string;
@@ -25,6 +26,7 @@ interface InsuranceState {
   policies: InsurancePolicy[];
   greenFamily: GreenFamilyUnit | null;
   isLoading: boolean;
+  fetchPolicies: () => Promise<void>;
   registerTrees: (policyId: string, treeCount: number) => Promise<void>;
   updateGreenFamily: (treeCount: number) => void;
   claimInsurance: (policyId: string, amount: number) => Promise<boolean>;
@@ -87,9 +89,40 @@ const initialGreenFamily = (totalTrees: number): GreenFamilyUnit => {
 export const useInsuranceStore = create<InsuranceState>()(
   persist(
     (set, get) => ({
-      policies: defaultPolicies,
+      policies: [],
       greenFamily: initialGreenFamily(30), // standard 30 trees initially
       isLoading: false,
+
+      fetchPolicies: async () => {
+        set({ isLoading: true });
+        try {
+          const { data } = await api.get('/climate-risk-insurance');
+          const apiPolicies = data.data.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            premium: item.premium_amount,
+            coverage: item.coverage_amount,
+            registeredTreesCount: 0,
+            status: item.is_active ? 'Active' : 'Inactive',
+            description: item.description || '',
+          }));
+          
+          // Merge with existing registeredTreesCount if they exist in store
+          const currentPolicies = get().policies;
+          const mergedPolicies = apiPolicies.map((apiPol: InsurancePolicy) => {
+             const existing = currentPolicies.find(p => p.id === apiPol.id);
+             if (existing) {
+               return { ...apiPol, registeredTreesCount: existing.registeredTreesCount, status: existing.registeredTreesCount > 0 ? 'Active' : apiPol.status };
+             }
+             return apiPol;
+          });
+
+          set({ policies: mergedPolicies, isLoading: false });
+        } catch (error) {
+          console.error('[insuranceStore] fetchPolicies failed:', error);
+          set({ isLoading: false });
+        }
+      },
 
       registerTrees: async (policyId, treeCount) => {
         set({ isLoading: true });

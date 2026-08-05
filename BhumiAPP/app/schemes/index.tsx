@@ -196,6 +196,7 @@ export default function GovtSchemesDashboard() {
   const authUser = useAuthStore((state) => state.user);
   const plots = useLandStore((state) => state.plots);
   const storedSchemes = useSchemeStore((state) => state.schemes);
+  const fetchSchemes = useSchemeStore((state) => state.fetchSchemes);
   const applyForScheme = useSchemeStore((state) => state.applyForScheme);
 
   // Agri Dashboard Integration
@@ -223,6 +224,7 @@ export default function GovtSchemesDashboard() {
 
   useEffect(() => {
     fetchDashboard();
+    fetchSchemes();
   }, []);
 
   // Map Backend Data to UI structures
