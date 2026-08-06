@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/utils/cn';
+import { BhumiLogo } from '../components/BhumiLogo';
 
 export const DashboardLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -88,16 +89,8 @@ export const DashboardLayout: React.FC = () => {
       >
         {/* Brand */}
         <div className="h-[72px] flex items-center px-4 border-b border-border overflow-hidden whitespace-nowrap flex-shrink-0">
-          <Link to="/admin/dashboard" className="flex items-center gap-2.5 active:scale-95 transition-transform">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Leaf className="w-4 h-4 text-primary-foreground" />
-            </div>
-            {isSidebarOpen && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col select-none">
-                <span className="font-bold text-foreground text-sm leading-none tracking-tight">BHUMICRED</span>
-                <span className="text-[11px] font-medium text-muted-foreground mt-0.5 tracking-wide">OPERATIONS COMMAND</span>
-              </motion.div>
-            )}
+          <Link to="/admin/dashboard" className="flex items-center active:scale-95 transition-transform">
+            <BhumiLogo isCollapsed={!isSidebarOpen} size="md" />
           </Link>
         </div>
 
@@ -166,13 +159,8 @@ export const DashboardLayout: React.FC = () => {
               className="fixed inset-y-0 left-0 z-50 w-64 bg-card flex flex-col h-full shadow-xl md:hidden border-r border-border"
             >
               <div className="h-[72px] flex items-center justify-between px-4 border-b border-border">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                    <Leaf className="w-4 h-4 text-primary-foreground" />
-                  </div>
-                  <span className="font-bold text-foreground text-sm">BHUMICRED</span>
-                </div>
-                <button onClick={() => setIsMobileMenuOpen(false)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground">
+                <BhumiLogo size="sm" showSubtitle={false} />
+                <button onClick={() => setIsMobileMenuOpen(false)} className="w-8 h-8 flex items-center justify-center border border-[#E2E8F0] bg-white rounded-xl shadow-xs text-muted-foreground hover:bg-muted">
                   <X className="w-4 h-4" />
                 </button>
               </div>

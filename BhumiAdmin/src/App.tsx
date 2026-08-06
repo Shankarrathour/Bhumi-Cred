@@ -1,4 +1,3 @@
-import React from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { theme } from './theme/muiTheme';
@@ -42,20 +41,17 @@ import { store } from './store/store';
 import { AuthProvider, PermissionGuard } from './context/AuthContext';
 import { QueryProvider } from './context/QueryProvider';
 
-const PlaceholderPage = ({ title }: { title: string }) => (
-  <div className="flex h-full items-center justify-center text-gray-400 py-24">
-    <h2>{title} Module coming soon...</h2>
-  </div>
-);
+import { SidebarProvider } from './context/SidebarContext';
 
 function App() {
   return (
     <Provider store={store}>
       <QueryProvider>
         <AuthProvider>
-          <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <BrowserRouter>
+          <SidebarProvider>
+            <ThemeProvider theme={theme}>
+              <CssBaseline />
+              <BrowserRouter>
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route element={<ProtectedRoute />}>
@@ -120,9 +116,10 @@ function App() {
               </Routes>
             </BrowserRouter>
           </ThemeProvider>
-        </AuthProvider>
-      </QueryProvider>
-    </Provider>
+        </SidebarProvider>
+      </AuthProvider>
+    </QueryProvider>
+  </Provider>
   );
 }
 

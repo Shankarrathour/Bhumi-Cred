@@ -122,7 +122,7 @@ export const CarbonRegistry: React.FC = () => {
     return [];
   }, [treeRegData]);
 
-  const allRows = useMemo<CreditRow[]>(() => rawList.map(toRow).filter(r => r.id), [rawList]);
+  const allRows = useMemo<CreditRow[]>(() => rawList.map(toRow).filter((r: CreditRow) => Boolean(r.id)), [rawList]);
 
   const filtered = useMemo(() => {
     let r = allRows;
