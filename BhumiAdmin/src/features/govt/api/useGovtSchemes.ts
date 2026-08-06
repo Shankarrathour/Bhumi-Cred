@@ -66,3 +66,22 @@ export const useGovtSchemes = (page = 1, limit = 20) => {
     staleTime: 5 * 60 * 1000,
   });
 };
+
+export const useGovtDetails = (id?: string | Record<string, any>) => {
+  const targetId = typeof id === 'string' ? id : (id as any)?.id;
+  const isValidObjectId = typeof targetId === 'string' && /^[0-9a-fA-F]{24}$/.test(targetId);
+
+  return useQuery({
+    queryKey: ['govtDetails', targetId],
+    queryFn: async () => {
+      if (!isValidObjectId) return null;
+      try {
+        const res = await apiClient.get(`/admin/agri/applications/${targetId}`);
+        return res.data;
+      } catch (err) {
+        return null;
+      }
+    },
+    enabled: isValidObjectId,
+  });
+};

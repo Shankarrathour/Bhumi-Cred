@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Leaf, Globe2, LayoutDashboard, Sprout, Building2, Map,
   FileText, ShieldCheck, CreditCard, ShoppingBag, Wallet,
-  KeyRound, ClipboardList, Settings, LogOut, X
+  KeyRound, ClipboardList, Settings, LogOut, X, Gift
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
@@ -48,6 +48,7 @@ const NAV_GROUPS: NavGroupType[] = [
       { id: 'carbon',      label: 'Carbon Credits',    icon: CreditCard,  path: '/carbon'      },
       { id: 'marketplace', label: 'Marketplace',       icon: ShoppingBag, path: '/marketplace' },
       { id: 'wallet',      label: 'Wallet & Payments', icon: Wallet,      path: '/wallet'      },
+      { id: 'referrals',   label: 'Referral Program',  icon: Gift,        path: '/referrals'   },
     ],
   },
   {

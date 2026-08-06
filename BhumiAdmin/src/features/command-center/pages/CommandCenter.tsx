@@ -13,6 +13,7 @@ interface SparklineProps { data: number[]; color: string; gradientId?: string; s
 interface KpiCardProps {
   title: string; value: string; icon: React.ReactNode; iconBg: string;
   change: string; positive: boolean; sparkData: number[]; sparkColor: string; gradientId: string;
+  onClick?: () => void;
 }
 interface KebabItem { label: string; icon: string; onClick: () => void; danger?: boolean; }
 interface KebabMenuProps { items: KebabItem[]; }
@@ -196,14 +197,15 @@ const aiInsights = [
 
 // ─── KPI Card ────────────────────────────────────────────────────────────────
 const KpiCard: React.FC<KpiCardProps> = ({
-  title, value, icon, iconBg, change, positive, sparkData, sparkColor, gradientId,
+  title, value, icon, iconBg, change, positive, sparkData, sparkColor, gradientId, onClick,
 }) => (
   <motion.div
+    onClick={onClick}
     initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
     whileHover={{ y: -5, boxShadow: '0 12px 40px rgba(0,0,0,0.10)' }}
     transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-    className="bg-white border border-[#E8EDF5] rounded-[20px] px-5 pt-4 pb-3 flex flex-col cursor-default overflow-hidden"
+    className="bg-white border border-[#E8EDF5] rounded-[20px] px-5 pt-4 pb-3 flex flex-col cursor-pointer overflow-hidden group hover:border-emerald-400 transition-all"
     style={{ minHeight: 170 }}
   >
     <div className="flex items-start justify-between">
@@ -264,6 +266,15 @@ export const CommandCenter: React.FC = () => {
   const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   const navigate = useNavigate();
+
+  // ── Timeframe & Project Filters State ─────────────────────────────────────
+  const [revenueTimeframe, setRevenueTimeframe] = useState<'This Month' | 'This Quarter' | 'This Year' | 'All Time'>('This Month');
+  const [projectFilter, setProjectFilter] = useState<'All Projects' | 'Carbon Projects' | 'Tree Projects' | 'Govt Projects'>('All Projects');
+
+  // ── Modals State ─────────────────────────────────────────────────────────
+  const [selectedActivity, setSelectedActivity] = useState<any | null>(null);
+  const [selectedInsight, setSelectedInsight] = useState<any | null>(null);
+  const [storageModalOpen, setStorageModalOpen] = useState(false);
 
   // ── Interactive State for Pending Lands ──────────────────────────────────
   const [lands, setLands] = useState(pendingLands);
@@ -340,6 +351,7 @@ export const CommandCenter: React.FC = () => {
       title: 'Total Farmers',
       value: stats?.total_farmers != null ? formatStat(stats.total_farmers) : '—',
       iconBg: '#F0FDF4', change: '+12.5%', positive: true,
+      onClick: () => navigate('/farmers'),
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
@@ -352,6 +364,7 @@ export const CommandCenter: React.FC = () => {
       title: 'Government Bodies',
       value: stats?.total_govt_bodies != null ? formatStat(stats.total_govt_bodies) : '—',
       iconBg: '#EFF6FF', change: '+4.2%', positive: true,
+      onClick: () => navigate('/govt'),
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/>
@@ -365,6 +378,7 @@ export const CommandCenter: React.FC = () => {
       title: 'Partners',
       value: stats?.total_partners != null ? formatStat(stats.total_partners) : (stats?.total_vendors != null ? formatStat(stats.total_vendors) : '—'),
       iconBg: '#FFF7ED', change: '+15.2%', positive: true,
+      onClick: () => navigate('/partners'),
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
@@ -376,6 +390,7 @@ export const CommandCenter: React.FC = () => {
       title: 'Pending Approvals',
       value: stats?.pending_approvals != null ? formatStat(stats.pending_approvals) : '—',
       iconBg: '#FEF2F2', change: '-5.4%', positive: false,
+      onClick: () => navigate('/land'),
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -388,6 +403,7 @@ export const CommandCenter: React.FC = () => {
       title: 'Carbon Credits',
       value: stats?.total_carbon_credits != null ? formatStat(stats.total_carbon_credits) + ' tCO₂e' : '—',
       iconBg: '#F0FDF4', change: '+8.1%', positive: true,
+      onClick: () => navigate('/carbon'),
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
@@ -404,6 +420,7 @@ export const CommandCenter: React.FC = () => {
         ? formatStat(stats.total_wallet_balance, '₹')
         : '—',
       iconBg: '#F5F3FF', change: '+11.2%', positive: true,
+      onClick: () => navigate('/wallet'),
       icon: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
@@ -425,15 +442,32 @@ export const CommandCenter: React.FC = () => {
         className="flex flex-wrap items-center gap-x-6 gap-y-2 bg-white border border-[#E8EDF5] rounded-2xl px-5 py-3"
         style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
       >
-        {statusPills.map((s, i) => (
-          <div key={i} className="flex items-center gap-2 text-[12px]">
-            <span className="text-[#64748B] font-medium">{s.label}</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold" style={{ background: s.valueBg, color: s.valueColor }}>
-              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: s.dot }} />
-              {s.value}
-            </span>
-          </div>
-        ))}
+        {statusPills.map((s, i) => {
+          const pillRoutes: Record<string, string> = {
+            'GIS Services': '/mrv',
+            'Wallet System': '/wallet',
+            'Carbon Market': '/carbon',
+            'Insurance Claims': '/insurance',
+          };
+          const route = pillRoutes[s.label];
+          return (
+            <div
+              key={i}
+              onClick={() => {
+                if (route) navigate(route);
+                else triggerToast(`${s.label}: ${s.value}`);
+              }}
+              className="flex items-center gap-2 text-[12px] cursor-pointer hover:opacity-80 transition-opacity"
+              title={`Click to view ${s.label}`}
+            >
+              <span className="text-[#64748B] font-medium">{s.label}</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold" style={{ background: s.valueBg, color: s.valueColor }}>
+                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: s.dot }} />
+                {s.value}
+              </span>
+            </div>
+          );
+        })}
       </motion.div>
 
       {/* ── KPI Cards ───────────────────────────────────────────────────────── */}
@@ -467,18 +501,37 @@ export const CommandCenter: React.FC = () => {
               <p className="text-[11.5px] text-[#94A3B8] mt-0.5">Monthly revenue vs carbon credit income</p>
             </div>
             <div className="flex items-center gap-2">
-              <button className="flex items-center gap-1 text-[12px] font-medium text-[#64748B] border border-[#E8EDF5] px-2.5 py-1 rounded-lg hover:bg-[#F8FAFC] transition-colors">
-                This Month
+              <button
+                onClick={() => {
+                  const opts: Array<'This Month' | 'This Quarter' | 'This Year' | 'All Time'> = ['This Month', 'This Quarter', 'This Year', 'All Time'];
+                  const idx = opts.indexOf(revenueTimeframe);
+                  const next = opts[(idx + 1) % opts.length];
+                  setRevenueTimeframe(next);
+                  triggerToast(`Revenue timeframe updated to ${next}`);
+                }}
+                className="flex items-center gap-1 text-[12px] font-medium text-[#64748B] border border-[#E8EDF5] px-2.5 py-1 rounded-lg hover:bg-[#F8FAFC] transition-colors"
+              >
+                {revenueTimeframe}
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
               <KebabMenu items={[
-                { icon: '📊', label: 'View Full Report', onClick: () => {} },
-                { icon: '📥', label: 'Export as CSV',    onClick: () => {} },
-                { icon: '🖼️', label: 'Export as PNG',    onClick: () => {} },
-                { icon: '🔄', label: 'Refresh Data',     onClick: () => {} },
-                { icon: '📌', label: 'Pin to Top',       onClick: () => {} },
+                { icon: '📊', label: 'View Full Report', onClick: () => navigate('/reports') },
+                { icon: '📥', label: 'Export as CSV',    onClick: () => {
+                    const csvStr = 'data:text/csv;charset=utf-8,Month,Platform Revenue (Cr),Carbon Credit Income (Cr)\nJan,5,2\nFeb,8,4\nMar,11,6\nApr,15,9\nMay,20,13\nJun,28,20';
+                    const link = document.createElement('a');
+                    link.setAttribute('href', encodeURI(csvStr));
+                    link.setAttribute('download', 'Revenue_Overview.csv');
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    triggerToast('Revenue chart exported to CSV');
+                  }
+                },
+                { icon: '🖼️', label: 'Export as PNG',    onClick: () => window.print() },
+                { icon: '🔄', label: 'Refresh Data',     onClick: () => triggerToast('Revenue data refreshed') },
+                { icon: '📌', label: 'Pin to Dashboard', onClick: () => triggerToast('Revenue widget pinned') },
               ]} />
             </div>
           </div>
@@ -538,17 +591,35 @@ export const CommandCenter: React.FC = () => {
               <p className="text-[11.5px] text-[#94A3B8] mt-0.5">89 total projects</p>
             </div>
             <div className="flex items-center gap-2">
-              <button className="flex items-center gap-1 text-[12px] font-medium text-[#64748B] border border-[#E8EDF5] px-2.5 py-1 rounded-lg hover:bg-[#F8FAFC] transition-colors">
-                All Projects
+              <button
+                onClick={() => {
+                  const opts: Array<'All Projects' | 'Carbon Projects' | 'Tree Projects' | 'Govt Projects'> = ['All Projects', 'Carbon Projects', 'Tree Projects', 'Govt Projects'];
+                  const idx = opts.indexOf(projectFilter);
+                  const next = opts[(idx + 1) % opts.length];
+                  setProjectFilter(next);
+                  triggerToast(`Filtered projects by ${next}`);
+                }}
+                className="flex items-center gap-1 text-[12px] font-medium text-[#64748B] border border-[#E8EDF5] px-2.5 py-1 rounded-lg hover:bg-[#F8FAFC] transition-colors"
+              >
+                {projectFilter}
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
               <KebabMenu items={[
-                { icon: '📋', label: 'View All Projects', onClick: () => {} },
-                { icon: '📥', label: 'Export Report',     onClick: () => {} },
-                { icon: '🔄', label: 'Refresh',           onClick: () => {} },
-                { icon: '📌', label: 'Pin to Top',        onClick: () => {} },
+                { icon: '📋', label: 'View All Projects', onClick: () => navigate('/projects') },
+                { icon: '📥', label: 'Export Breakdown', onClick: () => {
+                    const csvStr = 'data:text/csv;charset=utf-8,Status,Count,Percentage\nCompleted,32,35.9%\nVerification,29,32.6%\nUnder Review,11,12.4%\nDraft,17,19.1%';
+                    const link = document.createElement('a');
+                    link.setAttribute('href', encodeURI(csvStr));
+                    link.setAttribute('download', 'Project_Status_Breakdown.csv');
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    triggerToast('Project breakdown exported to CSV');
+                  }
+                },
+                { icon: '🔄', label: 'Refresh Analytics', onClick: () => triggerToast('Project analytics updated') },
               ]} />
             </div>
           </div>
@@ -601,12 +672,22 @@ export const CommandCenter: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-[14px] font-bold text-[#0F172A]">Live Activity Feed</h3>
             <div className="flex items-center gap-2">
-              <button className="text-[11.5px] font-semibold text-[#22C55E] hover:underline">View All</button>
+              <button onClick={() => navigate('/audit')} className="text-[11.5px] font-semibold text-[#22C55E] hover:underline">View All</button>
               <KebabMenu items={[
-                { icon: '👁️', label: 'View All Activity', onClick: () => {} },
-                { icon: '📥', label: 'Export Log',         onClick: () => {} },
-                { icon: '🔄', label: 'Refresh Feed',       onClick: () => {} },
-                { icon: '🔕', label: 'Mute Alerts',        onClick: () => {} },
+                { icon: '👁️', label: 'View All Activity', onClick: () => navigate('/audit') },
+                { icon: '📥', label: 'Export Log',         onClick: () => {
+                    const csvStr = 'data:text/csv;charset=utf-8,User,Action,Time\nRamesh Patel,registered land parcel,2 min ago\nMP Forest Dept,approved project PRJ-1042,11 min ago';
+                    const link = document.createElement('a');
+                    link.setAttribute('href', encodeURI(csvStr));
+                    link.setAttribute('download', 'Activity_Feed_Log.csv');
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    triggerToast('Activity feed exported to CSV');
+                  }
+                },
+                { icon: '🔄', label: 'Refresh Feed',       onClick: () => triggerToast('Activity feed refreshed') },
+                { icon: '🔕', label: 'Mute Alerts',        onClick: () => triggerToast('Activity alerts muted for 1 hour') },
               ]} />
             </div>
           </div>
@@ -617,10 +698,11 @@ export const CommandCenter: React.FC = () => {
               {activityFeed.map((item, i) => (
                 <motion.div
                   key={item.id}
+                  onClick={() => setSelectedActivity(item)}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.35 + i * 0.07 }}
-                  className="flex items-start gap-3 pl-1"
+                  className="flex items-start gap-3 pl-1 cursor-pointer hover:bg-[#FAFBFC] p-1.5 rounded-lg transition-colors"
                 >
                   <div
                     className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0 z-10 mt-0.5"
@@ -752,12 +834,22 @@ export const CommandCenter: React.FC = () => {
               <span className="px-1.5 py-0.5 bg-[#F5F3FF] text-[#7C3AED] text-[9px] font-bold rounded-md border border-[#DDD6FE]">Beta</span>
             </div>
             <div className="flex items-center gap-2">
-              <button className="text-[11.5px] font-semibold text-[#22C55E] hover:underline">View Report</button>
+              <button onClick={() => navigate('/reports')} className="text-[11.5px] font-semibold text-[#22C55E] hover:underline">View Report</button>
               <KebabMenu items={[
-                { icon: '📄', label: 'Full AI Report',   onClick: () => {} },
-                { icon: '🔔', label: 'Set Alert Rules',  onClick: () => {} },
-                { icon: '📥', label: 'Export Insights',  onClick: () => {} },
-                { icon: '🔄', label: 'Refresh Analysis', onClick: () => {} },
+                { icon: '📄', label: 'Full AI Report',   onClick: () => navigate('/reports') },
+                { icon: '🔔', label: 'Set Alert Rules',  onClick: () => triggerToast('AI alert rules updated') },
+                { icon: '📥', label: 'Export Insights',  onClick: () => {
+                    const csvStr = 'data:text/csv;charset=utf-8,Insight,Details\nCarbon price expected to increase by 4.2%,Based on market trends\n38 land parcels require GIS re-verification,High confidence anomalies';
+                    const link = document.createElement('a');
+                    link.setAttribute('href', encodeURI(csvStr));
+                    link.setAttribute('download', 'AI_Insights_Report.csv');
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    triggerToast('AI Insights report exported to CSV');
+                  }
+                },
+                { icon: '🔄', label: 'Refresh Analysis', onClick: () => triggerToast('AI insights re-analyzed') },
               ]} />
             </div>
           </div>
@@ -766,6 +858,7 @@ export const CommandCenter: React.FC = () => {
             {aiInsights.map((item, i) => (
               <motion.div
                 key={i}
+                onClick={() => setSelectedInsight(item)}
                 initial={{ opacity: 0, x: 8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.45 + i * 0.08 }}
@@ -834,7 +927,7 @@ export const CommandCenter: React.FC = () => {
         ))}
 
         {/* Storage with progress bar */}
-        <div className="flex items-center gap-2.5">
+        <div onClick={() => setStorageModalOpen(true)} className="flex items-center gap-2.5 cursor-pointer hover:opacity-80 transition-opacity">
           <div className="w-7 h-7 rounded-lg bg-[#FFFBEB] flex items-center justify-center">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round">
               <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
@@ -952,6 +1045,120 @@ export const CommandCenter: React.FC = () => {
                 >
                   {isSubmitting ? 'Saving...' : 'Save & Submit'}
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Activity Detail Modal ────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {selectedActivity && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-100 space-y-4"
+            >
+              <div className="flex justify-between items-center border-b pb-3">
+                <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full text-white text-xs font-bold flex items-center justify-center" style={{ background: selectedActivity.color }}>{selectedActivity.initials}</span>
+                  Activity Event #{selectedActivity.id}
+                </h3>
+                <button onClick={() => setSelectedActivity(null)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+              </div>
+              <div className="space-y-2 text-sm text-slate-700">
+                <p><span className="font-semibold text-slate-900">{selectedActivity.user}</span> {selectedActivity.action}</p>
+                <p className="text-xs text-slate-500">Timestamp: {selectedActivity.time}</p>
+                <div className="p-3 bg-slate-50 rounded-lg text-xs font-mono text-slate-600 border border-slate-200">
+                  <p>Event ID: ACT-00{selectedActivity.id}-2026</p>
+                  <p>IP Address: 192.168.1.10{selectedActivity.id}</p>
+                  <p>Status: VERIFIED & AUDITED</p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button onClick={() => setSelectedActivity(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">Close</button>
+                <button onClick={() => { navigate('/audit'); setSelectedActivity(null); }} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">View Audit Log</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── AI Insight Action Modal ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {selectedInsight && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-100 space-y-4"
+            >
+              <div className="flex justify-between items-center border-b pb-3">
+                <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full" style={{ background: selectedInsight.color }} />
+                  AI Intelligence Insight
+                </h3>
+                <button onClick={() => setSelectedInsight(null)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+              </div>
+              <div className="space-y-2 text-sm">
+                <p className="font-bold text-slate-900 text-base">{selectedInsight.text}</p>
+                <p className="text-slate-600 text-xs">{selectedInsight.sub}</p>
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 leading-relaxed">
+                  <span className="font-bold">Recommendation:</span> Machine learning model predicts optimal performance if action is executed within 48 hours.
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button onClick={() => setSelectedInsight(null)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">Dismiss</button>
+                <button onClick={() => {
+                  setSelectedInsight(null);
+                  if (selectedInsight.text.includes('Carbon')) navigate('/carbon');
+                  else if (selectedInsight.text.includes('insurance')) navigate('/insurance');
+                  else navigate('/land');
+                }} className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700">Take Action</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Storage Audit Modal ──────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {storageModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-100 space-y-4"
+            >
+              <div className="flex justify-between items-center border-b pb-3">
+                <h3 className="font-bold text-slate-900 text-lg">Platform Cloud Storage</h3>
+                <button onClick={() => setStorageModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-medium">MongoDB Atlas Database</span>
+                  <span className="font-bold text-slate-900">4.2 GB / 10 GB</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-medium">S3 Document Assets</span>
+                  <span className="font-bold text-slate-900">18.6 GB / 25 GB</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-600 font-medium">GIS Satellite Polygons</span>
+                  <span className="font-bold text-slate-900">12.1 GB / 15 GB</span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-amber-500 rounded-full" style={{ width: '72%' }} />
+                </div>
+                <p className="text-xs text-slate-500">System backup completes daily at 02:00 AM UTC.</p>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button onClick={() => setStorageModalOpen(false)} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">Close</button>
+                <button onClick={() => { setStorageModalOpen(false); triggerToast('Storage cache cleaned up (+1.2GB cleared)'); }} className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700">Clear Cache</button>
               </div>
             </motion.div>
           </div>

@@ -54,7 +54,16 @@ async def get_application_details(
     """
     Get full details of a submitted application.
     """
-    return await service.get_application_details(application_id)
+    from beanie import PydanticObjectId
+    from fastapi import HTTPException
+
+    if not PydanticObjectId.is_valid(application_id):
+        raise HTTPException(status_code=404, detail="Invalid application ID format")
+
+    res = await service.get_application_details(application_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return res
 
 from pydantic import BaseModel
 

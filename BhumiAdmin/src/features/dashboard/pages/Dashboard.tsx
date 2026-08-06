@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import {
   Sprout, Trees, Cloud, ShieldCheck, Wallet,
   AlertTriangle, Map, Leaf, TrendingUp, Activity,
-  RefreshCw, Zap, BarChart2, Building2, Handshake, ChevronRight, Calendar
+  RefreshCw, Zap, BarChart2, Building2, Handshake, ChevronRight, Calendar, ChevronDown
 } from 'lucide-react';
 import {
   AreaChart, Area, PieChart, Pie, Cell,
-  ResponsiveContainer, Tooltip, CartesianGrid, XAxis, YAxis, BarChart, Bar
+  ResponsiveContainer, Tooltip, CartesianGrid, XAxis, YAxis
 } from 'recharts';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { ChartCard } from '../../../components/ui/ChartCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
@@ -16,13 +17,27 @@ import { PageHeader } from '../../../components/ui/PageHeader';
 import { useDashboard } from '../api/useDashboard';
 
 // ── Mock Data ─────────────────────────────────────────────────────────────
-const REVENUE_DATA = [
+const REVENUE_DATA_MONTH = [
   { month: 'Mar', revenue: 1.8, credits: 0.9 },
   { month: 'Apr', revenue: 2.1, credits: 1.1 },
   { month: 'May', revenue: 1.9, credits: 1.0 },
   { month: 'Jun', revenue: 2.5, credits: 1.3 },
   { month: 'Jul', revenue: 2.2, credits: 1.2 },
   { month: 'Aug', revenue: 2.45, credits: 1.4 },
+];
+
+const REVENUE_DATA_QUARTER = [
+  { month: 'Q1', revenue: 5.4, credits: 2.8 },
+  { month: 'Q2', revenue: 6.9, credits: 3.6 },
+  { month: 'Q3', revenue: 7.2, credits: 4.1 },
+  { month: 'Q4', revenue: 8.5, credits: 5.2 },
+];
+
+const REVENUE_DATA_YEAR = [
+  { month: '2022', revenue: 12.4, credits: 6.2 },
+  { month: '2023', revenue: 18.9, credits: 9.8 },
+  { month: '2024', revenue: 24.5, credits: 14.1 },
+  { month: '2025', revenue: 31.2, credits: 18.6 },
 ];
 
 const PROJECT_STATUS = [
@@ -33,18 +48,26 @@ const PROJECT_STATUS = [
 ];
 
 const ACTIVITY_FEED = [
-  { id: 1, icon: Sprout,     color: '#16A34A', bg: '#F0FDF4', title: 'Farmer Registered',      subtitle: 'Ramesh Patel from Sehore, MP',   time: '10:32 AM' },
-  { id: 2, icon: Map,        color: '#2563EB', bg: '#EFF6FF', title: 'Land Parcel Verified',   subtitle: '45.2 acres in Betul, MP',         time: '10:28 AM' },
-  { id: 3, icon: Cloud,      color: '#16A34A', bg: '#F0FDF4', title: 'Carbon Credit Issued',    subtitle: '1,250 tCO2e to Project Green',    time: '10:21 AM' },
-  { id: 4, icon: ShieldCheck,color: '#8B5CF6', bg: '#F5F3FF', title: 'Tree Shield Purchased',  subtitle: 'Policy #TS-9021 by Mohan Singh', time: '10:15 AM' },
-  { id: 5, icon: Wallet,     color: '#EF4444', bg: '#FEF2F2', title: 'Withdrawal Approved',   subtitle: '₹45,000 to Sita Devi (Indore)',   time: '10:10 AM' },
+  { id: 1, icon: Sprout,     color: '#16A34A', bg: '#F0FDF4', title: 'Farmer Registered',      subtitle: 'Ramesh Patel from Sehore, MP',   time: '10:32 AM', route: '/farmers' },
+  { id: 2, icon: Map,        color: '#2563EB', bg: '#EFF6FF', title: 'Land Parcel Verified',   subtitle: '45.2 acres in Betul, MP',         time: '10:28 AM', route: '/land' },
+  { id: 3, icon: Cloud,      color: '#16A34A', bg: '#F0FDF4', title: 'Carbon Credit Issued',    subtitle: '1,250 tCO2e to Project Green',    time: '10:21 AM', route: '/carbon' },
+  { id: 4, icon: ShieldCheck,color: '#8B5CF6', bg: '#F5F3FF', title: 'Tree Shield Purchased',  subtitle: 'Policy #TS-9021 by Mohan Singh', time: '10:15 AM', route: '/insurance' },
+  { id: 5, icon: Wallet,     color: '#EF4444', bg: '#FEF2F2', title: 'Withdrawal Approved',   subtitle: '₹45,000 to Sita Devi (Indore)',   time: '10:10 AM', route: '/wallet' },
 ];
 
 const LIVE_ALERTS = [
-  { title: 'Forest Fire Alert',          region: 'Maharashtra Region',  level: 'danger',  time: '2 mins ago' },
-  { title: 'Heavy Rainfall Warning',     region: 'Gujarat Region',      level: 'warning', time: '14 mins ago' },
-  { title: 'Land Verification Pending',  region: 'Madhya Pradesh',      level: 'warning', time: '22 mins ago' },
-  { title: 'New Plantation (500 Trees)', region: 'Chhattisgarh',        level: 'success', time: '35 mins ago' },
+  { title: 'Forest Fire Alert',          region: 'Maharashtra Region',  level: 'danger',  time: '2 mins ago', route: '/command-center' },
+  { title: 'Heavy Rainfall Warning',     region: 'Gujarat Region',      level: 'warning', time: '14 mins ago', route: '/command-center' },
+  { title: 'Land Verification Pending',  region: 'Madhya Pradesh',      level: 'warning', time: '22 mins ago', route: '/land' },
+  { title: 'New Plantation (500 Trees)', region: 'Chhattisgarh',        level: 'success', time: '35 mins ago', route: '/projects' },
+];
+
+const DATE_RANGE_OPTIONS = [
+  'Today (Live Telemetry)',
+  'May 18 — May 24, 2025',
+  'This Month (May 2025)',
+  'Last Quarter (Q1 2025)',
+  'This Year (2025)',
 ];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -64,13 +87,32 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const Dashboard = () => {
+  const navigate = useNavigate();
   const { refetch } = useDashboard();
   const [refreshing, setRefreshing] = useState(false);
+  const [dateRange, setDateRange] = useState('May 18 — May 24, 2025');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [revenuePeriod, setRevenuePeriod] = useState<'This Month' | 'Last Quarter' | 'This Year'>('This Month');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refetch();
-    setTimeout(() => setRefreshing(false), 800);
+    setTimeout(() => {
+      setRefreshing(false);
+      triggerToast('Executive Dashboard re-synchronized');
+    }, 600);
+  };
+
+  const getRevenueData = () => {
+    if (revenuePeriod === 'Last Quarter') return REVENUE_DATA_QUARTER;
+    if (revenuePeriod === 'This Year') return REVENUE_DATA_YEAR;
+    return REVENUE_DATA_MONTH;
   };
 
   return (
@@ -84,11 +126,50 @@ export const Dashboard = () => {
         icon={BarChart2}
         iconColor="#16A34A"
         actions={
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white border border-[#E2E8F0] rounded-xl text-[12px] text-[#64748B] shadow-xs">
-              <Calendar size={14} className="text-[#94A3B8]" />
-              <span className="font-medium text-[#0F172A]">May 18 — May 24, 2025</span>
+          <div className="flex items-center gap-3 relative">
+            {/* Interactive Date Range Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowDatePicker(!showDatePicker)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-[#E2E8F0] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] rounded-xl text-[12px] text-[#64748B] shadow-xs cursor-pointer transition-colors"
+              >
+                <Calendar size={14} className="text-[#94A3B8]" />
+                <span className="font-medium text-[#0F172A]">{dateRange}</span>
+                <ChevronDown size={12} className="text-[#94A3B8]" />
+              </button>
+
+              <AnimatePresence>
+                {showDatePicker && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    className="absolute right-0 top-[calc(100%+6px)] w-[220px] bg-white rounded-2xl border border-[#E8EDF5] shadow-lg z-50 p-1.5"
+                  >
+                    <div className="px-3 py-1.5 border-b border-[#F1F5F9] mb-1">
+                      <p className="text-[10.5px] font-bold uppercase tracking-wider text-[#94A3B8]">Select Date Range</p>
+                    </div>
+                    {DATE_RANGE_OPTIONS.map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => {
+                          setDateRange(opt);
+                          setShowDatePicker(false);
+                          triggerToast(`Dashboard filtered for ${opt}`);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-xl text-[12px] font-medium transition-colors ${
+                          dateRange === opt ? 'bg-[#F0FDF4] text-[#16A34A] font-bold' : 'hover:bg-[#F8FAFC] text-[#374151]'
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
+
+            {/* Refresh Button */}
             <button
               onClick={handleRefresh}
               className="flex items-center gap-2 px-3 py-1.5 bg-white border border-[#E2E8F0] hover:border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#0F172A] font-semibold text-[12.5px] rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
@@ -111,6 +192,7 @@ export const Dashboard = () => {
           trend={12.5}
           sparkColor="#16A34A"
           sparkData={[28, 32, 30, 36, 34, 42, 45]}
+          onClick={() => navigate('/farmers')}
         />
         <KpiCard
           title="GOVT BODIES"
@@ -121,6 +203,7 @@ export const Dashboard = () => {
           trend={4.2}
           sparkColor="#2563EB"
           sparkData={[110, 112, 115, 118, 120, 122, 124]}
+          onClick={() => navigate('/govt')}
         />
         <KpiCard
           title="PARTNERS"
@@ -131,6 +214,7 @@ export const Dashboard = () => {
           trend={15.2}
           sparkColor="#F59E0B"
           sparkData={[720, 750, 780, 810, 840, 865, 892]}
+          onClick={() => navigate('/partners')}
         />
         <KpiCard
           title="PENDING APPROVALS"
@@ -141,6 +225,7 @@ export const Dashboard = () => {
           trend={-5.4}
           sparkColor="#EF4444"
           sparkData={[1600, 1550, 1520, 1490, 1470, 1450, 1432]}
+          onClick={() => navigate('/land')}
         />
       </div>
 
@@ -155,6 +240,7 @@ export const Dashboard = () => {
           trend={18.2}
           sparkColor="#2563EB"
           sparkData={[65, 70, 74, 78, 82, 85, 89]}
+          onClick={() => navigate('/projects')}
         />
         <KpiCard
           title="CARBON CREDITS"
@@ -166,6 +252,7 @@ export const Dashboard = () => {
           trend={8.1}
           sparkColor="#16A34A"
           sparkData={[0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2]}
+          onClick={() => navigate('/carbon')}
         />
         <KpiCard
           title="INSURANCE POLICIES"
@@ -176,6 +263,7 @@ export const Dashboard = () => {
           trend={15.3}
           sparkColor="#8B5CF6"
           sparkData={[9800, 10200, 10700, 11200, 11700, 12100, 12450]}
+          onClick={() => navigate('/insurance')}
         />
         <KpiCard
           title="PLATFORM WALLET"
@@ -186,6 +274,7 @@ export const Dashboard = () => {
           trend={11.2}
           sparkColor="#EF4444"
           sparkData={[10.2, 10.6, 11.0, 11.5, 12.0, 12.4, 12.8]}
+          onClick={() => navigate('/wallet')}
         />
       </div>
 
@@ -199,15 +288,23 @@ export const Dashboard = () => {
           height={240}
           className="xl:col-span-2"
           actions={
-            <select className="px-3 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]">
-              <option>This Month</option>
-              <option>Last Quarter</option>
-              <option>This Year</option>
+            <select
+              value={revenuePeriod}
+              onChange={(e) => {
+                const val = e.target.value as any;
+                setRevenuePeriod(val);
+                triggerToast(`Revenue Overview updated for ${val}`);
+              }}
+              className="px-3 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]"
+            >
+              <option value="This Month">This Month</option>
+              <option value="Last Quarter">Last Quarter</option>
+              <option value="This Year">This Year</option>
             </select>
           }
         >
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={REVENUE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <AreaChart data={getRevenueData()} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="gradRev" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#16A34A" stopOpacity={0.2} />
@@ -230,7 +327,7 @@ export const Dashboard = () => {
 
         {/* Project Status Donut (1 Col) */}
         <ChartCard title="Project Status" subtitle="89 total projects" height={240}>
-          <div className="flex items-center gap-4 h-full">
+          <div className="flex items-center gap-4 h-full cursor-pointer" onClick={() => navigate('/projects')}>
             <ResponsiveContainer width="55%" height="100%">
               <PieChart>
                 <Pie
@@ -250,7 +347,7 @@ export const Dashboard = () => {
 
             <div className="flex-1 space-y-3">
               {PROJECT_STATUS.map(p => (
-                <div key={p.name} className="flex items-center justify-between">
+                <div key={p.name} className="flex items-center justify-between hover:opacity-80">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color }} />
                     <span className="text-[12px] font-medium text-[#64748B]">{p.name}</span>
@@ -273,16 +370,19 @@ export const Dashboard = () => {
               <h3 className="text-[14px] font-bold text-[#0F172A]">Recent Activity</h3>
               <p className="text-[11.5px] text-[#94A3B8]">Live platform events</p>
             </div>
-            <button className="text-[12px] text-[#16A34A] hover:underline font-semibold">View all</button>
+            <button onClick={() => navigate('/audit')} className="text-[12px] text-[#16A34A] hover:underline font-semibold cursor-pointer">
+              View all
+            </button>
           </div>
           <div className="space-y-1">
             {ACTIVITY_FEED.map((item, i) => (
               <motion.div
                 key={item.id}
+                onClick={() => navigate(item.route)}
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="flex items-start gap-3 py-2.5 border-b border-[#F8FAFC] last:border-0"
+                className="flex items-start gap-3 py-2.5 border-b border-[#F8FAFC] last:border-0 hover:bg-[#F8FAFC] px-1.5 rounded-xl cursor-pointer transition-colors"
               >
                 <div className="shrink-0 w-8 h-8 rounded-xl flex items-center justify-center mt-0.5" style={{ background: item.bg }}>
                   <item.icon size={15} style={{ color: item.color }} />
@@ -304,16 +404,19 @@ export const Dashboard = () => {
               <h3 className="text-[14px] font-bold text-[#0F172A]">Live Alerts</h3>
               <p className="text-[11.5px] text-[#94A3B8]">Requires your attention</p>
             </div>
-            <button className="text-[12px] text-[#16A34A] hover:underline font-semibold">View all</button>
+            <button onClick={() => navigate('/notifications')} className="text-[12px] text-[#16A34A] hover:underline font-semibold cursor-pointer">
+              View all
+            </button>
           </div>
           <div className="space-y-2.5">
             {LIVE_ALERTS.map((alert, i) => (
               <motion.div
                 key={i}
+                onClick={() => navigate(alert.route)}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.06 }}
-                className="flex items-start justify-between gap-3 p-3 rounded-xl bg-[#FAFCFF] border border-[#F1F5F9] hover:border-[#E2E8F0] transition-colors cursor-pointer"
+                className="flex items-start justify-between gap-3 p-3 rounded-xl bg-[#FAFCFF] border border-[#F1F5F9] hover:border-[#E2E8F0] hover:shadow-xs transition-all cursor-pointer"
               >
                 <div className="flex items-start gap-2.5">
                   <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center mt-0.5 ${
@@ -355,10 +458,12 @@ export const Dashboard = () => {
             {[
               { icon: TrendingUp, bg: '#F0FDF4', color: '#16A34A', priority: 'High', confidence: 94,
                 insight: 'MP region has the highest carbon credit potential for Q4.',
-                points: ['1,200 acres ready for MRV verification', '245 insurance policies expire this month'] },
+                points: ['1,200 acres ready for MRV verification', '245 insurance policies expire this month'],
+                link: '/reports' },
               { icon: Activity, bg: '#EFF6FF', color: '#2563EB', priority: 'Medium', confidence: 81,
                 insight: 'Carbon credit demand high in EU market.',
-                points: ['Consider listing 500 tCO2e on exchange', 'Prices up 12% vs last quarter'] },
+                points: ['Consider listing 500 tCO2e on exchange', 'Prices up 12% vs last quarter'],
+                link: '/carbon' },
             ].map((ins, i) => (
               <div key={i} className="p-3.5 rounded-xl border border-[#F1F5F9] bg-[#FAFCFF]">
                 <div className="flex items-start gap-2.5 mb-2">
@@ -381,7 +486,7 @@ export const Dashboard = () => {
                     </li>
                   ))}
                 </ul>
-                <button className="text-[11.5px] text-[#16A34A] font-semibold flex items-center gap-1 hover:underline">
+                <button onClick={() => navigate(ins.link)} className="text-[11.5px] text-[#16A34A] font-semibold flex items-center gap-1 hover:underline cursor-pointer">
                   View Full Analysis <ChevronRight size={11} />
                 </button>
               </div>
@@ -390,6 +495,21 @@ export const Dashboard = () => {
         </div>
 
       </div>
+
+      {/* ── Floating Toast Notification ── */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-slate-700"
+          >
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-xs font-medium">{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

@@ -43,6 +43,8 @@ import { QueryProvider } from './context/QueryProvider';
 
 import { SidebarProvider } from './context/SidebarContext';
 
+import { ReferralManagement } from './features/referrals/pages/ReferralManagement';
+
 function App() {
   return (
     <Provider store={store}>
@@ -58,6 +60,7 @@ function App() {
                   <Route path="/" element={<MainLayout />}>
                     <Route index element={<Dashboard />} />
                     <Route path="command-center" element={<CommandCenter />} />
+                    <Route path="referrals" element={<ReferralManagement />} />
                     <Route 
                       path="users" 
                       element={

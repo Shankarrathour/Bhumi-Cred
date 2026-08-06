@@ -398,6 +398,18 @@ export default function ProfileScreen() {
           ))}
         </View>
 
+        {/* Refer & Earn Rewards */}
+        <Text style={styles.sectionLabel}>Refer & Earn Rewards</Text>
+        <View style={styles.settingsGroup}>
+          {renderSettingItem(
+            'gift-outline', 
+            'Refer Farmers & Earn Cash', 
+            'Get ₹500 + 10 tCO₂e for every friend invited',
+            undefined,
+            () => router.push('/referral' as any)
+          )}
+        </View>
+
         {/* Insurance & Certificates */}
         <Text style={styles.sectionLabel}>Insurance & Cover</Text>
         <View style={styles.settingsGroup}>

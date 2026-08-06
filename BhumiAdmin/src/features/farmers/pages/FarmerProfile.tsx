@@ -87,8 +87,9 @@ export const FarmerProfile = () => {
       {/* Header & Back Button */}
       <div className="flex items-center space-x-4">
         <button 
-          onClick={() => navigate('/farmers')}
+          onClick={() => navigate(-1)}
           className="p-2 hover:bg-gray-100 rounded-full transition-colors border border-gray-200 bg-white"
+          title="Go Back"
         >
           <ArrowLeft size={20} className="text-gray-600" />
         </button>
