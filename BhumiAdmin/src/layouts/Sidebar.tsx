@@ -1,21 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Globe2, LayoutDashboard, Users, Sprout, Building2, Handshake,
-  Map, FileText, Cloud, ShieldCheck, Trees, Wallet, Activity,
-  Settings, ChevronLeft, ChevronRight, Search, Pin, Star,
-  BarChart3, Bell, HelpCircle, ClipboardList, ChevronDown, LogOut,
-  Leaf
+  Leaf, Globe2, LayoutDashboard, Sprout, Building2, Map,
+  FileText, ShieldCheck, CreditCard, ShoppingBag, Wallet,
+  KeyRound, ClipboardList, Settings, LogOut, X
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
 import { RootState } from '../store/store';
-
 import { useAuth } from '../context/AuthContext';
+import { useSidebar } from '../context/SidebarContext';
 import { Role } from '../store/slices/authSlice';
-
-// ── Navigation structure ──────────────────────────────────────────────────────
+import { BhumiLogo } from '../components/BhumiLogo';
 
 type NavItemType = {
   id: string;
@@ -25,274 +22,263 @@ type NavItemType = {
   allowedRoles?: (Role | string)[];
 };
 
-type NavGroupType = {
-  label: string;
-  items: NavItemType[];
-};
+type NavGroupType = { label: string; items: NavItemType[] };
 
 const NAV_GROUPS: NavGroupType[] = [
   {
-    label: 'Overview',
+    label: 'OVERVIEW',
     items: [
-      { id: 'command-center', label: 'Command Center', icon: Globe2,        path: '/command-center', allowedRoles: ['Super Admin'] },
-      { id: 'dashboard',      label: 'Dashboard',      icon: LayoutDashboard, path: '/' },
+      { id: 'command-center',      label: 'Command Center',      icon: Globe2,          path: '/command-center' },
+      { id: 'executive-dashboard', label: 'Executive Dashboard', icon: LayoutDashboard, path: '/' },
     ],
   },
   {
-    label: 'Operations',
+    label: 'OPERATIONS',
     items: [
-      { id: 'users',    label: 'User Management', icon: Users,     path: '/users', allowedRoles: ['Super Admin'] },
-      { id: 'farmers',  label: 'Farmers',          icon: Sprout,    path: '/farmers', allowedRoles: ['Super Admin', 'Operations Admin', 'KYC Admin', 'Project Admin', 'Auditor'] },
-      { id: 'govt',     label: 'Government',       icon: Building2, path: '/govt', allowedRoles: ['Super Admin', 'Operations Admin', 'KYC Admin', 'Project Admin', 'Auditor'] },
-      { id: 'partners', label: 'Partners',          icon: Handshake, path: '/partners', allowedRoles: ['Super Admin', 'Operations Admin', 'KYC Admin', 'Project Admin', 'Auditor'] },
-      { id: 'kyc',      label: 'KYC Center',        icon: ShieldCheck, path: '/kyc', allowedRoles: ['Super Admin', 'Operations Admin', 'KYC Admin', 'Auditor'] },
-      { id: 'documents',label: 'Document Center',   icon: FileText,  path: '/documents', allowedRoles: ['Super Admin', 'Operations Admin', 'KYC Admin', 'Auditor'] },
-      { id: 'land',     label: 'Land & GIS',        icon: Map,       path: '/land', allowedRoles: ['Super Admin', 'Operations Admin', 'GIS Admin', 'Project Admin', 'Auditor'] },
-      { id: 'projects', label: 'Projects',          icon: FileText,  path: '/projects', allowedRoles: ['Super Admin', 'Operations Admin', 'Project Admin', 'Auditor'] },
+      { id: 'farmers',  label: 'Farmers',           icon: Sprout,      path: '/farmers'   },
+      { id: 'govt',     label: 'Government Bodies', icon: Building2,   path: '/govt'      },
+      { id: 'land',     label: 'Land & GIS',        icon: Map,         path: '/land'      },
+      { id: 'projects', label: 'Projects',          icon: FileText,    path: '/projects'  },
+      { id: 'insurance',label: 'Tree Insurance',    icon: ShieldCheck, path: '/insurance' },
     ],
   },
   {
-    label: 'Business',
+    label: 'BUSINESS',
     items: [
-      { id: 'carbon',      label: 'Carbon Credits', icon: Cloud,       path: '/carbon', allowedRoles: ['Super Admin', 'Operations Admin', 'Project Admin', 'Finance Admin', 'Auditor'] },
-      { id: 'insurance',   label: 'Insurance',      icon: ShieldCheck, path: '/insurance', allowedRoles: ['Super Admin', 'Operations Admin', 'Insurance Admin', 'Auditor'] },
-      { id: 'marketplace', label: 'Marketplace',    icon: Trees,       path: '/marketplace', allowedRoles: ['Super Admin', 'Operations Admin', 'Marketplace Admin', 'Finance Admin', 'Auditor'] },
-      { id: 'wallet',      label: 'Wallet',         icon: Wallet,      path: '/wallet', allowedRoles: ['Super Admin', 'Finance Admin', 'Auditor'] },
-      { id: 'mrv',         label: 'MRV Ops',        icon: Activity,    path: '/mrv', allowedRoles: ['Super Admin', 'Operations Admin', 'Project Admin', 'GIS Admin', 'Auditor'] },
+      { id: 'carbon',      label: 'Carbon Credits',    icon: CreditCard,  path: '/carbon'      },
+      { id: 'marketplace', label: 'Marketplace',       icon: ShoppingBag, path: '/marketplace' },
+      { id: 'wallet',      label: 'Wallet & Payments', icon: Wallet,      path: '/wallet'      },
     ],
   },
   {
-    label: 'System',
+    label: 'SYSTEM',
     items: [
-      { id: 'notifications', label: 'Notifications', icon: Bell,          path: '/notifications', allowedRoles: ['Super Admin', 'Content Admin'] },
-      { id: 'reports',       label: 'Reports',        icon: BarChart3,     path: '/reports', allowedRoles: ['Super Admin', 'Finance Admin', 'Operations Admin', 'Auditor'] },
-      { id: 'support',       label: 'Support Center', icon: HelpCircle,    path: '/support', allowedRoles: ['Super Admin', 'Support Admin'] },
-      { id: 'audit',         label: 'Audit Logs',     icon: ClipboardList, path: '/audit', allowedRoles: ['Super Admin', 'Auditor'] },
-      { id: 'cms',           label: 'CMS Content',    icon: FileText,      path: '/cms', allowedRoles: ['Super Admin', 'Content Admin'] },
-      { id: 'settings',      label: 'Settings',       icon: Settings,      path: '/settings', allowedRoles: ['Super Admin'] },
+      { id: 'users',    label: 'Roles & Access', icon: KeyRound,      path: '/users'    },
+      { id: 'audit',    label: 'Audit Logs',     icon: ClipboardList, path: '/audit'    },
+      { id: 'settings', label: 'Settings',       icon: Settings,      path: '/settings' },
     ],
   },
 ];
 
-// ── Sidebar Component ─────────────────────────────────────────────────────────
-
-export const Sidebar = () => {
+export const Sidebar: React.FC = () => {
   const { hasRole } = useAuth();
-  const [collapsed, setCollapsed]   = useState(false);
-  const [searchQ,   setSearchQ]     = useState('');
-  const [pinned,    setPinned]       = useState<string[]>([]);
+  const { collapsed, mobileOpen, closeMobile, isMobile } = useSidebar();
   const location = useLocation();
   const dispatch = useDispatch();
-  const user     = useSelector((s: RootState) => s.auth.user);
+  const user = useSelector((s: RootState) => s.auth.user);
 
-  // Filter nav based on role and search
   const filtered = NAV_GROUPS.map(g => ({
     ...g,
-    items: g.items.filter(i => {
-      // First check role permission
-      if (i.allowedRoles && !hasRole(i.allowedRoles)) return false;
-      // Then check search query
-      if (searchQ.trim() && !i.label.toLowerCase().includes(searchQ.toLowerCase())) return false;
-      return true;
-    }),
+    items: g.items.filter(i => !i.allowedRoles || hasRole(i.allowedRoles)),
   })).filter(g => g.items.length > 0);
-
-  const togglePin = (id: string) =>
-    setPinned(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
   const initials = user?.name
     ? user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     : 'SA';
 
-  return (
-    <motion.div
-      animate={{ width: collapsed ? 68 : 240 }}
-      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-      className="shrink-0 flex flex-col h-screen bg-white border-r border-[#F1F5F9] relative overflow-hidden"
-      style={{ boxShadow: '1px 0 0 0 #F1F5F9' }}
-    >
-      {/* ── Logo ── */}
-      <div className="h-[60px] flex items-center px-4 border-b border-[#F1F5F9] shrink-0">
-        <AnimatePresence mode="wait">
-          {collapsed ? (
-            <motion.div
-              key="icon"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.15 }}
-              className="w-8 h-8 bg-[#F0FDF4] rounded-xl flex items-center justify-center mx-auto"
-            >
-              <Leaf size={18} className="text-[#16A34A]" />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="logo"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.15 }}
-              className="flex items-center gap-2.5"
-            >
-              <div className="w-8 h-8 bg-[#F0FDF4] rounded-xl flex items-center justify-center shrink-0">
-                <Leaf size={18} className="text-[#16A34A]" />
-              </div>
-              <div>
-                <div className="text-[14px] font-700 text-[#0F172A] leading-none" style={{ fontWeight: 700 }}>BhumiCred</div>
-                <div className="text-[10px] text-[#94A3B8] mt-0.5 leading-none">Enterprise Console</div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+  const isCollapsed = isMobile ? false : collapsed;
+
+  const sidebarContent = (
+    <div className="flex flex-col h-full bg-white relative overflow-hidden select-none">
+      {/* ── Brand Header (60px) ── */}
+      <div className="h-[60px] flex items-center px-4 border-b border-[#F1F5F9] shrink-0 justify-between">
+        <BhumiLogo isCollapsed={isCollapsed} size="md" />
+
+        {isMobile && (
+          <button
+            onClick={closeMobile}
+            className="w-8 h-8 flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] bg-white shadow-xs transition-colors"
+            title="Close Menu"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
-      {/* ── Search ── */}
-      <AnimatePresence>
-        {!collapsed && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="px-3 py-2.5 shrink-0"
-          >
-            <div className="relative">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
-              <input
-                type="text"
-                value={searchQ}
-                onChange={e => setSearchQ(e.target.value)}
-                placeholder="Search modules..."
-                className="w-full h-8 pl-8 pr-3 text-[12.5px] bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] outline-none focus:border-[#16A34A] focus:bg-white text-[#0F172A] placeholder-[#94A3B8] transition-all"
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Navigation ── */}
-      <div className="flex-1 overflow-y-auto py-2 px-2.5">
-        {/* Pinned items */}
-        {!collapsed && pinned.length > 0 && (
-          <div className="mb-1">
-            <div className="sidebar-section-label">Pinned</div>
-            {NAV_GROUPS.flatMap(g => g.items)
-              .filter(i => pinned.includes(i.id))
-              .map(item => (
-                <SidebarItem key={item.id} item={item} collapsed={collapsed}
-                  isPinned={true} onPin={() => togglePin(item.id)}
-                  isActive={location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path))}
-                />
-              ))
-            }
-          </div>
-        )}
-
-        {/* Main nav groups */}
+      {/* ── Navigation Links ── */}
+      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-4 custom-scrollbar">
         {filtered.map(group => (
-          <div key={group.label} className="mb-1">
-            {!collapsed && (
-              <div className="sidebar-section-label">{group.label}</div>
+          <div key={group.label} className="space-y-1">
+            {!isCollapsed && (
+              <div className="text-[10px] font-bold tracking-widest text-[#94A3B8] px-3 pt-1 pb-1 uppercase">
+                {group.label}
+              </div>
             )}
+
             {group.items.map(item => {
               const isActive = item.path === '/'
                 ? location.pathname === '/'
                 : location.pathname.startsWith(item.path);
+
+              const Icon = item.icon;
+
               return (
-                <SidebarItem key={item.id} item={item} collapsed={collapsed}
-                  isPinned={pinned.includes(item.id)} onPin={() => togglePin(item.id)}
-                  isActive={isActive}
-                />
+                <NavLink
+                  key={item.id}
+                  to={item.path}
+                  onClick={() => isMobile && closeMobile()}
+                  className="block relative group"
+                >
+                  <div
+                    className={`
+                      flex items-center h-[42px] rounded-xl transition-all duration-200 cursor-pointer relative
+                      ${isCollapsed ? 'justify-center px-0' : 'px-3.5 gap-3'}
+                      ${
+                        isActive
+                          ? 'bg-[#F0FDF4] text-[#16A34A] font-semibold border-l-[3.5px] border-[#22C55E] shadow-sm'
+                          : 'text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] font-medium'
+                      }
+                    `}
+                  >
+                    <Icon
+                      size={18}
+                      className={`shrink-0 transition-colors ${
+                        isActive ? 'text-[#16A34A]' : 'text-[#94A3B8] group-hover:text-[#64748B]'
+                      }`}
+                    />
+
+                    {!isCollapsed && (
+                      <span className="truncate text-[13.5px] leading-none">
+                        {item.label}
+                      </span>
+                    )}
+
+                    {/* Floating Tooltip when Collapsed */}
+                    {isCollapsed && (
+                      <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#0F172A] text-white text-[12px] font-semibold rounded-lg shadow-xl whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center gap-1">
+                        <span>{item.label}</span>
+                        <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-[#0F172A] rotate-45 rounded-xs" />
+                      </div>
+                    )}
+                  </div>
+                </NavLink>
               );
             })}
           </div>
         ))}
       </div>
 
-      {/* ── User Profile ── */}
-      <div className="shrink-0 p-2.5 border-t border-[#F1F5F9]">
-        <div className={`flex items-center gap-2.5 rounded-[10px] p-2 hover:bg-[#F8FAFC] cursor-pointer transition-colors group ${collapsed ? 'justify-center' : ''}`}>
-          <div className="shrink-0 w-8 h-8 rounded-[10px] bg-[#2563EB] flex items-center justify-center text-white text-[12px] font-700" style={{ fontWeight: 700 }}>
-            {initials}
+      {/* ── System Health Widget ── */}
+      <AnimatePresence>
+        {!isCollapsed && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mx-3 mb-3 shrink-0"
+          >
+            <div className="bg-[#F0FDF4] border border-[#DCFCE7] rounded-2xl p-3 shadow-xs">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-[#16A34A]">
+                  System Health
+                </div>
+                <span className="text-[10px] font-bold text-[#16A34A] bg-white px-1.5 py-0.5 rounded-md border border-[#DCFCE7]">
+                  99.98%
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22C55E] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#22C55E]"></span>
+                </span>
+                <span className="text-[11.5px] font-semibold text-[#16A34A]">
+                  All Systems Operational
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-[#DCFCE7] rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-[#22C55E] to-[#16A34A] rounded-full w-[99.98%]" />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── User Profile Footer ── */}
+      <div className="shrink-0 border-t border-[#F1F5F9] p-3">
+        <div
+          className={`flex items-center rounded-xl p-2 transition-colors relative group ${
+            isCollapsed ? 'justify-center' : 'gap-3 hover:bg-[#F8FAFC]'
+          }`}
+        >
+          <div className="relative shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-[#2563EB] flex items-center justify-center text-white text-[11px] font-bold shadow-sm">
+              {initials}
+            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-[#22C55E] border-2 border-white rounded-full" />
           </div>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex-1 overflow-hidden"
-              >
-                <div className="text-[12.5px] font-600 text-[#0F172A] truncate leading-tight" style={{ fontWeight: 600 }}>
-                  {user?.name || 'Super Admin'}
-                </div>
-                <div className="text-[11px] text-[#94A3B8] truncate leading-tight">
-                  {user?.role || 'Administrator'}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {!collapsed && (
+
+          {!isCollapsed && (
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-semibold text-[#0F172A] truncate leading-tight">
+                {user?.name || 'Super Admin'}
+              </div>
+              <div className="text-[10.5px] text-[#94A3B8] truncate leading-tight mt-0.5">
+                {user?.email || 'admin@bhumicred.com'}
+              </div>
+            </div>
+          )}
+
+          {!isCollapsed && (
             <button
               onClick={() => dispatch(logout())}
-              className="shrink-0 p-1 rounded-[6px] text-[#94A3B8] hover:text-[#EF4444] hover:bg-[#FEF2F2] opacity-0 group-hover:opacity-100 transition-all"
-              title="Logout"
+              className="p-1.5 text-[#94A3B8] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition-colors shrink-0"
+              title="Sign Out"
             >
-              <LogOut size={14} />
+              <LogOut size={15} />
             </button>
+          )}
+
+          {/* Tooltip on User Profile when Collapsed */}
+          {isCollapsed && (
+            <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#0F172A] text-white text-[12px] font-semibold rounded-lg shadow-xl whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              {user?.name || 'Super Admin'}
+              <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-[#0F172A] rotate-45 rounded-xs" />
+            </div>
           )}
         </div>
       </div>
-
-      {/* ── Collapse Toggle ── */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-[72px] w-6 h-6 bg-white border border-[#E2E8F0] rounded-full flex items-center justify-center shadow-sm hover:shadow-md hover:border-[#16A34A] hover:text-[#16A34A] text-[#64748B] transition-all z-10"
-      >
-        {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
-      </button>
-    </motion.div>
+    </div>
   );
-};
 
-// ── Sidebar Item ──────────────────────────────────────────────────────────────
-
-interface NavItem { id: string; label: string; icon: any; path: string; }
-
-const SidebarItem = ({
-  item, collapsed, isActive, isPinned, onPin,
-}: {
-  item: NavItem; collapsed: boolean; isActive: boolean; isPinned: boolean; onPin: () => void;
-}) => {
   return (
-    <NavLink to={item.path} title={collapsed ? item.label : undefined}>
-      {({ isActive: navIsActive }) => {
-        const active = isActive || navIsActive;
-        return (
-          <div className={`sidebar-nav-item group ${active ? 'active' : ''}`}>
-            <item.icon size={17} className={`nav-icon shrink-0 ${active ? 'text-[#16A34A]' : 'text-[#64748B]'}`} />
-            <AnimatePresence>
-              {!collapsed && (
-                <motion.span
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 'auto' }}
-                  exit={{ opacity: 0, width: 0 }}
-                  className="flex-1 truncate text-[13px]"
-                >
-                  {item.label}
-                </motion.span>
-              )}
-            </AnimatePresence>
-            {!collapsed && (
-              <button
-                onClick={e => { e.preventDefault(); e.stopPropagation(); onPin(); }}
-                className={`shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-all ${isPinned ? 'opacity-100 text-[#16A34A]' : 'text-[#CBD5E1]'}`}
-              >
-                <Pin size={11} className={isPinned ? 'fill-current' : ''} />
-              </button>
-            )}
-          </div>
-        );
-      }}
-    </NavLink>
+    <>
+      {/* ── Mobile Overlay Drawer (<1024px) ── */}
+      <AnimatePresence>
+        {isMobile && mobileOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={closeMobile}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden"
+            />
+
+            {/* Mobile Drawer Slide-in */}
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+              className="fixed inset-y-0 left-0 w-[280px] bg-white z-50 shadow-2xl border-r border-[#F1F5F9] lg:hidden"
+            >
+              {sidebarContent}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Desktop Fixed/Inline Sidebar (≥1024px) ── */}
+      <motion.aside
+        animate={{ width: collapsed ? 88 : 280 }}
+        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+        className="hidden lg:block shrink-0 h-screen bg-white border-r border-[#F1F5F9] relative z-20"
+      >
+        {sidebarContent}
+      </motion.aside>
+    </>
   );
 };

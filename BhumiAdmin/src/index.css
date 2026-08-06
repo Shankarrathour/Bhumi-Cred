@@ -435,10 +435,10 @@
 .ent-tooltip:hover::after { opacity: 1; }
 
 /* ── Scrollbars ── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
 /* ── Live pulse dot ── */
 .live-dot {

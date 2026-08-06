@@ -1,6 +1,6 @@
 import React from 'react';
 
-type Variant = 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'gray' | 'orange' | 'cyan' | 'default';
+type Variant = 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'gray' | 'orange' | 'cyan' | 'default' | 'error';
 
 interface StatusBadgeProps {
   label: string;
@@ -14,6 +14,7 @@ const variantMap: Record<Variant, { bg: string; text: string; dot: string }> = {
   success: { bg: '#F0FDF4', text: '#16A34A', dot: '#22C55E' },
   warning: { bg: '#FFFBEB', text: '#B45309', dot: '#F59E0B' },
   danger:  { bg: '#FEF2F2', text: '#DC2626', dot: '#EF4444' },
+  error:   { bg: '#FEF2F2', text: '#DC2626', dot: '#EF4444' },
   info:    { bg: '#EFF6FF', text: '#1D4ED8', dot: '#3B82F6' },
   purple:  { bg: '#F5F3FF', text: '#7C3AED', dot: '#8B5CF6' },
   gray:    { bg: '#F1F5F9', text: '#475569', dot: '#94A3B8' },

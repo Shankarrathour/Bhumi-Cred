@@ -55,7 +55,7 @@ export const EnterpriseDataTable: React.FC<EnterpriseDataTableProps> = ({
     setSelected([]);
   };
 
-  const handleClick = (event: React.MouseEvent<unknown>, id: string) => {
+  const handleClick = (event: any, id: string) => {
     const selectedIndex = selected.indexOf(id);
     let newSelected: string[] = [];
 

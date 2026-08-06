@@ -25,7 +25,7 @@
     "@tanstack/react-query": "^5.100.9",
     "axios": "^1.18.1",
     "dayjs": "^1.11.20",
-    "expo": "~54.0.35",
+    "expo": "~54.0.",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.13",
     "expo-file-system": "~19.0.23",

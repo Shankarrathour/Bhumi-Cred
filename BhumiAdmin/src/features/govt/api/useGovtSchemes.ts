@@ -3,22 +3,22 @@ import { apiClient } from '../../../api/axios';
 
 export interface GovtSchemeListItem {
   id: string;
-  scheme_id: string;
+  scheme_id?: string;
   name: string;
-  department: string;
-  ministry: string;
-  state: string;
-  scheme_type: 'central' | 'state' | 'joint';
-  eligibility_criteria: string;
-  benefit_amount: number;
-  currency: string;
-  applications_today: number;
-  total_applications: number;
-  approved_applications: number;
-  status: 'active' | 'inactive' | 'draft' | 'expired';
-  start_date: string;
-  end_date: string | null;
-  created_at: string;
+  department?: string;
+  ministry?: string;
+  state?: string;
+  scheme_type?: 'central' | 'state' | 'joint';
+  eligibility_criteria?: string;
+  benefit_amount?: number;
+  currency?: string;
+  applications_today?: number;
+  total_applications?: number;
+  approved_applications?: number;
+  status: string;
+  start_date?: string;
+  end_date?: string | null;
+  created_at?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -31,16 +31,35 @@ export interface PaginatedResponse<T> {
 
 const fetchGovtSchemes = async (
   page = 1,
-  limit = 15,
+  limit = 20,
 ): Promise<PaginatedResponse<GovtSchemeListItem>> => {
-  const response = await apiClient.get<PaginatedResponse<GovtSchemeListItem>>(
-    '/admin/govt-schemes',
-    { params: { page, limit } },
-  );
-  return response.data;
+  const response = await apiClient.get('/admin/agri/schemes', {
+    params: { page, limit },
+  });
+
+  const raw = response.data;
+
+  // Handle both { success: true, data: [...] } and standard array/paginated shapes
+  let items: GovtSchemeListItem[] = [];
+  if (Array.isArray(raw)) {
+    items = raw;
+  } else if (Array.isArray(raw?.data)) {
+    items = raw.data;
+  } else if (Array.isArray(raw?.items)) {
+    items = raw.items;
+  }
+
+  const total = items.length;
+  return {
+    data: items,
+    total: raw?.total ?? total,
+    page: raw?.page ?? page,
+    size: raw?.size ?? limit,
+    pages: (raw?.pages ?? Math.ceil(total / limit)) || 1,
+  };
 };
 
-export const useGovtSchemes = (page = 1, limit = 15) => {
+export const useGovtSchemes = (page = 1, limit = 20) => {
   return useQuery({
     queryKey: ['govtSchemes', page, limit],
     queryFn: () => fetchGovtSchemes(page, limit),

@@ -1,10 +1,8 @@
 import axios from 'axios';
 
-export const API_BASE_URL = 'http://localhost:8000/v1';
-// export const API_BASE_URL = 'http://10.197.144.58:8000/v1';
-// export const API_BASE_URL = 'http://10.23.101.58:8000/v1';
-// export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-console.log("API_BASE_URL =", API_BASE_URL);
+// ── Base URL — reads from env in production, falls back to localhost ─────────
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/v1';
 
 let _accessToken: string | null = localStorage.getItem('admin_access_token');
 let _refreshToken: string | null = localStorage.getItem('admin_refresh_token');
