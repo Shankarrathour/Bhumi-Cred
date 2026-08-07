@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { LucideIcon } from 'lucide-react';
+import { LucideIcon, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface PageHeaderProps {
   title: string;
@@ -9,11 +10,23 @@ interface PageHeaderProps {
   actions?: React.ReactNode;
   icon?: LucideIcon;
   iconColor?: string;
+  showBack?: boolean;
+  onBack?: () => void;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
-  title, description, badge, actions, icon: Icon, iconColor = '#16A34A',
+  title, description, badge, actions, icon: Icon, iconColor = '#16A34A', showBack, onBack,
 }) => {
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      navigate(-1);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -6 }}
@@ -22,6 +35,16 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       className="flex items-start justify-between gap-4 mb-6"
     >
       <div className="flex items-center gap-3 min-w-0">
+        {(showBack || onBack) && (
+          <button
+            onClick={handleBack}
+            className="shrink-0 w-9 h-9 rounded-xl border border-[#E2E8F0] bg-white flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] hover:border-[#CBD5E1] transition-all shadow-xs cursor-pointer"
+            title="Go Back"
+            aria-label="Go Back"
+          >
+            <ArrowLeft size={18} />
+          </button>
+        )}
         {Icon && (
           <div
             className="shrink-0 w-10 h-10 rounded-[12px] flex items-center justify-center"

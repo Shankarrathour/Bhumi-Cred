@@ -24,7 +24,7 @@ export const TransactionDetails = () => {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
@@ -39,8 +39,9 @@ export const TransactionDetails = () => {
     <div className="space-y-6">
       <div className="flex items-center space-x-4">
         <button 
-          onClick={() => navigate('/wallet')}
+          onClick={() => navigate(-1)}
           className="p-2 hover:bg-gray-100 rounded-full transition-colors border border-gray-200 bg-white"
+          title="Go Back"
         >
           <ArrowLeft size={20} className="text-gray-600" />
         </button>

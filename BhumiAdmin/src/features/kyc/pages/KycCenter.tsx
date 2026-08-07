@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, UserCheck, Search, Filter, X, Check, Eye, AlertTriangle, FileText, Image as ImageIcon } from 'lucide-react';
+import { ShieldCheck, UserCheck, X, Check, AlertTriangle, FileText, Image as ImageIcon } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
-import { EmptyState } from '../../../components/ui/EmptyState';
 import { Button, IconButton, Chip } from '@mui/material';
 import toast from 'react-hot-toast';
 

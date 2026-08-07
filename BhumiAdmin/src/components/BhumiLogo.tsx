@@ -71,7 +71,7 @@ export const BhumiLogo: React.FC<BhumiLogoProps> = ({
       {!isCollapsed && (
         <div className="flex flex-col min-w-0">
           <div className={`${titleSize} font-bold leading-none tracking-tight flex items-center`}>
-            <span className="text-[#0F172A] font-extrabold">Bhumi</span>
+            <span className="text-[#0F172A] font-extrabold">bhumi</span>
             <span className="text-[#D97706] font-bold">Cred</span>
           </div>
           {showSubtitle && (

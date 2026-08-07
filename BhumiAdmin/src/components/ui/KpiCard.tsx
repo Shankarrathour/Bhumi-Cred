@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 
 interface KpiCardProps {
@@ -16,6 +16,7 @@ interface KpiCardProps {
   prefix?: string;
   suffix?: string;
   loading?: boolean;
+  onClick?: () => void;
 }
 
 const DEFAULT_SPARK = [30, 25, 35, 28, 42, 38, 45, 40, 48];
@@ -27,6 +28,7 @@ export const KpiCard: React.FC<KpiCardProps> = ({
   sparkData = DEFAULT_SPARK, sparkColor = '#16A34A',
   prefix = '', suffix = '',
   loading = false,
+  onClick,
 }) => {
   const spark = sparkData.map((v, i) => ({ i, v }));
 
@@ -50,9 +52,12 @@ export const KpiCard: React.FC<KpiCardProps> = ({
 
   return (
     <motion.div
-      whileHover={{ y: -2, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.06)' }}
+      onClick={onClick}
+      whileHover={{ y: -3, boxShadow: '0 12px 30px -5px rgba(0,0,0,0.08)' }}
       transition={{ duration: 0.2 }}
-      className="bg-white border border-[#E8EDF5] rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.03)] cursor-default flex flex-col justify-between"
+      className={`bg-white border border-[#E8EDF5] rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between ${
+        onClick ? 'cursor-pointer hover:border-emerald-300' : 'cursor-default'
+      }`}
     >
       {/* Header Row */}
       <div className="flex items-center justify-between mb-2">

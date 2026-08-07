@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  Bell, AlertTriangle, Info, CheckCircle2, ShieldAlert, Filter,
-  CheckCheck, Trash2, ArrowRight, RefreshCw, Layers, Shield, CloudRain
+  Bell, AlertTriangle, Info, CheckCircle2, ShieldAlert,
+  CheckCheck, Trash2, ArrowRight, RefreshCw
 } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { FilterBar } from '../../../components/ui/FilterBar';

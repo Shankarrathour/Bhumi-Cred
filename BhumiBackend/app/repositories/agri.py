@@ -200,9 +200,17 @@ class AgriRepository:
         from app.models.agri_application_document import AgriApplicationDocument
         from app.models.agri_application_timeline import AgriApplicationTimeline
         from beanie import PydanticObjectId
-        app_id = PydanticObjectId(application_id)
-        
-        application = await AgriApplication.get(app_id)
+        from bson.errors import InvalidId
+
+        if not PydanticObjectId.is_valid(application_id):
+            return None
+
+        try:
+            app_id = PydanticObjectId(application_id)
+            application = await AgriApplication.get(app_id)
+        except (InvalidId, Exception):
+            return None
+
         if not application:
             return None
             

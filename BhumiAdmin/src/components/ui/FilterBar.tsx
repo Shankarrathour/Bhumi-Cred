@@ -1,6 +1,5 @@
 import React from 'react';
-import { Search, SlidersHorizontal, Download, Upload, RefreshCw, ChevronDown } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Search, Download, Upload, RefreshCw } from 'lucide-react';
 
 interface FilterOption {
   label: string;

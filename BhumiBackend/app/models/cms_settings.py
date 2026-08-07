@@ -221,7 +221,7 @@ class CMSTermsAndPolicy(Document):
 
 
 class SystemSetting(Document):
-    setting_id: str = "GLOBAL_SYSTEM_SETTINGS"
+    setting_id: str = Field(default="GLOBAL_SYSTEM_SETTINGS")
     app_name: str = "BHUMICRED"
     support_email: EmailStr = "support@bhumicred.com"
     support_phone: str = "1800-123-4567"
@@ -238,7 +238,7 @@ class SystemSetting(Document):
 
 
 class PlatformFeeSetting(Document):
-    setting_id: str = "GLOBAL_PLATFORM_FEES"
+    setting_id: str = Field(default="GLOBAL_PLATFORM_FEES")
     carbon_trade_fee_percent: float = Field(default=2.5, ge=0)
     marketplace_commission_percent: float = Field(default=5.0, ge=0)
     insurance_processing_fee_inr: float = Field(default=50.0, ge=0)

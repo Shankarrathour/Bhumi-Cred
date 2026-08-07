@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, Download, TrendingUp, Users, Package, AlertCircle, Loader2, ShoppingBag, Tag } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
