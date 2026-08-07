@@ -1,14 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Users, Plus, ShieldCheck, UserCheck, KeyRound, RefreshCw, Eye, Pencil, Mail,
-  Shield, UserX, Clock, Globe2, MapPin, Smartphone, Laptop, Lock, AlertTriangle,
-  CheckCircle2, XCircle, Search, Download, Upload, Activity, Layers, Check, X,
-  SlidersHorizontal, ChevronRight, FileSpreadsheet, Key, LogOut, ArrowUpRight, BarChart2,
-  Grid, ListFilter, Sliders, ShieldAlert
+  Users, Plus, UserCheck, KeyRound, RefreshCw, Eye,
+  Shield, UserX, Clock, MapPin, Activity, X,
+  BarChart2, ShieldAlert
 } from 'lucide-react';
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid
+  AreaChart, Area, PieChart, Pie, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid
 } from 'recharts';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { FilterBar } from '../../../components/ui/FilterBar';
@@ -16,7 +14,7 @@ import { KpiCard } from '../../../components/ui/KpiCard';
 import { ChartCard } from '../../../components/ui/ChartCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { EmptyState, SkeletonTable } from '../../../components/ui/EmptyState';
-import { useUsers, AdminUserItem, SEEDED_ADMIN_USERS, UserActivityLog } from '../api/useUsers';
+import { useUsers, AdminUserItem, SEEDED_ADMIN_USERS } from '../api/useUsers';
 import { useRoles } from '../api/useRoles';
 import toast from 'react-hot-toast';
 
@@ -35,7 +33,7 @@ const IAM_ACTIONS = [
 ];
 
 // Initial matrix state
-const DEFAULT_MATRIX: Record<string, Record<string, boolean>> = {
+const DEFAULT_MATRIX: Record<string, Record<string, Record<string, boolean>>> = {
   'Super Admin': IAM_MODULES.reduce((acc, m) => ({ ...acc, [m]: IAM_ACTIONS.reduce((a, act) => ({ ...a, [act]: true }), {}) }), {}),
   'Operations Admin': {
     'Farmer Management': { View: true, Create: true, Edit: true, Delete: false, Approve: true, Reject: true, Assign: true, Export: true, 'Manage Wallet': false },
@@ -83,10 +81,10 @@ export const UserList = () => {
 
   // Permission Matrix Selected Role
   const [matrixRole, setMatrixRole] = useState<string>('Super Admin');
-  const [localMatrixState, setLocalMatrixState] = useState<Record<string, Record<string, boolean>>>({});
+  const [localMatrixState, setLocalMatrixState] = useState<Record<string, Record<string, Record<string, boolean>>>>({});
 
   const { data: apiUsers, isLoading, refetch, isFetching } = useUsers();
-  const { data: rolesData, isLoading: rolesLoading } = useRoles();
+  const { data: rolesData } = useRoles();
   const users = apiUsers || SEEDED_ADMIN_USERS;
 
   // Use dynamic matrix or default
@@ -448,7 +446,7 @@ export const UserList = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {IAM_MODULES.map((mod, idx) => {
+                  {IAM_MODULES.map((mod) => {
                     const currentPerms = activeMatrix[mod] || {};
                     return (
                       <tr key={mod} className="hover:bg-[#FAFCFF]">
@@ -670,7 +668,7 @@ export const UserList = () => {
                 {/* TAB 4: TIMELINE */}
                 {drawerTab === 'timeline' && (
                   <div className="space-y-3">
-                    {selectedUser.activity_logs?.map((log, i) => (
+                    {selectedUser.activity_logs?.map((log) => (
                       <div key={log.id} className="p-3 rounded-[10px] bg-[#F8FAFC] border border-[#E2E8F0] text-[12px]">
                         <div className="flex items-center justify-between font-600 text-[#0F172A] mb-1" style={{ fontWeight: 600 }}>
                           <span>{log.action}</span>

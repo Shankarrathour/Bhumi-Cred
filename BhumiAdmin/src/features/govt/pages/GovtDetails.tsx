@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle, XCircle, FileText, Download, Building2, User, Phone, Mail,
-  MapPin, Landmark, Calendar, ShieldCheck, ExternalLink, Award, Layers, Clock
+  MapPin, Landmark, ShieldCheck, Award, Layers, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StatusBadge } from '../../../components/ui/StatusBadge';

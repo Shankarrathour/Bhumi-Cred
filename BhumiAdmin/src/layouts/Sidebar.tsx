@@ -2,9 +2,10 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Leaf, Globe2, LayoutDashboard, Sprout, Building2, Map,
+  Globe2, LayoutDashboard, Sprout, Building2, Map,
   FileText, ShieldCheck, CreditCard, ShoppingBag, Wallet,
-  KeyRound, ClipboardList, Settings, LogOut, X, Gift
+  KeyRound, ClipboardList, Settings, LogOut, X, Gift,
+  Users, CheckSquare, FileCheck, BarChart3, Bell, LifeBuoy, Monitor, Activity
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
@@ -28,35 +29,48 @@ const NAV_GROUPS: NavGroupType[] = [
   {
     label: 'OVERVIEW',
     items: [
-      { id: 'command-center',      label: 'Command Center',      icon: Globe2,          path: '/command-center' },
-      { id: 'executive-dashboard', label: 'Executive Dashboard', icon: LayoutDashboard, path: '/' },
+      { id: 'executive-dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+      { id: 'command-center', label: 'Command Center', icon: Globe2, path: '/command-center' },
+      { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, path: '/reports' },
     ],
   },
   {
     label: 'OPERATIONS',
     items: [
-      { id: 'farmers',  label: 'Farmers',           icon: Sprout,      path: '/farmers'   },
-      { id: 'govt',     label: 'Government Bodies', icon: Building2,   path: '/govt'      },
-      { id: 'land',     label: 'Land & GIS',        icon: Map,         path: '/land'      },
-      { id: 'projects', label: 'Projects',          icon: FileText,    path: '/projects'  },
-      { id: 'insurance',label: 'Tree Insurance',    icon: ShieldCheck, path: '/insurance' },
+      { id: 'farmers', label: 'Farmer Management', icon: Sprout, path: '/farmers', allowedRoles: ['Super Admin', 'Operations Admin'] },
+      { id: 'govt', label: 'Government Bodies', icon: Building2, path: '/govt', allowedRoles: ['Super Admin', 'Operations Admin'] },
+      { id: 'partners', label: 'Partner Management', icon: Users, path: '/partners', allowedRoles: ['Super Admin', 'Operations Admin'] },
+      { id: 'land', label: 'Land & GIS Management', icon: Map, path: '/land', allowedRoles: ['Super Admin', 'Operations Admin', 'GIS Admin'] },
+      { id: 'projects', label: 'Project Management', icon: FileText, path: '/projects', allowedRoles: ['Super Admin', 'Operations Admin', 'Project Admin'] },
+      { id: 'mrv', label: 'MRV & Verification', icon: Activity, path: '/mrv', allowedRoles: ['Super Admin', 'Project Admin', 'GIS Admin'] },
+      { id: 'insurance', label: 'Tree Insurance', icon: ShieldCheck, path: '/insurance', allowedRoles: ['Super Admin', 'Insurance Admin'] },
+      { id: 'kyc', label: 'KYC Verification', icon: CheckSquare, path: '/kyc', allowedRoles: ['Super Admin', 'KYC Admin'] },
+      { id: 'documents', label: 'Document Verification', icon: FileCheck, path: '/documents', allowedRoles: ['Super Admin', 'KYC Admin', 'Operations Admin'] },
     ],
   },
   {
-    label: 'BUSINESS',
+    label: 'BUSINESS & COMMERCE',
     items: [
-      { id: 'carbon',      label: 'Carbon Credits',    icon: CreditCard,  path: '/carbon'      },
-      { id: 'marketplace', label: 'Marketplace',       icon: ShoppingBag, path: '/marketplace' },
-      { id: 'wallet',      label: 'Wallet & Payments', icon: Wallet,      path: '/wallet'      },
-      { id: 'referrals',   label: 'Referral Program',  icon: Gift,        path: '/referrals'   },
+      { id: 'carbon', label: 'Carbon Credit Mgmt', icon: CreditCard, path: '/carbon', allowedRoles: ['Super Admin', 'Project Admin', 'Finance Admin'] },
+      { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag, path: '/marketplace', allowedRoles: ['Super Admin', 'Marketplace Admin'] },
+      { id: 'wallet', label: 'Wallet & Payments', icon: Wallet, path: '/wallet', allowedRoles: ['Super Admin', 'Finance Admin'] },
+      { id: 'referrals', label: 'Referral Program', icon: Gift, allowedRoles: ['Super Admin', 'Operations Admin'], path: '/referrals' },
     ],
   },
   {
-    label: 'SYSTEM',
+    label: 'ENGAGEMENT & CONTENT',
     items: [
-      { id: 'users',    label: 'Roles & Access', icon: KeyRound,      path: '/users'    },
-      { id: 'audit',    label: 'Audit Logs',     icon: ClipboardList, path: '/audit'    },
-      { id: 'settings', label: 'Settings',       icon: Settings,      path: '/settings' },
+      { id: 'notifications', label: 'Notifications', icon: Bell, path: '/notifications', allowedRoles: ['Super Admin', 'Content Admin', 'Operations Admin'] },
+      { id: 'support', label: 'Support Center', icon: LifeBuoy, path: '/support', allowedRoles: ['Super Admin', 'Support Admin'] },
+      { id: 'cms', label: 'CMS (Content)', icon: Monitor, path: '/cms', allowedRoles: ['Super Admin', 'Content Admin'] },
+    ],
+  },
+  {
+    label: 'SYSTEM & GOVERNANCE',
+    items: [
+      { id: 'users', label: 'User & Role Mgmt', icon: KeyRound, path: '/users', allowedRoles: ['Super Admin'] },
+      { id: 'audit', label: 'Audit Logs', icon: ClipboardList, path: '/audit', allowedRoles: ['Super Admin', 'Auditor'] },
+      { id: 'settings', label: 'System Settings', icon: Settings, path: '/settings', allowedRoles: ['Super Admin'] },
     ],
   },
 ];

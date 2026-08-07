@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Map, Cloud, RefreshCw, AlertTriangle, Download, Leaf, Globe, AlertCircle, Loader2 } from 'lucide-react';
+import { Activity, Map, Cloud, RefreshCw, AlertTriangle, Download, Globe, AlertCircle, Loader2 } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { ChartCard } from '../../../components/ui/ChartCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { Grid, Typography, Card, CardContent } from '@mui/material';
+import { Typography, Card, CardContent } from '@mui/material';
 import { useAdminProjects } from '../api/useMrv';
 
 const BIOMASS_GROWTH_DATA = [
@@ -52,7 +52,7 @@ export const MrvDashboard: React.FC = () => {
         iconColor="#0EA5E9"
         actions={
           <>
-            <button onClick={handleRefresh} className="btn btn-secondary btn-sm gap-1.5">
+            <button onClick={handleRefresh} className="btn btn-secondary btn-sm gap-1.5 cursor-pointer">
               <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} /> Sync Data
             </button>
           </>
@@ -66,8 +66,8 @@ export const MrvDashboard: React.FC = () => {
         <KpiCard title="Est. Carbon (tCO₂)" value={totalCarbon.toFixed(1)} icon={Cloud} iconBg="#F5F3FF" iconColor="#8B5CF6" />
       </div>
 
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div className="md:col-span-8">
           <ChartCard title="Biomass Growth Tracking" subtitle="Estimated biomass (tons) across active projects over last 6 months" height={300}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={BIOMASS_GROWTH_DATA}>
@@ -85,22 +85,22 @@ export const MrvDashboard: React.FC = () => {
               </AreaChart>
             </ResponsiveContainer>
           </ChartCard>
-        </Grid>
+        </div>
 
-        <Grid item xs={12} md={4}>
+        <div className="md:col-span-4">
           <Card className="h-full border border-[#E2E8F0] shadow-sm rounded-xl">
             <CardContent className="h-full flex flex-col p-5">
               <Typography variant="h6" className="font-semibold text-slate-800 mb-2">Project Heatmap</Typography>
               <Typography variant="body2" className="text-slate-500 mb-4">Live view of project deployments globally.</Typography>
-              <div className="flex-1 bg-slate-100 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-slate-300">
+              <div className="flex-1 bg-slate-100 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-slate-300 min-h-[160px]">
                 <Map className="text-slate-400 mb-2" size={32} />
-                <Typography color="text.secondary">Global Map View Placeholder</Typography>
-                <Typography variant="caption" color="text.secondary">(Integrates with Mapbox/Google Maps)</Typography>
+                <Typography color="text.secondary">Global Map View</Typography>
+                <Typography variant="caption" color="text.secondary">(Live GIS Overlay)</Typography>
               </div>
             </CardContent>
           </Card>
-        </Grid>
-      </Grid>
+        </div>
+      </div>
 
       {/* Projects Table */}
       <div className="ent-card overflow-hidden mt-6">

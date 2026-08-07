@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-  Wallet, ArrowDownRight, ArrowUpRight, CheckCircle2, XCircle,
-  Clock, RefreshCw, Download, Eye, Check, X, IndianRupee
+  Wallet, ArrowUpRight, CheckCircle2,
+  Clock, RefreshCw, Eye, Check, X, IndianRupee, Download
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {

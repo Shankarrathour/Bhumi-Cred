@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { 
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
-  Paper, Checkbox, IconButton, TablePagination, Menu, MenuItem, Tooltip 
+  Paper, Checkbox, IconButton, TablePagination, Menu, MenuItem
 } from '@mui/material';
-import { MoreVertical, Edit2, Trash2, Eye, Download } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, Eye } from 'lucide-react';
 
 interface Column {
   id: string;
@@ -37,7 +37,7 @@ export const EnterpriseDataTable: React.FC<EnterpriseDataTableProps> = ({
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [activeRow, setActiveRow] = useState<any>(null);
 
-  const handleChangePage = (event: unknown, newPage: number) => {
+  const handleChangePage = (_: unknown, newPage: number) => {
     setPage(newPage);
   };
 
@@ -55,7 +55,7 @@ export const EnterpriseDataTable: React.FC<EnterpriseDataTableProps> = ({
     setSelected([]);
   };
 
-  const handleClick = (event: any, id: string) => {
+  const handleClick = (_: any, id: string) => {
     const selectedIndex = selected.indexOf(id);
     let newSelected: string[] = [];
 

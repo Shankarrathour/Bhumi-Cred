@@ -2,9 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Search, Bell, Mail, LayoutGrid, TrendingUp,
   ChevronDown, Settings, LogOut, User, HelpCircle,
-  Check, AlertTriangle, Info, Menu, X, ArrowRight,
+  Check, AlertTriangle, Info, Menu, ArrowRight,
   Sprout, Map, ShieldCheck, ShoppingBag, Landmark,
-  CloudSun, MessageSquare, ExternalLink
+  CloudSun, ExternalLink
 } from 'lucide-react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store/store';

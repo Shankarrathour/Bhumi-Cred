@@ -30,8 +30,13 @@ export interface SuccessResponse<T> {
 }
 
 const fetchLandVerificationQueue = async (): Promise<AdminLandVerificationItem[]> => {
-  const response = await apiClient.get<SuccessResponse<AdminLandVerificationItem[]>>('/admin/farmers/land-verification');
-  return response.data.data;
+  try {
+    const response = await apiClient.get<SuccessResponse<AdminLandVerificationItem[]>>('/admin/farmers/land-verification');
+    return response.data?.data || [];
+  } catch (err) {
+    console.error('Failed to fetch land verification queue, falling back', err);
+    return [];
+  }
 };
 
 export const useLandVerificationQueue = () => {

@@ -17,6 +17,7 @@ def get_admin_dashboard_service() -> AdminMarketplaceDashboardService:
 from app.dependencies.auth import CurrentAdmin
 
 @router.get("", response_model=AdminMarketplaceDashboardResponse)
+@router.get("/", response_model=AdminMarketplaceDashboardResponse)
 async def get_dashboard_summary(
     admin: CurrentAdmin,
     service: AdminMarketplaceDashboardService = Depends(get_admin_dashboard_service)

@@ -16,7 +16,6 @@ import {
   Sun,
   Moon,
   ShieldCheck,
-  Leaf,
   ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

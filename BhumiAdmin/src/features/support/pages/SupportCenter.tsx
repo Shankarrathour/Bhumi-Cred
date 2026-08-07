@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LifeBuoy, X, Send, Search, Clock, CheckCircle } from 'lucide-react';
+import { LifeBuoy, X, Send, CheckCircle } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { Button, IconButton, Chip } from '@mui/material';
@@ -8,10 +8,10 @@ import toast from 'react-hot-toast';
 import { useSupportTickets, useReplyTicket, useUpdateTicketStatus, Ticket } from '../api/useSupport';
 
 export const SupportCenter = () => {
-  const { data: tickets = [], isLoading } = useSupportTickets();
+  const { data: tickets = [], isLoading, refetch } = useSupportTickets();
   const replyMutation = useReplyTicket();
-  const statusMutation = useUpdateTicketStatus();
-  
+  const updateStatusMutation = useUpdateTicketStatus();
+
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [replyText, setReplyText] = useState('');
 
@@ -20,26 +20,25 @@ export const SupportCenter = () => {
     replyMutation.mutate(
       { ticketId: selectedTicket.id, message: replyText },
       {
-        onSuccess: (updatedTicket) => {
-          toast.success('Reply sent successfully');
+        onSuccess: () => {
+          toast.success('Reply sent successfully!');
           setReplyText('');
-          setSelectedTicket(updatedTicket);
+          refetch();
         },
-        onError: () => toast.error('Failed to send reply')
       }
     );
   };
 
-  const handleResolve = () => {
+  const handleStatusChange = (status: Ticket['status']) => {
     if (!selectedTicket) return;
-    statusMutation.mutate(
-      { ticketId: selectedTicket.id, status: 'RESOLVED' },
+    updateStatusMutation.mutate(
+      { ticketId: selectedTicket.id, status },
       {
-        onSuccess: (updatedTicket) => {
-          toast.success('Ticket marked as resolved');
-          setSelectedTicket(updatedTicket);
+        onSuccess: () => {
+          toast.success(`Ticket marked as ${status}`);
+          setSelectedTicket({ ...selectedTicket, status });
+          refetch();
         },
-        onError: () => toast.error('Failed to update ticket')
       }
     );
   };
@@ -50,7 +49,7 @@ export const SupportCenter = () => {
         title="Support Center"
         description="Manage vendor and user support queries, track issue resolutions, and provide assistance."
         icon={LifeBuoy}
-        badge={{ label: `${tickets.filter(t => t.status !== 'RESOLVED' && t.status !== 'CLOSED').length} Active`, variant: 'primary' }}
+        badge={{ label: `${tickets.filter(t => t.status !== 'RESOLVED' && t.status !== 'CLOSED').length} Active`, variant: 'info' }}
       />
 
       <div className="ent-card overflow-hidden">
@@ -181,8 +180,8 @@ export const SupportCenter = () => {
                       color="success" 
                       size="small"
                       startIcon={<CheckCircle size={16} />} 
-                      onClick={handleResolve}
-                      disabled={statusMutation.isPending}
+                      onClick={() => handleStatusChange('RESOLVED')}
+                      disabled={updateStatusMutation.isPending}
                       className="!rounded-lg !text-[13px] !py-1.5"
                     >
                       Mark as Resolved

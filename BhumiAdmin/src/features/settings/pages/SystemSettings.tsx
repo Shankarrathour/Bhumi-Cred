@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-  Settings, Save, Shield, Globe, CreditCard, CheckCircle, AlertCircle, Loader2,
-  Lock, Mail, Building2, Key, RefreshCw, Eye, EyeOff, Zap, ShieldAlert
+  Settings, Save, Shield, Globe, CreditCard, AlertCircle, Loader2,
+  Lock, Mail, Building2, Key, Eye, EyeOff, ShieldAlert
 } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { motion, AnimatePresence } from 'framer-motion';

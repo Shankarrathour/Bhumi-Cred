@@ -13,6 +13,13 @@ export interface FarmerListItem {
   kyc_status: string;
   is_active: boolean;
   total_land_area: number;
+  created_at?: string;
+  wallet_balance?: number;
+  total_trees?: number;
+  carbon_credits_generated?: number;
+  project_name?: string;
+  insurance_count?: number;
+  photo_url?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -58,11 +65,14 @@ export interface AdminFarmerDetailResponse {
   id: string;
   farmer_id?: string;
   mobile: string;
+  first_name?: string;
+  last_name?: string;
   full_name?: string;
   state?: string;
   district?: string;
   village?: string;
   kyc_status: string;
+  is_active?: boolean;
   wallet_balance: number;
   total_acreage: number;
   total_trees: number;
