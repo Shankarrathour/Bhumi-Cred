@@ -277,14 +277,13 @@ class BhumiCredRegistrationService:
     async def get_or_generate_invoice(self, reg_id: str) -> InvoiceResponse:
         reg = await self.get_registration(reg_id)
 
-        if reg.current_step < 6:
-            raise BadRequestException("Please complete Step 6 first.", "STEP_VALIDATION_FAILED")
+        if reg.current_step < 5 and reg.status != "submitted":
+            raise BadRequestException("Please complete all registration steps first.", "STEP_VALIDATION_FAILED")
 
-        # Check if invoice already exists
+        # Check if invoice already exists — return cached invoice
         existing_invoice = await self._invoices.get_by_registration_id(reg_id)
         if existing_invoice:
             return self._build_invoice_response(existing_invoice)
-            await existing_invoice.delete()
 
         # Dynamic invoice calculation logic
         # Billing Items:
@@ -370,6 +369,58 @@ class BhumiCredRegistrationService:
         await self._registrations.save(reg)
 
         logger.info(f"Submitted registration successfully. Reg Number: {reg_number}")
+
+        # Also create a LandParcel so it shows in the Admin panel's GIS & Land / land list
+        try:
+            from app.models.land_parcel import LandParcel, GeoCoords, LandVerificationStatus, OwnershipType
+            from bson import ObjectId
+
+            area_acres = 0.0
+            if reg.calculated_area and reg.calculated_area.acre:
+                area_acres = float(reg.calculated_area.acre)
+            elif reg.total_area:
+                area_acres = float(reg.total_area)
+
+            # Map boundary points to list of GeoCoords
+            coords_list = []
+            if reg.boundary_points:
+                for p in reg.boundary_points:
+                    coords_list.append(GeoCoords(latitude=p.latitude, longitude=p.longitude))
+
+            # Center coordinates
+            center_coords = None
+            if reg.latitude is not None and reg.longitude is not None:
+                center_coords = GeoCoords(latitude=reg.latitude, longitude=reg.longitude)
+            elif coords_list:
+                center_coords = coords_list[0]
+            else:
+                center_coords = GeoCoords(latitude=23.0225, longitude=77.0124)
+
+            land_parcel = LandParcel(
+                farmer_id=reg.farmer_id if reg.farmer_id else "unknown_farmer",
+                survey_number=reg_number,
+                khasra_number=reg_number,
+                area_acres=area_acres if area_acres > 0 else 1.0,
+                ownership_type=OwnershipType.OWN if reg.belongs_to_self else OwnershipType.LEASED,
+                is_irrigated=False,
+                state=reg.state or "Madhya Pradesh",
+                district=reg.district or "Sehore",
+                village=reg.village or "Ichhawar",
+                gram_panchayat=reg.gram_panchayat,
+                tehsil=reg.tehsil,
+                coordinates=center_coords,
+                boundary_polygon=coords_list,
+                tree_stock_count=reg.tree_stock_count or 0,
+                plantation_area_acres=reg.plantation_area or 0.0,
+                verification_status=LandVerificationStatus.PENDING,
+                is_active=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc)
+            )
+            await land_parcel.insert()
+            logger.info(f"Automatically created LandParcel for submitted registration: {reg_number}")
+        except Exception as e:
+            logger.error(f"Failed to automatically create LandParcel for registration {reg_number}: {e}", exc_info=True)
 
         return SubmitRegistrationResponse(
             registration_number=reg_number,

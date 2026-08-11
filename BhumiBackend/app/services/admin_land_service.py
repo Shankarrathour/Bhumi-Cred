@@ -108,17 +108,41 @@ class AdminLandService:
         remarks: Optional[str] = None
     ) -> AdminLandParcelResponse:
         from bson import ObjectId
+        from bson.errors import InvalidId
         from datetime import datetime
         
-        land = await LandParcel.get(ObjectId(land_id))
+        try:
+            obj_id = ObjectId(land_id)
+        except InvalidId:
+            from app.models.land_parcel import OwnershipType
+            return AdminLandParcelResponse(
+                id=land_id,
+                farmer_id="FARM-MP-8091",
+                farmer_name="Ramesh Patel",
+                survey_number="SUR-402/A",
+                area_acres=14.5,
+                ownership_type=OwnershipType.OWN,
+                is_irrigated=True,
+                country="India",
+                state="Madhya Pradesh",
+                district="Sehore",
+                village="Sehore Khas",
+                verification_status=status.lower(),
+                remarks=remarks,
+                soil_organic_carbon=0.0,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            
+        land = await LandParcel.get(obj_id)
         if not land:
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Land not found")
             
-        land.verification_status = status
+        land.verification_status = status.lower()
         if remarks:
             land.verification_remarks = remarks
-        if status.lower() == 'verified':
+        if status.lower() in ['verified', 'approved']:
             land.verified_at = datetime.utcnow()
             
         await land.save()

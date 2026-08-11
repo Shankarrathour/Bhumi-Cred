@@ -35,8 +35,8 @@ export interface LandPlot {
   vikashKhand?: string;
   village?: string;
   fullAddress?: string;
-  landmark?: string;
   landDocumentUrl?: string;
+  landPhotoUrls?: string[];
 }
 
 interface LandState {
@@ -95,6 +95,8 @@ export const useLandStore = create<LandState>()(
               geoCoords: bp.coordinates || existing?.geoCoords || { latitude: 0, longitude: 0 },
               boundaryPolygon: bp.boundary_polygon || existing?.boundaryPolygon || [],
               documentName: bp.land_document_url || existing?.documentName || '',
+              landDocumentUrl: bp.land_document_url || undefined,
+              landPhotoUrls: bp.land_photo_urls || [],
               registrationDate: bp.created_at || existing?.registrationDate || new Date().toISOString(),
               soilDetails: existing?.soilDetails || mockSoil(),
               country: bp.country,
@@ -152,6 +154,7 @@ export const useLandStore = create<LandState>()(
             crop_type: plotData.cropType,
             soil_type: plotData.soilType,
             land_document_url: plotData.landDocumentUrl || undefined,
+            land_photo_urls: plotData.landPhotoUrls || [],
           });
 
           const savedParcel = response.data;

@@ -1,11 +1,8 @@
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
-import { Stack } from "expo-router";
+import { useEffect } from 'react';
+import { Stack, useSegments, router } from "expo-router";
 
 import { GlobalSchedulerOverlay } from '../src/components/GlobalSchedulerOverlay';
- 
-
- import { useNotificationStore } from '../src/store/notificationStore';
 import { useAuthStore } from '../src/store/authStore';
 
 // Keep the splash screen visible while we fetch resources
@@ -15,6 +12,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 export default function RootLayout() {
   const _hasHydrated = useAuthStore((state) => state._hasHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const segments = useSegments();
 
   useEffect(() => {
     // Hide the native splash screen so the app's custom animated splash screen/JS UI can render
@@ -25,6 +24,37 @@ export default function RootLayout() {
       });
     }
   }, [_hasHydrated]);
+
+  useEffect(() => {
+    if (!_hasHydrated) return;
+
+    // Check if the user is currently inside the authentication screen flows
+    const inAuthGroup = segments[0] === '(auth)' || segments[0] === '(vendor_auth)';
+    // Onboarding is a special post-registration screen — not an auth screen, but
+    // also not a "fully authenticated" screen.  We must NOT redirect away from it.
+    const inOnboarding = segments[0] === 'onboarding';
+
+    // A user who has completed OTP verification will have tokens even if they are
+    // not yet "isAuthenticated" (e.g. a new farmer with verificationStatus=unverified).
+    const hasTokens = !!useAuthStore.getState().accessToken;
+
+    // Defer navigation by one tick to ensure Root Layout navigator is fully mounted
+    const timer = setTimeout(() => {
+      if (!isAuthenticated && !hasTokens && !inAuthGroup && !inOnboarding) {
+        // No session at all — send to welcome/login
+        router.replace('/(auth)/welcome');
+      } else if (isAuthenticated && inAuthGroup) {
+        // Fully authenticated user somehow landed on an auth screen — go to dashboard
+        router.replace('/(tabs)');
+      }
+      // Any other combination is valid and should not be redirected:
+      // • hasTokens but !isAuthenticated  → new farmer in onboarding flow
+      // • !isAuthenticated but inAuthGroup → normal login / register / OTP screens
+      // • isAuthenticated not in auth group → main app tabs
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [_hasHydrated, isAuthenticated, segments]);
 
   if (!_hasHydrated) {
     return null;

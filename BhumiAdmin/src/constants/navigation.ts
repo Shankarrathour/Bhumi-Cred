@@ -11,6 +11,7 @@ import {
   BookOpen, 
   Wallet, 
   ArrowDownRight, 
+  ArrowLeftRight, 
   LineChart, 
   UserCheck, 
   FileCode, 
@@ -18,7 +19,8 @@ import {
   History, 
   BarChart3, 
   Settings,
-  FileText
+  FileText,
+  FolderKanban
 } from 'lucide-react';
 import { UserRole } from '../types';
 
@@ -106,6 +108,12 @@ export const NAVIGATION_ITEMS: NavItem[] = [
     roles: ['super_admin', 'finance_manager'],
   },
   {
+    title: 'Carbon Exchange',
+    path: '/admin/carbon-exchange',
+    icon: ArrowLeftRight,
+    roles: ['super_admin', 'finance_manager'],
+  },
+  {
     title: 'Withdrawals Desk',
     path: '/admin/withdrawals',
     icon: ArrowDownRight,
@@ -116,6 +124,18 @@ export const NAVIGATION_ITEMS: NavItem[] = [
     path: '/admin/esg',
     icon: LineChart,
     roles: ['super_admin', 'carbon_project_manager'],
+  },
+  {
+    title: 'CSR Management',
+    path: '/admin/csr-management',
+    icon: FolderKanban,
+    roles: ['super_admin', 'carbon_project_manager'],
+  },
+  {
+    title: 'Investor & ESG',
+    path: '/admin/investor-dashboard',
+    icon: LineChart,
+    roles: ['super_admin', 'finance_manager'],
   },
   {
     title: 'Employee Directory',

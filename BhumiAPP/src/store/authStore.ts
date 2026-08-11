@@ -3,6 +3,7 @@ console.log("[authStore] Module Start");
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { setAuthTokens, setAuthCallbacks } from '../api/apiClient';
+import { resolveMediaUrl } from '../utils/resolveMediaUrl';
 // import { useWalletStore } from './walletStore';
 // import { useMarketplaceStore } from './marketplaceStore';
 
@@ -93,6 +94,12 @@ export interface UserProfile {
   verificationStatus: 'unverified' | 'pending' | 'approved' | 'rejected';
   carbonCreditsGenerated: number;
   isActive?: boolean;
+  gender?: string;
+  pincode?: string;
+  tehsil?: string;
+  category?: string;
+  education?: string;
+  occupation?: string;
 }
 
 interface AuthState {
@@ -139,6 +146,12 @@ const defaultUser: UserProfile = {
   fullAddress: '',
   verificationStatus: 'unverified',
   carbonCreditsGenerated: 0,
+  gender: 'Male',
+  pincode: '',
+  tehsil: '',
+  category: '',
+  education: '',
+  occupation: '',
 };
 
 function mapVendorResponse(v: any): VendorProfile {
@@ -151,7 +164,7 @@ function mapVendorResponse(v: any): VendorProfile {
     phone: v.phone,
     dob: v.dob,
     gender: v.gender,
-    profilePhotoUrl: v.profile_photo_url,
+    profilePhotoUrl: resolveMediaUrl(v.profile_photo_url) ?? null,
     businessName: v.business_name,
     gstNumber: v.gst_number,
     yearsOfExperience: v.years_of_experience,
@@ -167,8 +180,8 @@ function mapVendorResponse(v: any): VendorProfile {
     longitude: v.longitude,
     kycIdentityType: v.kyc_identity_type,
     kycIdentityNumber: v.kyc_identity_number,
-    kycDocumentFrontUrl: v.kyc_document_front_url,
-    kycDocumentBackUrl: v.kyc_document_back_url,
+    kycDocumentFrontUrl: resolveMediaUrl(v.kyc_document_front_url) ?? null,
+    kycDocumentBackUrl: resolveMediaUrl(v.kyc_document_back_url) ?? null,
     bankAccountNumber: v.bank_account_number,
     bankIfsc: v.bank_ifsc,
     bankHolderName: v.bank_holder_name,
@@ -339,7 +352,7 @@ export const useAuthStore = create<AuthState>()(
               ? new Date(p.dob).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
               : currentUser.dob,
             email: p?.email || currentUser.email,
-            farmerPhoto: p?.farmer_photo_url || currentUser.farmerPhoto,
+            farmerPhoto: resolveMediaUrl(p?.farmer_photo_url) || currentUser.farmerPhoto,
             state: addr?.state || currentUser.state,
             district: addr?.district || currentUser.district,
             village: addr?.village || currentUser.village,
@@ -348,6 +361,12 @@ export const useAuthStore = create<AuthState>()(
             vikashKhand: addr?.vikash_khand || currentUser.vikashKhand,
             fullAddress: addr?.full_address || currentUser.fullAddress,
             carbonCreditsGenerated: p?.carbon_credits_generated ?? currentUser.carbonCreditsGenerated,
+            gender: p?.gender || currentUser.gender,
+            category: p?.category || currentUser.category,
+            education: p?.education || currentUser.education,
+            occupation: p?.occupation || currentUser.occupation,
+            pincode: addr?.pincode || currentUser.pincode,
+            tehsil: addr?.tehsil || currentUser.tehsil,
           };
 
           const walletBal: number = p?.wallet_balance ?? get().walletBalance;
@@ -400,6 +419,9 @@ export const useAuthStore = create<AuthState>()(
 
       updateOnboardingData: (data: Partial<UserProfile>) => {
         const currentUser = get().user || defaultUser;
+        if (data.farmerPhoto !== undefined) {
+          data.farmerPhoto = resolveMediaUrl(data.farmerPhoto);
+        }
         set({ user: { ...currentUser, ...data } });
       },
 
@@ -436,7 +458,12 @@ export const useAuthStore = create<AuthState>()(
           };
           if (user.dob) {
             try {
-              profilePayload.dob = new Date(user.dob).toISOString();
+              if (user.dob.includes('/')) {
+                const [d, m, y] = user.dob.split('/');
+                profilePayload.dob = new Date(Number(y), Number(m) - 1, Number(d)).toISOString();
+              } else {
+                profilePayload.dob = new Date(user.dob).toISOString();
+              }
             } catch {
               // Skip invalid dob.
             }
@@ -451,8 +478,10 @@ export const useAuthStore = create<AuthState>()(
             current_address: {
               state: user.state || undefined,
               district: user.district || undefined,
+              tehsil: user.tehsil || undefined,
               village: user.village || undefined,
               city: user.city || undefined,
+              pincode: user.pincode || undefined,
               gram_panchayat: user.gramPanchayat || undefined,
               vikash_khand: user.vikashKhand || undefined,
               full_address: user.fullAddress || undefined,

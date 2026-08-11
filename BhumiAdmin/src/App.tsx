@@ -8,6 +8,9 @@ import { FarmerList } from './features/farmers/pages/FarmerList';
 import { FarmerProfile } from './features/farmers/pages/FarmerProfile';
 import { GovtList } from './features/govt/pages/GovtList';
 import { GovtDetails } from './features/govt/pages/GovtDetails';
+import { GovtSchemesPage } from './pages/GovtSchemes';
+import { CSRManagementPage } from './pages/CSRManagement';
+import { InvestorDashboardPage } from './pages/InvestorDashboard';
 import { PartnerList } from './features/partners/pages/PartnerList';
 import { PartnerDetails } from './features/partners/pages/PartnerDetails';
 import { DocumentCenter } from './features/documents/pages/DocumentCenter';
@@ -21,11 +24,13 @@ import { ProjectManagement } from './features/projects/pages/ProjectManagement';
 import { ProjectDetails } from './features/projects/pages/ProjectDetails';
 import { CarbonRegistry } from './features/carbon/pages/CarbonRegistry';
 import { CarbonCreditDetails } from './features/carbon/pages/CarbonCreditDetails';
+import { CarbonExchangePage } from './pages/CarbonExchange';
 import { TreeInsurance } from './features/insurance/pages/TreeInsurance';
 import { InsuranceDetails } from './features/insurance/pages/InsuranceDetails';
 
 import { ProductDetails } from './features/marketplace/pages/ProductDetails';
 import { MrvDashboard } from './features/mrv/pages/MrvDashboard';
+import { DroneDashboard } from './features/drone/pages/DroneDashboard';
 import { KycCenter } from './features/kyc/pages/KycCenter';
 import { SupportCenter } from './features/support/pages/SupportCenter';
 import { CmsDashboard } from './features/cms/pages/CmsDashboard';
@@ -40,6 +45,7 @@ import { Provider } from 'react-redux';
 import { store } from './store/store';
 import { AuthProvider, PermissionGuard } from './context/AuthContext';
 import { QueryProvider } from './context/QueryProvider';
+import { Toaster } from 'react-hot-toast';
 
 import { SidebarProvider } from './context/SidebarContext';
 
@@ -53,6 +59,24 @@ function App() {
           <SidebarProvider>
             <ThemeProvider theme={theme}>
               <CssBaseline />
+              <Toaster 
+                position="top-right"
+                toastOptions={{
+                  className: 'text-xs font-bold font-mono select-none rounded-xl shadow-xl border border-[#E8EDF5] uppercase tracking-wider',
+                  style: {
+                    background: '#ffffff',
+                    color: '#0F172A',
+                    borderRadius: '12px',
+                    border: '1px solid #E8EDF5'
+                  },
+                  success: {
+                    iconTheme: {
+                      primary: '#16A34A',
+                      secondary: '#ffffff',
+                    },
+                  },
+                }}
+              />
               <BrowserRouter>
               <Routes>
                 <Route path="/login" element={<Login />} />
@@ -77,6 +101,9 @@ function App() {
                       <Route index element={<GovtList />} />
                       <Route path=":id" element={<GovtDetails />} />
                     </Route>
+                    <Route path="govt-schemes" element={<GovtSchemesPage />} />
+                    <Route path="csr-management" element={<CSRManagementPage />} />
+                    <Route path="investor-dashboard" element={<InvestorDashboardPage />} />
                     <Route path="partners">
                       <Route index element={<PartnerList />} />
                       <Route path=":id" element={<PartnerDetails />} />
@@ -94,6 +121,7 @@ function App() {
                       <Route index element={<CarbonRegistry />} />
                       <Route path=":id" element={<CarbonCreditDetails />} />
                     </Route>
+                    <Route path="carbon-exchange" element={<CarbonExchangePage />} />
                     <Route path="insurance">
                       <Route index element={<TreeInsurance />} />
                       <Route path=":id" element={<InsuranceDetails />} />
@@ -113,6 +141,7 @@ function App() {
                     <Route path="support" element={<SupportCenter />} />
                     <Route path="audit" element={<AuditLogs />} />
                     <Route path="mrv" element={<MrvDashboard />} />
+                    <Route path="drone" element={<DroneDashboard />} />
                     <Route path="settings" element={<SystemSettings />} />
                   </Route>
                 </Route>

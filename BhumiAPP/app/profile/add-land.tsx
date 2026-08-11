@@ -73,6 +73,7 @@ export default function AddLandScreen() {
     soilCard: 'None',
     photo1: 'None',
     photo2: 'None',
+    photo3: 'None',
     photo4: 'None',
   });
 
@@ -82,6 +83,7 @@ export default function AddLandScreen() {
   const [previewData, setPreviewData] = useState<{ uri: string, docKey: string } | null>(null);
   const [showNextStepsModal, setShowNextStepsModal] = useState(false);
   const [landDocumentUrl, setLandDocumentUrl] = useState<string | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
 
   const [availableStates, setAvailableStates] = useState<string[]>([]);
   const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
@@ -172,10 +174,7 @@ export default function AddLandScreen() {
     }
   };
 
-  // NOTE: photo1-4 (land site photos) have no corresponding field/endpoint on
-  // the backend yet (LandParcel only stores a single land_document_url) — so
-  // those slots remain a client-side-only completeness gate for now. See the
-  // image-upload audit report for details.
+  // NOTE: soilCard remains a client-side-only simulation for now.
   const handleSimulateUpload = (key: string) => {
     if (docStates[key] === 'Uploading' || docStates[key] === 'Verifying') return;
 
@@ -198,44 +197,45 @@ export default function AddLandScreen() {
     });
   };
 
-  // Land Proof is the one document slot the backend actually has a field for
-  // (LandParcel.land_document_url via POST /farmer/profile/land/document) —
-  // so it gets a real upload instead of the simulated animation above.
-  const handleLandProofUpload = async (uri: string) => {
-    if (docStates.landProof === 'Uploading' || docStates.landProof === 'Verifying') return;
+  const handlePhotoUpload = async (docKey: string, uri: string) => {
+    if (docStates[docKey] === 'Uploading' || docStates[docKey] === 'Verifying') return;
 
     triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
-    setDocStates(prev => ({ ...prev, landProof: 'Uploading' }));
-    uploadAnims.landProof.setValue(0);
-    Animated.timing(uploadAnims.landProof, {
+    setDocStates(prev => ({ ...prev, [docKey]: 'Uploading' }));
+    uploadAnims[docKey].setValue(0);
+    Animated.timing(uploadAnims[docKey], {
       toValue: 1,
       duration: 1500,
       useNativeDriver: false,
     }).start();
 
     try {
-      const filename = uri.split('/').pop() || 'land_proof.jpg';
+      const filename = uri.split('/').pop() || `${docKey}.jpg`;
       const formData = new FormData();
       formData.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
       const res = await api.post('/farmer/profile/land/document', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       const url: string | undefined = res.data?.data?.url;
-      setDocStates(prev => ({ ...prev, landProof: 'Verifying' }));
+      setDocStates(prev => ({ ...prev, [docKey]: 'Verifying' }));
       setTimeout(() => {
         if (url) {
-          setLandDocumentUrl(url);
-          setDocStates(prev => ({ ...prev, landProof: 'Approved' }));
+          if (docKey === 'landProof') {
+            setLandDocumentUrl(url);
+          } else {
+            setPhotoUrls(prev => ({ ...prev, [docKey]: url }));
+          }
+          setDocStates(prev => ({ ...prev, [docKey]: 'Approved' }));
           if (Platform.OS !== 'web') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
         } else {
-          setDocStates(prev => ({ ...prev, landProof: 'None' }));
-          Alert.alert('Upload Error', 'Upload succeeded but no document URL was returned.');
+          setDocStates(prev => ({ ...prev, [docKey]: 'None' }));
+          Alert.alert('Upload Error', 'Upload succeeded but no URL was returned.');
         }
       }, 1000);
     } catch (error: any) {
-      setDocStates(prev => ({ ...prev, landProof: 'None' }));
+      setDocStates(prev => ({ ...prev, [docKey]: 'None' }));
       const msg: string = error?.response?.data?.message || 'Upload failed. Please try again.';
       Alert.alert('Upload Error', msg);
     }
@@ -355,6 +355,9 @@ export default function AddLandScreen() {
         boundaryPolygon,
         documentName: 'Khasra Khatauni',
         landDocumentUrl: landDocumentUrl || undefined,
+        landPhotoUrls: ['photo1', 'photo2', 'photo3', 'photo4']
+          .map(k => photoUrls[k])
+          .filter(Boolean),
         country,
         state: stateName,
         district,
@@ -730,8 +733,8 @@ export default function AddLandScreen() {
                 if (previewData) {
                   const { docKey, uri } = previewData;
                   setPreviewData(null);
-                  if (docKey === 'landProof') {
-                    handleLandProofUpload(uri);
+                  if (docKey === 'landProof' || docKey.startsWith('photo')) {
+                    handlePhotoUpload(docKey, uri);
                   } else {
                     handleSimulateUpload(docKey);
                   }

@@ -64,6 +64,7 @@ class FarmerRepository(BaseRepository[Farmer]):
         search: Optional[str] = None,
         state: Optional[str] = None,
         district: Optional[str] = None,
+        village: Optional[str] = None,
     ) -> tuple[list[Farmer], int]:
         query: dict = {}
         if kyc_status:
@@ -78,11 +79,16 @@ class FarmerRepository(BaseRepository[Farmer]):
             query["state"] = state
         if district:
             query["district"] = district
+        if village:
+            query["village"] = {"$regex": village, "$options": "i"}
         if search:
             query["$or"] = [
                 {"full_name": {"$regex": search, "$options": "i"}},
                 {"mobile": {"$regex": search, "$options": "i"}},
                 {"farmer_id": {"$regex": search, "$options": "i"}},
+                {"village": {"$regex": search, "$options": "i"}},
+                {"district": {"$regex": search, "$options": "i"}},
+                {"state": {"$regex": search, "$options": "i"}},
             ]
 
         results = await Farmer.find(query).sort("-created_at").skip(skip).limit(limit).to_list()

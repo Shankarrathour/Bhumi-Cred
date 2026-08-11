@@ -213,6 +213,8 @@ def create_app() -> FastAPI:
         )
 
     # ── Routes ────────────────────────────────────────────────────────────────
+    from app.routes.chat import router as chat_router
+    app.include_router(chat_router) # Root level chat route
     app.include_router(api_router, prefix=settings.API_PREFIX)
 
     # ── Static file serving — local upload storage ────────────────────────────

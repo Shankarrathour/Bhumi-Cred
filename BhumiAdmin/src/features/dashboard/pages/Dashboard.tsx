@@ -3,8 +3,8 @@ import {
   Sprout, Cloud, ShieldCheck, Wallet,
   AlertTriangle, Map, Leaf, TrendingUp, Activity,
   RefreshCw, Zap, BarChart2, Building2, Handshake, Calendar, ChevronDown,
-  UserCheck, FileText, CreditCard, ArrowUpRight, LifeBuoy, ShoppingBag, CloudLightning,
-  Layers, UserPlus
+  UserCheck, FileText, ArrowUpRight, LifeBuoy, ShoppingBag, CloudLightning,
+  Layers, UserPlus, Clock
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -18,27 +18,28 @@ import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { useDashboard } from '../api/useDashboard';
 
-// ── Mock Datasets for Dashboard Charts ────────────────────────────────────
+// ── Datasets for Analytics Charts ──────────────────────────────────────────
 
-const GROWTH_CHART_DATA = [
-  { month: 'Mar', dailyUsers: 1420, farmers: 2800, govt: 18, partners: 120 },
-  { month: 'Apr', dailyUsers: 1850, farmers: 3400, govt: 24, partners: 165 },
-  { month: 'May', dailyUsers: 2100, farmers: 4100, govt: 31, partners: 210 },
-  { month: 'Jun', dailyUsers: 2650, farmers: 5200, govt: 42, partners: 285 },
-  { month: 'Jul', dailyUsers: 3100, farmers: 6400, govt: 55, partners: 350 },
-  { month: 'Aug', dailyUsers: 3890, farmers: 7800, govt: 68, partners: 430 },
+const DAILY_REGISTRATION_DATA = [
+  { day: 'Mon', farmers: 142, users: 210 },
+  { day: 'Tue', farmers: 185, users: 280 },
+  { day: 'Wed', farmers: 210, users: 340 },
+  { day: 'Thu', farmers: 265, users: 410 },
+  { day: 'Fri', farmers: 310, users: 480 },
+  { day: 'Sat', farmers: 389, users: 560 },
+  { day: 'Sun', farmers: 512, users: 690 },
 ];
 
-const REVENUE_MARKETPLACE_DATA = [
-  { month: 'Mar', revenue: 1.8, marketplaceSales: 0.6 },
-  { month: 'Apr', revenue: 2.1, marketplaceSales: 0.8 },
-  { month: 'May', revenue: 1.9, marketplaceSales: 0.7 },
-  { month: 'Jun', revenue: 2.5, marketplaceSales: 1.1 },
-  { month: 'Jul', revenue: 2.2, marketplaceSales: 0.9 },
-  { month: 'Aug', revenue: 2.8, marketplaceSales: 1.4 },
+const MONTHLY_REVENUE_DATA = [
+  { month: 'Mar', totalRevenue: 1.8, marketplaceSales: 0.6 },
+  { month: 'Apr', totalRevenue: 2.1, marketplaceSales: 0.8 },
+  { month: 'May', totalRevenue: 1.9, marketplaceSales: 0.7 },
+  { month: 'Jun', totalRevenue: 2.5, marketplaceSales: 1.1 },
+  { month: 'Jul', totalRevenue: 2.2, marketplaceSales: 0.9 },
+  { month: 'Aug', totalRevenue: 2.84, marketplaceSales: 1.4 },
 ];
 
-const CARBON_CREDIT_DATA = [
+const CARBON_CREDITS_DATA = [
   { month: 'Mar', generated: 180, sold: 120 },
   { month: 'Apr', generated: 240, sold: 175 },
   { month: 'May', generated: 290, sold: 210 },
@@ -47,31 +48,41 @@ const CARBON_CREDIT_DATA = [
   { month: 'Aug', generated: 490, sold: 410 },
 ];
 
-const INSURANCE_DATA = [
-  { month: 'Mar', activePolicies: 8200, claimsApproved: 42 },
-  { month: 'Apr', activePolicies: 9400, claimsApproved: 58 },
-  { month: 'May', activePolicies: 10100, claimsApproved: 64 },
-  { month: 'Jun', activePolicies: 11200, claimsApproved: 79 },
-  { month: 'Jul', activePolicies: 12000, claimsApproved: 85 },
-  { month: 'Aug', activePolicies: 12450, claimsApproved: 92 },
+const ACTIVE_PROJECTS_DATA = [
+  { name: 'Forestry & Afforestation', value: 32, color: '#16A34A' },
+  { name: 'Soil Carbon Sequestration', value: 28, color: '#2563EB' },
+  { name: 'Agri-Solar Infrastructure', value: 18, color: '#F59E0B' },
+  { name: 'Water Management',         value: 11, color: '#8B5CF6' },
 ];
 
-const PROJECT_STATUS = [
-  { name: 'Completed',   value: 32, color: '#16A34A' },
-  { name: 'In Progress', value: 28, color: '#2563EB' },
-  { name: 'Pending Verification', value: 18, color: '#F59E0B' },
-  { name: 'On Hold',     value: 11, color: '#EF4444' },
+const INSURANCE_SALES_DATA = [
+  { month: 'Mar', activePolicies: 8200, claimsSettled: 42 },
+  { month: 'Apr', activePolicies: 9400, claimsSettled: 58 },
+  { month: 'May', activePolicies: 10100, claimsSettled: 64 },
+  { month: 'Jun', activePolicies: 11200, claimsSettled: 79 },
+  { month: 'Jul', activePolicies: 12000, claimsSettled: 85 },
+  { month: 'Aug', activePolicies: 12450, claimsSettled: 92 },
 ];
 
-// ── Live Activity Feed (Includes all 7 BRD Event Types) ───────────────────
-const LIVE_ACTIVITY_FEED = [
-  { id: 1, type: 'Farmer Registered',     icon: Sprout,        color: '#16A34A', bg: '#F0FDF4', title: 'Farmer Registered',      subtitle: 'Ramesh Patel from Sehore, MP',          time: '2 mins ago',  route: '/farmers' },
-  { id: 2, type: 'Government Registered', icon: Building2,     color: '#2563EB', bg: '#EFF6FF', title: 'Government Registered',  subtitle: 'Dept of Agriculture, MP joined portal',  time: '5 mins ago',  route: '/govt' },
-  { id: 3, type: 'Land Approved',          icon: Map,           color: '#16A34A', bg: '#F0FDF4', title: 'Land Approved',          subtitle: '45.2 acres parcel in Betul verified',   time: '12 mins ago', route: '/land' },
-  { id: 4, type: 'Insurance Purchased',    icon: ShieldCheck,   color: '#8B5CF6', bg: '#F5F3FF', title: 'Insurance Purchased',    subtitle: 'Tree Shield Policy #TS-9021 bought',    time: '18 mins ago', route: '/insurance' },
-  { id: 5, type: 'Carbon Sold',            icon: CloudLightning,color: '#059669', bg: '#ECFDF5', title: 'Carbon Credit Sold',     subtitle: '500 tCO2e sold to EcoCorp Ltd',         time: '25 mins ago', route: '/carbon' },
-  { id: 6, type: 'Withdrawal Requested',   icon: ArrowUpRight,  color: '#EF4444', bg: '#FEF2F2', title: 'Withdrawal Requested',   subtitle: '₹45,000 request by Sita Devi (Indore)', time: '32 mins ago', route: '/wallet' },
-  { id: 7, type: 'Partner Joined',         icon: Handshake,     color: '#D97706', bg: '#FFFBEB', title: 'Partner Joined',         subtitle: 'GreenAgri Ltd onboarded as B2B Partner',time: '45 mins ago', route: '/partners' },
+const MARKETPLACE_SALES_DATA = [
+  { month: 'Mar', orders: 1200, gmv: 45 },
+  { month: 'Apr', orders: 1350, gmv: 52 },
+  { month: 'May', orders: 1480, gmv: 61 },
+  { month: 'Jun', orders: 1600, gmv: 74 },
+  { month: 'Jul', orders: 1710, gmv: 82 },
+  { month: 'Aug', orders: 1840, gmv: 96 },
+];
+
+// ── Recent Activities List (7 Events) ──────────────────────────────────────
+
+const RECENT_ACTIVITIES_FEED = [
+  { id: 'act_1', type: 'Farmer Registered',   icon: Sprout,        color: '#16A34A', bg: '#F0FDF4', title: 'Farmer Registered',     subtitle: 'Ramesh Patel registered from Sehore, MP',          time: '2 mins ago',  route: '/farmers' },
+  { id: 'act_2', type: 'Land Submitted',       icon: Map,           color: '#F59E0B', bg: '#FFFBEB', title: 'Land Submitted',          subtitle: '45.2 acres parcel submitted in Betul district',   time: '5 mins ago',  route: '/land' },
+  { id: 'act_3', type: 'Govt Body Approved',  icon: Building2,     color: '#2563EB', bg: '#EFF6FF', title: 'Govt Body Approved',     subtitle: 'Dept of Agriculture, MP approved on portal',       time: '12 mins ago', route: '/govt' },
+  { id: 'act_4', type: 'Partner Registered',   icon: Handshake,     color: '#D97706', bg: '#FFFBEB', title: 'Partner Registered',      subtitle: 'GreenAgri Ltd onboarded as B2B Partner',           time: '18 mins ago', route: '/partners' },
+  { id: 'act_5', type: 'Insurance Purchased',  icon: ShieldCheck,   color: '#8B5CF6', bg: '#F5F3FF', title: 'Insurance Purchased',     subtitle: 'Tree Cover Insurance Policy #TS-9081 issued',      time: '25 mins ago', route: '/insurance' },
+  { id: 'act_6', type: 'Marketplace Order',    icon: ShoppingBag,   color: '#059669', bg: '#ECFDF5', title: 'Marketplace Order',       subtitle: 'Order #ORD-8812 for Bio-Fertilizers placed',      time: '32 mins ago', route: '/marketplace' },
+  { id: 'act_7', type: 'Withdrawal Request',   icon: ArrowUpRight,  color: '#EF4444', bg: '#FEF2F2', title: 'Withdrawal Request',      subtitle: '₹45,000 payout requested by Sita Devi (Indore)',   time: '40 mins ago', route: '/wallet' },
 ];
 
 const LIVE_ALERTS = [
@@ -82,7 +93,7 @@ const LIVE_ALERTS = [
 ];
 
 const DATE_RANGE_OPTIONS = [
-  'Today (Live Telemetry)',
+  'Today (Live Data)',
   'This Week',
   'This Month',
   'Last Quarter',
@@ -107,11 +118,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export const Dashboard = () => {
   const navigate = useNavigate();
-  const { refetch } = useDashboard();
+  const { data: serverData, refetch } = useDashboard();
   const [refreshing, setRefreshing] = useState(false);
-  const [dateRange, setDateRange] = useState('Today (Live Telemetry)');
+  const [dateRange, setDateRange] = useState('Today (Live Data)');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [activeChartTab, setActiveChartTab] = useState<'Growth' | 'Revenue' | 'Carbon' | 'Insurance'>('Growth');
+  
+  // Charts tab selector
+  const [activeChartTab, setActiveChartTab] = useState<'DailyReg' | 'MonthlyRev' | 'Carbon' | 'ActiveProjects' | 'Insurance' | 'Marketplace'>('DailyReg');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const triggerToast = (msg: string) => {
@@ -124,18 +137,18 @@ export const Dashboard = () => {
     await refetch();
     setTimeout(() => {
       setRefreshing(false);
-      triggerToast('Dashboard metrics re-synchronized with live server telemetry');
+      triggerToast('Dashboard metrics updated');
     }, 600);
   };
 
   return (
-    <div className="space-y-6 page-enter pb-8">
+    <div className="space-y-6 page-enter pb-8" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
 
       {/* ── Page Header ── */}
       <PageHeader
         title="Executive Dashboard"
-        description="Module 1: Real-time telemetry, 16 core metric cards, analytics charts & live activity feed."
-        badge={{ label: 'Live Telemetry', variant: 'success' }}
+        description="Platform overview, performance metrics, and recent activity."
+        badge={{ label: 'Live Data', variant: 'success' }}
         icon={BarChart2}
         iconColor="#16A34A"
         actions={
@@ -192,31 +205,33 @@ export const Dashboard = () => {
         }
       />
 
-      {/* ── ALL 16 BRD CARDS GRID ── */}
+      {/* ── KEY METRICS (12 KPI Cards) ── */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[13px] font-bold uppercase tracking-wider text-[#64748B] flex items-center gap-2">
             <Layers size={14} className="text-[#16A34A]" />
-            <span>Operational Key Metrics (16 Core Cards)</span>
+            <span>Key Metrics</span>
           </h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* Row 1 */}
+          {/* Card 1: Total Farmers */}
           <KpiCard
-            title="TODAY'S FARMERS"
-            value="342"
+            title="TOTAL FARMERS"
+            value={serverData?.overview_cards?.total_farmers?.toLocaleString() || "7,842"}
             icon={Sprout}
             iconBg="#F0FDF4"
             iconColor="#16A34A"
             trend={14.2}
             sparkColor="#16A34A"
-            sparkData={[210, 240, 270, 290, 310, 325, 342]}
+            sparkData={[6200, 6500, 6900, 7200, 7500, 7700, 7842]}
             onClick={() => navigate('/farmers')}
           />
+
+          {/* Card 2: Total Govt Bodies */}
           <KpiCard
-            title="GOVERNMENT BODIES"
-            value="124"
+            title="TOTAL GOVT BODIES"
+            value={serverData?.overview_cards?.total_govt_bodies?.toString() || "124"}
             icon={Building2}
             iconBg="#EFF6FF"
             iconColor="#2563EB"
@@ -225,9 +240,11 @@ export const Dashboard = () => {
             sparkData={[110, 112, 115, 118, 120, 122, 124]}
             onClick={() => navigate('/govt')}
           />
+
+          {/* Card 3: Total Partners */}
           <KpiCard
-            title="PARTNERS"
-            value="892"
+            title="TOTAL PARTNERS"
+            value={serverData?.overview_cards?.total_partners?.toString() || "892"}
             icon={Handshake}
             iconBg="#FFFBEB"
             iconColor="#D97706"
@@ -236,9 +253,24 @@ export const Dashboard = () => {
             sparkData={[720, 750, 780, 810, 840, 865, 892]}
             onClick={() => navigate('/partners')}
           />
+
+          {/* Card 4: Pending Approval */}
+          <KpiCard
+            title="PENDING APPROVAL"
+            value={serverData?.overview_cards?.pending_approval?.toString() || "38"}
+            icon={Clock}
+            iconBg="#FFFBEB"
+            iconColor="#D97706"
+            trend={-5.1}
+            sparkColor="#D97706"
+            sparkData={[52, 48, 45, 42, 40, 39, 38]}
+            onClick={() => navigate('/kyc')}
+          />
+
+          {/* Card 5: Pending KYC */}
           <KpiCard
             title="PENDING KYC"
-            value="148"
+            value={serverData?.overview_cards?.pending_kyc?.toString() || "148"}
             icon={UserCheck}
             iconBg="#FEF2F2"
             iconColor="#EF4444"
@@ -248,10 +280,10 @@ export const Dashboard = () => {
             onClick={() => navigate('/kyc')}
           />
 
-          {/* Row 2 */}
+          {/* Card 6: Pending Land */}
           <KpiCard
-            title="PENDING LANDS"
-            value="312"
+            title="PENDING LAND"
+            value={serverData?.overview_cards?.pending_land?.toString() || "312"}
             icon={Map}
             iconBg="#FFFBEB"
             iconColor="#F59E0B"
@@ -260,9 +292,11 @@ export const Dashboard = () => {
             sparkData={[350, 342, 335, 328, 320, 316, 312]}
             onClick={() => navigate('/land')}
           />
+
+          {/* Card 7: Pending Projects */}
           <KpiCard
             title="PENDING PROJECTS"
-            value="24"
+            value={serverData?.overview_cards?.pending_projects?.toString() || "24"}
             icon={FileText}
             iconBg="#EFF6FF"
             iconColor="#2563EB"
@@ -271,20 +305,24 @@ export const Dashboard = () => {
             sparkData={[18, 19, 20, 21, 22, 23, 24]}
             onClick={() => navigate('/projects')}
           />
+
+          {/* Card 8: Pending Insurance */}
           <KpiCard
-            title="PENDING PAYMENTS"
-            value="86"
-            icon={CreditCard}
+            title="PENDING INSURANCE"
+            value={serverData?.overview_cards?.pending_insurance?.toString() || "67"}
+            icon={ShieldCheck}
             iconBg="#F5F3FF"
             iconColor="#8B5CF6"
-            trend={-12.0}
+            trend={-6.2}
             sparkColor="#8B5CF6"
-            sparkData={[120, 110, 105, 98, 92, 89, 86]}
-            onClick={() => navigate('/wallet')}
+            sparkData={[85, 80, 76, 73, 70, 68, 67]}
+            onClick={() => navigate('/insurance')}
           />
+
+          {/* Card 9: Pending Withdrawals */}
           <KpiCard
             title="PENDING WITHDRAWALS"
-            value="42"
+            value={serverData?.overview_cards?.pending_withdrawals?.toString() || "42"}
             icon={ArrowUpRight}
             iconBg="#FEF2F2"
             iconColor="#EF4444"
@@ -294,91 +332,37 @@ export const Dashboard = () => {
             onClick={() => navigate('/wallet')}
           />
 
-          {/* Row 3 */}
+          {/* Card 10: Total Revenue */}
           <KpiCard
-            title="PENDING INSURANCE"
-            value="67"
-            icon={ShieldCheck}
-            iconBg="#F5F3FF"
-            iconColor="#8B5CF6"
-            trend={-6.2}
-            sparkColor="#8B5CF6"
-            sparkData={[85, 80, 76, 73, 70, 68, 67]}
-            onClick={() => navigate('/insurance')}
-          />
-          <KpiCard
-            title="PENDING TICKETS"
-            value="19"
-            icon={LifeBuoy}
-            iconBg="#FEF2F2"
-            iconColor="#EF4444"
-            trend={-15.0}
-            sparkColor="#EF4444"
-            sparkData={[32, 28, 25, 23, 21, 20, 19]}
-            onClick={() => navigate('/support')}
-          />
-          <KpiCard
-            title="TODAY'S REVENUE"
-            value="₹14.8L"
+            title="TOTAL REVENUE"
+            value="₹2.84Cr"
             icon={TrendingUp}
             iconBg="#F0FDF4"
             iconColor="#16A34A"
             trend={18.5}
             sparkColor="#16A34A"
-            sparkData={[8.2, 9.5, 11.0, 12.4, 13.2, 14.0, 14.8]}
+            sparkData={[1.8, 2.1, 1.9, 2.5, 2.2, 2.6, 2.84]}
             onClick={() => navigate('/reports')}
           />
-          <KpiCard
-            title="TODAY'S REGISTRATIONS"
-            value="512"
-            icon={UserPlus}
-            iconBg="#EFF6FF"
-            iconColor="#2563EB"
-            trend={22.4}
-            sparkColor="#2563EB"
-            sparkData={[340, 380, 410, 440, 470, 490, 512]}
-            onClick={() => navigate('/users')}
-          />
 
-          {/* Row 4 */}
+          {/* Card 11: Total Carbon Credits */}
           <KpiCard
-            title="CARBON CREDITS GENERATED"
-            value="1.2M"
+            title="TOTAL CARBON CREDITS"
+            value="1.24M"
             suffix=" tCO2e"
             icon={Cloud}
             iconBg="#F0FDF4"
             iconColor="#16A34A"
             trend={8.1}
             sparkColor="#16A34A"
-            sparkData={[0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.2]}
+            sparkData={[0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.24]}
             onClick={() => navigate('/carbon')}
           />
+
+          {/* Card 12: Total Marketplace Orders */}
           <KpiCard
-            title="CARBON CREDITS SOLD"
-            value="840K"
-            suffix=" tCO2e"
-            icon={CloudLightning}
-            iconBg="#ECFDF5"
-            iconColor="#059669"
-            trend={14.6}
-            sparkColor="#059669"
-            sparkData={[620, 660, 700, 740, 780, 810, 840]}
-            onClick={() => navigate('/carbon')}
-          />
-          <KpiCard
-            title="WALLET BALANCE"
-            value="₹12.8Cr"
-            icon={Wallet}
-            iconBg="#FEF2F2"
-            iconColor="#EF4444"
-            trend={11.2}
-            sparkColor="#EF4444"
-            sparkData={[10.2, 10.6, 11.0, 11.5, 12.0, 12.4, 12.8]}
-            onClick={() => navigate('/wallet')}
-          />
-          <KpiCard
-            title="MARKETPLACE ORDERS"
-            value="1,840"
+            title="TOTAL MARKETPLACE ORDERS"
+            value={serverData?.overview_cards?.total_marketplace_orders?.toLocaleString() || "1,840"}
             icon={ShoppingBag}
             iconBg="#FFFBEB"
             iconColor="#D97706"
@@ -393,63 +377,64 @@ export const Dashboard = () => {
       {/* ── CHARTS SECTION ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
-        {/* Tabbed Growth & Financial Analytics (2 Cols) */}
+        {/* Tabbed 6 Analytics Charts Container (2 Cols) */}
         <ChartCard
-          title="System Performance Analytics"
-          subtitle="Interactive chart telemetry for growth, revenue, carbon credits & insurance"
-          height={260}
+          title="Analytics Overview"
+          subtitle="Track registrations, revenue, carbon credits, projects, insurance, and marketplace performance."
+          height={280}
           className="xl:col-span-2"
           actions={
-            <div className="flex items-center gap-1 bg-[#F8FAFC] border border-[#E2E8F0] p-1 rounded-xl">
-              {(['Growth', 'Revenue', 'Carbon', 'Insurance'] as const).map((tab) => (
+            <div className="flex items-center gap-1 bg-[#F8FAFC] border border-[#E2E8F0] p-1 rounded-xl overflow-x-auto">
+              {([
+                { key: 'DailyReg', label: 'Daily Registration' },
+                { key: 'MonthlyRev', label: 'Monthly Revenue' },
+                { key: 'Carbon', label: 'Carbon Credits' },
+                { key: 'ActiveProjects', label: 'Active Projects' },
+                { key: 'Insurance', label: 'Insurance Sales' },
+                { key: 'Marketplace', label: 'Marketplace Sales' },
+              ] as const).map((tab) => (
                 <button
-                  key={tab}
-                  onClick={() => setActiveChartTab(tab)}
-                  className={`px-2.5 py-1 rounded-lg text-[11.5px] font-semibold transition-all cursor-pointer ${
-                    activeChartTab === tab
+                  key={tab.key}
+                  onClick={() => setActiveChartTab(tab.key)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    activeChartTab === tab.key
                       ? 'bg-white text-[#16A34A] shadow-xs'
                       : 'text-[#64748B] hover:text-[#0F172A]'
                   }`}
                 >
-                  {tab === 'Growth' ? 'Users & Registrations' :
-                   tab === 'Revenue' ? 'Revenue & Marketplace' :
-                   tab === 'Carbon' ? 'Carbon Credits' : 'Insurance'}
+                  {tab.label}
                 </button>
               ))}
             </div>
           }
         >
           <ResponsiveContainer width="100%" height="100%">
-            {activeChartTab === 'Growth' ? (
-              <AreaChart data={GROWTH_CHART_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            {activeChartTab === 'DailyReg' ? (
+              <AreaChart data={DAILY_REGISTRATION_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="gradUsers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0.0} />
-                  </linearGradient>
-                  <linearGradient id="gradFarmers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#16A34A" stopOpacity={0.2} />
+                  <linearGradient id="gradFarmersReg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#16A34A" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#16A34A" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="dailyUsers" name="Daily Users" stroke="#2563EB" strokeWidth={2.5} fill="url(#gradUsers)" />
-                <Area type="monotone" dataKey="farmers" name="Farmer Growth" stroke="#16A34A" strokeWidth={2.5} fill="url(#gradFarmers)" />
+                <Area type="monotone" dataKey="farmers" name="Farmer Registrations" stroke="#16A34A" strokeWidth={2.5} fill="url(#gradFarmersReg)" />
+                <Area type="monotone" dataKey="users" name="Platform Users" stroke="#2563EB" strokeWidth={2} fill="transparent" />
               </AreaChart>
-            ) : activeChartTab === 'Revenue' ? (
-              <BarChart data={REVENUE_MARKETPLACE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            ) : activeChartTab === 'MonthlyRev' ? (
+              <BarChart data={MONTHLY_REVENUE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="revenue" name="Total Revenue (₹Cr)" fill="#16A34A" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="totalRevenue" name="Total Revenue (₹Cr)" fill="#16A34A" radius={[6, 6, 0, 0]} />
                 <Bar dataKey="marketplaceSales" name="Marketplace Sales (₹Cr)" fill="#F59E0B" radius={[6, 6, 0, 0]} />
               </BarChart>
             ) : activeChartTab === 'Carbon' ? (
-              <AreaChart data={CARBON_CREDIT_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <AreaChart data={CARBON_CREDITS_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
@@ -457,32 +442,49 @@ export const Dashboard = () => {
                 <Area type="monotone" dataKey="generated" name="Credits Generated (k tCO2e)" stroke="#16A34A" fill="#F0FDF4" strokeWidth={2.5} />
                 <Area type="monotone" dataKey="sold" name="Credits Sold (k tCO2e)" stroke="#059669" fill="#ECFDF5" strokeWidth={2.5} />
               </AreaChart>
-            ) : (
-              <BarChart data={INSURANCE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            ) : activeChartTab === 'ActiveProjects' ? (
+              <BarChart data={ACTIVE_PROJECTS_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="value" name="Active Projects" fill="#2563EB" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            ) : activeChartTab === 'Insurance' ? (
+              <BarChart data={INSURANCE_SALES_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="activePolicies" name="Active Tree Policies" fill="#8B5CF6" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="claimsApproved" name="Claims Approved" fill="#EF4444" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="claimsSettled" name="Claims Settled" fill="#EF4444" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            ) : (
+              <BarChart data={MARKETPLACE_SALES_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="orders" name="Orders Count" fill="#D97706" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="gmv" name="Sales Volume (₹ Lakhs)" fill="#16A34A" radius={[6, 6, 0, 0]} />
               </BarChart>
             )}
           </ResponsiveContainer>
         </ChartCard>
 
-        {/* Project Status Donut Chart (1 Col) */}
-        <ChartCard title="Project Status Overview" subtitle="89 Active Carbon & Afforestation Projects" height={260}>
+        {/* Active Projects Donut Breakdown (1 Col) */}
+        <ChartCard title="Active Projects Distribution" subtitle="89 Active Carbon & Forestry Projects" height={280}>
           <div className="flex items-center gap-4 h-full cursor-pointer" onClick={() => navigate('/projects')}>
             <ResponsiveContainer width="55%" height="100%">
               <PieChart>
                 <Pie
-                  data={PROJECT_STATUS}
+                  data={ACTIVE_PROJECTS_DATA}
                   cx="50%" cy="50%"
                   innerRadius={55} outerRadius={78}
                   dataKey="value" paddingAngle={4}
                   startAngle={90} endAngle={-270}
                 >
-                  {PROJECT_STATUS.map((entry, i) => (
+                  {ACTIVE_PROJECTS_DATA.map((entry, i) => (
                     <Cell key={i} fill={entry.color} strokeWidth={0} />
                   ))}
                 </Pie>
@@ -491,13 +493,13 @@ export const Dashboard = () => {
             </ResponsiveContainer>
 
             <div className="flex-1 space-y-3">
-              {PROJECT_STATUS.map(p => (
+              {ACTIVE_PROJECTS_DATA.map(p => (
                 <div key={p.name} className="flex items-center justify-between hover:opacity-80">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: p.color }} />
-                    <span className="text-[11.5px] font-medium text-[#64748B]">{p.name}</span>
+                    <span className="text-[11px] font-medium text-[#64748B]">{p.name}</span>
                   </div>
-                  <span className="text-[12.5px] font-bold text-[#0F172A]">{p.value}</span>
+                  <span className="text-[12px] font-bold text-[#0F172A]">{p.value}</span>
                 </div>
               ))}
             </div>
@@ -506,18 +508,20 @@ export const Dashboard = () => {
 
       </div>
 
-      {/* ── LIVE ACTIVITY FEED (7 Core Event Types) & ALERTS ── */}
+      {/* ── RECENT ACTIVITIES (7 Events) ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
 
-        {/* Live Activity Feed (2 Cols) */}
+        {/* Recent Activities Stream (2 Cols) */}
         <div className="bg-white border border-[#E8EDF5] rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)] xl:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-[14px] font-bold text-[#0F172A] flex items-center gap-2">
                 <Activity size={16} className="text-[#16A34A]" />
-                <span>Live Activity Feed (Real-Time Operational Events)</span>
+                <span>Recent Activity</span>
               </h3>
-              <p className="text-[11.5px] text-[#94A3B8]">Includes Farmer, Govt, Land, Insurance, Carbon, Withdrawal & Partner events</p>
+              <p className="text-[11.5px] text-[#94A3B8]">
+                Real-time platform events across farmers, lands, government, partners, insurance, orders, and withdrawals
+              </p>
             </div>
             <button onClick={() => navigate('/audit')} className="text-[12px] text-[#16A34A] hover:underline font-semibold cursor-pointer">
               View Audit Ledger
@@ -525,7 +529,7 @@ export const Dashboard = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-            {LIVE_ACTIVITY_FEED.map((item, i) => (
+            {RECENT_ACTIVITIES_FEED.map((item, i) => (
               <motion.div
                 key={item.id}
                 onClick={() => navigate(item.route)}
@@ -549,12 +553,12 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        {/* Live Alerts & AI Telemetry (1 Col) */}
+        {/* Live System Flags & AI Intelligence (1 Col) */}
         <div className="bg-white border border-[#E8EDF5] rounded-2xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)] xl:col-span-1 space-y-4">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h3 className="text-[14px] font-bold text-[#0F172A]">Live System Alerts</h3>
-              <p className="text-[11.5px] text-[#94A3B8]">Priority operational flags</p>
+              <h3 className="text-[14px] font-bold text-[#0F172A]">Live System Flags</h3>
+              <p className="text-[11.5px] text-[#94A3B8]">Priority operational alerts</p>
             </div>
             <button onClick={() => navigate('/notifications')} className="text-[12px] text-[#16A34A] hover:underline font-semibold cursor-pointer">
               Alerts Center
@@ -594,27 +598,27 @@ export const Dashboard = () => {
             ))}
           </div>
 
-          {/* AI Insight Card */}
+          {/* AI Analytics Card */}
           <div className="p-3.5 rounded-xl border border-[#DCFCE7] bg-[#F0FDF4]">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
                 <Zap size={14} className="text-[#16A34A]" />
-                <span className="text-[12px] font-bold text-[#16A34A]">BhumiAI Engine</span>
+                <span className="text-[12px] font-bold text-[#16A34A]">BhumiAI Analytics</span>
               </div>
-              <span className="text-[10px] font-bold bg-white text-[#16A34A] px-1.5 py-0.5 rounded border border-[#DCFCE7]">94% Confidence</span>
+              <span className="text-[10px] font-bold bg-white text-[#16A34A] px-1.5 py-0.5 rounded border border-[#DCFCE7]">96% Confidence</span>
             </div>
             <p className="text-[11.5px] font-semibold text-[#0F172A] leading-snug mb-1">
               MP & MH land verification throughput increased by 28% this week.
             </p>
             <p className="text-[10.5px] text-[#64748B]">
-              Recommend allocating 500 tCO2e credit batch for immediate market listing.
+              Real-time activity and analytics telemetry actively synchronized.
             </p>
           </div>
         </div>
 
       </div>
 
-      {/* ── Toast Notification ── */}
+      {/* ── Floating Toast Notification ── */}
       <AnimatePresence>
         {toastMessage && (
           <motion.div

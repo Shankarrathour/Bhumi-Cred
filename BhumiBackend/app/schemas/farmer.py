@@ -89,8 +89,8 @@ class FarmerOverviewResponse(BaseModel):
     carbon_credits_generated: float = 0.0
     is_active: bool = True
     is_deleted: bool = False
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -113,7 +113,7 @@ class FarmerPublicResponse(BaseModel):
     village: Optional[str] = None
     kyc_status: KYCStatus = KYCStatus.UNVERIFIED
     is_active: bool = True
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

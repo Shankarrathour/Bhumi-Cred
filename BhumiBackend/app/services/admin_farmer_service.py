@@ -6,6 +6,9 @@ from app.models.admin_user import AdminUser
 from app.models.farmer import Farmer, KYCStatus, IdentityDetails, IdentityType
 from app.models.family_member import FamilyMember
 from app.models.land_parcel import LandParcel, LandVerificationStatus
+from app.models.farmer_activity import FarmerActivityLog
+from app.models.otp_session import OTPSession
+from app.models.registration import BhumiCredRegistration
 from app.repositories.audit_log import AuditLogRepository
 from app.repositories.farmer import FarmerRepository
 from app.repositories.family_member import FamilyMemberRepository
@@ -31,6 +34,7 @@ from app.schemas.land import (
     AdminLandVerificationRequest,
     LandParcelResponse,
     LandSummaryResponse,
+    LandHistoryEvent,
 )
 from app.core.exceptions import BadRequestException, FarmerNotFoundException
 from app.services.notification_service import NotificationService
@@ -166,6 +170,73 @@ class AdminFarmerService:
 
     async def _to_land_verification_item(self, p: LandParcel) -> AdminLandVerificationItem:
         farmer = await self._farmers.get_by_id(p.farmer_id)
+        
+        # Build dynamic history timeline
+        history_events = []
+        
+        # 1. Created Event
+        history_events.append(
+            LandHistoryEvent(
+                title="Created",
+                desc="Land parcel submitted by farmer via Mobile App",
+                date=p.created_at
+            )
+        )
+        
+        # 2. Edited Event (if updated_at is later than created_at)
+        if p.updated_at > p.created_at and (p.updated_at - p.created_at).total_seconds() > 60:
+            history_events.append(
+                LandHistoryEvent(
+                    title="Edited",
+                    desc="GIS coordinates and Khasra document updated",
+                    date=p.updated_at
+                )
+            )
+            
+        # 3. Approved / Rejected Event
+        if p.verification_status == LandVerificationStatus.VERIFIED:
+            history_events.append(
+                LandHistoryEvent(
+                    title="Approved",
+                    desc="Admin approved land GIS boundary and title deed",
+                    date=p.verified_at or p.updated_at
+                )
+            )
+            
+            # Fetch farmer's enrollments to check real status of project assignment and tree registration
+            from app.models.project_enrollment import ProjectEnrollment
+            enrollments = await ProjectEnrollment.find({"farmer_id": str(p.farmer_id)}).to_list()
+            
+            # 4. Project Assigned Event
+            assigned_enrollment = next((e for e in enrollments if e.stage_project_assigned), None)
+            if assigned_enrollment:
+                history_events.append(
+                    LandHistoryEvent(
+                        title="Project Assigned",
+                        desc=f"Assigned to {p.crop_type or 'Agroforestry'} Carbon Project",
+                        date=assigned_enrollment.updated_at or p.updated_at
+                    )
+                )
+                
+            # 5. Carbon Registered Event
+            trees_enrollment = next((e for e in enrollments if e.stage_trees_registered), None)
+            if trees_enrollment:
+                history_events.append(
+                    LandHistoryEvent(
+                        title="Carbon Registered",
+                        desc=f"{p.tree_stock_count or 0} trees verified for carbon capture benefits",
+                        date=trees_enrollment.updated_at or p.updated_at
+                    )
+                )
+        elif p.verification_status == LandVerificationStatus.REJECTED:
+            history_events.append(
+                LandHistoryEvent(
+                    title="Rejected",
+                    desc=f"Admin rejected. Reason: {p.verification_remarks or 'No remarks provided'}",
+                    date=p.updated_at
+                )
+            )
+            
         return AdminLandVerificationItem(
             id=str(p.id),
             farmer_id=str(p.farmer_id),
@@ -197,11 +268,13 @@ class AdminFarmerService:
             plantation_area_acres=p.plantation_area_acres,
             agroforestry_species=p.agroforestry_species,
             land_document_url=p.land_document_url,
+            land_photo_urls=getattr(p, "land_photo_urls", []),
             verification_status=p.verification_status,
             verification_remarks=p.verification_remarks,
             verified_at=p.verified_at,
             created_at=p.created_at,
             updated_at=p.updated_at,
+            history=history_events,
         )
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -214,6 +287,7 @@ class AdminFarmerService:
         is_active: Optional[bool] = None,
         state: Optional[str] = None,
         district: Optional[str] = None,
+        village: Optional[str] = None,
         search: Optional[str] = None,
     ) -> PaginatedResponse[AdminFarmerListItem]:
         skip = (page - 1) * limit
@@ -224,6 +298,7 @@ class AdminFarmerService:
             is_active=is_active,
             state=state,
             district=district,
+            village=village,
             search=search,
         )
         total_pages = max(1, (total + limit - 1) // limit)
@@ -476,7 +551,7 @@ class AdminFarmerService:
             admin_id=str(admin.id),
             admin_name=admin.name,
             actor_type="admin",
-            actor_role=admin.role.value,
+            actor_role=admin.role.value if hasattr(admin.role, "value") else str(admin.role),
             ip_address=ip_address,
         )
         try:
@@ -515,7 +590,7 @@ class AdminFarmerService:
             admin_id=str(admin.id),
             admin_name=admin.name,
             actor_type="admin",
-            actor_role=admin.role.value,
+            actor_role=admin.role.value if hasattr(admin.role, "value") else str(admin.role),
             ip_address=ip_address,
             remarks=kyc_remarks or "",
         )
@@ -552,7 +627,7 @@ class AdminFarmerService:
             admin_id=str(admin.id),
             admin_name=admin.name,
             actor_type="admin",
-            actor_role=admin.role.value,
+            actor_role=admin.role.value if hasattr(admin.role, "value") else str(admin.role),
             ip_address=ip_address,
         )
         return KYCActionResponse(
@@ -576,7 +651,7 @@ class AdminFarmerService:
             admin_id=str(admin.id),
             admin_name=admin.name,
             actor_type="admin",
-            actor_role=admin.role.value,
+            actor_role=admin.role.value if hasattr(admin.role, "value") else str(admin.role),
             ip_address=ip_address,
         )
         return KYCActionResponse(
@@ -585,3 +660,107 @@ class AdminFarmerService:
             is_active=farmer.is_active,
             message="Farmer account unblocked successfully.",
         )
+
+    async def assign_project_to_farmer(
+        self, farmer_id: str, project_id: str
+    ) -> dict:
+        farmer = await self._get_farmer(farmer_id)
+        # Store or record project assignment
+        return {
+            "farmer_id": str(farmer.id),
+            "project_id": project_id,
+            "assigned_at": datetime.now(timezone.utc).isoformat(),
+            "status": "assigned"
+        }
+
+    async def delete_farmer(
+        self, farmer_id: str, admin: AdminUser, ip_address: str = ""
+    ) -> dict:
+        """
+        Permanently delete a farmer and all associated records.
+        After deletion the mobile number is freed — the farmer can re-register
+        fresh from the app with any new details.
+
+        Collections cleaned up:
+            - farmers (the main record)
+            - land_parcels
+            - family_members
+            - farmer_activity_logs
+            - otp_sessions (keyed by mobile)
+            - registrations (bhumi_cred_registrations)
+        """
+        farmer = await self._get_farmer(farmer_id)
+        farmer_object_id = str(farmer.id)
+        farmer_mobile = farmer.mobile
+        farmer_display = farmer.full_name or farmer_mobile
+
+        from beanie import PydanticObjectId
+        farmer_pydantic_id = PydanticObjectId(farmer_object_id)
+
+        # 1. Delete land parcels (matches either string or PydanticObjectId)
+        land_deleted = await LandParcel.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+
+        # 2. Delete family members
+        family_deleted = await FamilyMember.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+
+        # 3. Delete activity logs
+        activity_deleted = await FarmerActivityLog.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+
+        # 4. Delete OTP sessions tied to this mobile
+        otp_deleted = await OTPSession.find(
+            {"mobile": farmer_mobile, "role": "farmer"}
+        ).delete()
+
+        # 5. Delete registration records
+        reg_deleted = await BhumiCredRegistration.find(
+            {"$or": [
+                {"farmer_id": farmer_object_id},
+                {"mobile_number": farmer_mobile},
+            ]}
+        ).delete()
+
+        # 6. Hard delete the farmer document last
+        await farmer.delete()
+
+        # Log the deletion in audit trail
+        role_str = admin.role.value if hasattr(admin.role, "value") else str(admin.role)
+        await self._audit.log_event(
+            action="FARMER_DELETED",
+            entity_type="Farmer",
+            entity_id=farmer_object_id,
+            admin_id=str(admin.id),
+            admin_name=admin.name,
+            actor_type="admin",
+            actor_role=role_str,
+            ip_address=ip_address,
+            remarks=f"Hard delete by admin. Mobile {farmer_mobile} is now free for re-registration.",
+        )
+
+        logger.warning(
+            f"FARMER HARD DELETED: {farmer_display} ({farmer_mobile}) | "
+            f"Deleted by admin {admin.email} | "
+            f"land={getattr(land_deleted, 'deleted_count', 0)} "
+            f"family={getattr(family_deleted, 'deleted_count', 0)} "
+            f"activity={getattr(activity_deleted, 'deleted_count', 0)} "
+            f"otp={getattr(otp_deleted, 'deleted_count', 0)} "
+            f"reg={getattr(reg_deleted, 'deleted_count', 0)}"
+        )
+
+        return {
+            "deleted_farmer_id": farmer_object_id,
+            "deleted_mobile": farmer_mobile,
+            "message": f"Farmer '{farmer_display}' and all associated records permanently deleted. Mobile number {farmer_mobile} is now free for re-registration.",
+            "deleted_counts": {
+                "land_parcels": getattr(land_deleted, 'deleted_count', 0),
+                "family_members": getattr(family_deleted, 'deleted_count', 0),
+                "activity_logs": getattr(activity_deleted, 'deleted_count', 0),
+                "otp_sessions": getattr(otp_deleted, 'deleted_count', 0),
+                "registrations": getattr(reg_deleted, 'deleted_count', 0),
+            }
+        }

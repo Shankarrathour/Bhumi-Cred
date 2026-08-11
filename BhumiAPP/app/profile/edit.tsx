@@ -25,6 +25,8 @@ import { updateProfile } from '../../src/store/slices/authSlice';
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
 import { isValidEmail, isValidPincode, isValidDate } from '../../src/utils/validation';
 import CustomCalendarModal from '../../components/CustomCalendarModal';
+import { useAuthStore } from '../../src/store/authStore';
+import api from '../../src/api/apiClient';
 
 const { width } = Dimensions.get('window');
 
@@ -37,26 +39,31 @@ const MONTHS = [
 export default function EditProfileScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  const user = useSelector((state: RootState) => state.auth.user);
+  const user = useAuthStore((state) => state.user);
+  const fetchProfile = useAuthStore((state) => state.fetchProfile);
   const insets = useSafeAreaInsets();
 
   // Dynamic Tab state
   const [activeTab, setActiveTab] = useState<'personal' | 'address'>('personal');
 
   // Form States - Personal Details
-  const [name, setName] = useState(user?.name || '');
+  const [name, setName] = useState(user?.fullName || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.mobile || '');
-  const [altPhone, setAltPhone] = useState(user?.altMobile || '');
+  const [altPhone, setAltPhone] = useState('');
   const [dob, setDob] = useState(user?.dob || 'Select Date');
-  const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>((user?.gender as any) || 'Male');
-  const [farmingRole, setFarmingRole] = useState('Landowner');
+  const [gender, setGender] = useState<'Male' | 'Female' | 'Other'>(
+    user?.gender
+      ? (user.gender.charAt(0).toUpperCase() + user.gender.slice(1)) as any
+      : 'Male'
+  );
+  const [farmingRole, setFarmingRole] = useState(user?.occupation || 'Landowner');
 
   // Form States - Location details
   const [fullAddress, setFullAddress] = useState(user?.fullAddress || '');
   const [pincode, setPincode] = useState(user?.pincode || '');
   const [landmark, setLandmark] = useState('');
-  const [city, setCity] = useState('Noida');
+  const [city, setCity] = useState(user?.city || 'Noida');
 
   // New Calendar Modal State
   const [isCalendarVisible, setIsCalendarVisible] = useState(false);
@@ -65,7 +72,7 @@ export default function EditProfileScreen() {
   const scrollViewRef = React.useRef<ScrollView>(null);
   const fieldPositions = React.useRef<Record<string, number>>({});
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setErrors({});
     let hasError = false;
     const newErrors: Record<string, string> = {};
@@ -97,22 +104,68 @@ export default function EditProfileScreen() {
       return;
     }
 
-    // Dispatch updated model to global Redux Slice
-    dispatch(updateProfile({
-      name: name.trim(),
-      email: email.trim(),
-      altMobile: altPhone.trim(),
-      dob: dob !== 'Select Date' ? dob : undefined,
-      gender,
-      fullAddress: fullAddress.trim(),
-      pincode: pincode.trim(),
-    }));
+    try {
+      // 1. Prepare profile payload
+      const profilePayload: Record<string, any> = {
+        full_name: name.trim(),
+        email: email.trim() || null,
+        gender: gender.toLowerCase(),
+        occupation: farmingRole,
+      };
 
-    Alert.alert(
-      "Update Successful ✅",
-      "Your personal profile and location details have been synchronized!",
-      [{ text: "Done", onPress: () => router.back() }]
-    );
+      if (dob && dob !== 'Select Date') {
+        if (dob.includes('/')) {
+          const [d, m, y] = dob.split('/');
+          profilePayload.dob = new Date(Number(y), Number(m) - 1, Number(d)).toISOString();
+        } else {
+          profilePayload.dob = new Date(dob).toISOString();
+        }
+      }
+
+      // 2. Prepare address payload
+      const addressPayload = {
+        current_address: {
+          state: user?.state || undefined,
+          district: user?.district || undefined,
+          village: user?.village || undefined,
+          city: city.trim(),
+          gram_panchayat: user?.gramPanchayat || undefined,
+          vikash_khand: user?.vikashKhand || undefined,
+          full_address: fullAddress.trim(),
+          pincode: pincode.trim() || undefined,
+        }
+      };
+
+      // 3. Save to backend API
+      await Promise.all([
+        api.put('/farmer/profile', profilePayload),
+        api.put('/farmer/address', addressPayload),
+      ]);
+
+      // 4. Update Zustand store
+      await fetchProfile();
+
+      // 5. Update Redux store (for compatibility)
+      dispatch(updateProfile({
+        name: name.trim(),
+        email: email.trim(),
+        altMobile: altPhone.trim(),
+        dob: dob !== 'Select Date' ? dob : undefined,
+        gender,
+        fullAddress: fullAddress.trim(),
+        pincode: pincode.trim(),
+      }));
+
+      Alert.alert(
+        "Update Successful ✅",
+        "Your personal profile and location details have been synchronized!",
+        [{ text: "Done", onPress: () => router.back() }]
+      );
+    } catch (err: any) {
+      console.warn('[edit] Save profile failed:', err);
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to update profile. Please try again.';
+      Alert.alert("Update Failed ❌", errMsg);
+    }
   };
 
   return (

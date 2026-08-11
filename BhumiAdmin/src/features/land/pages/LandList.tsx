@@ -1,10 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Map, Layers, Eye, RefreshCw, MapPin,
-  ShieldAlert, AlertTriangle, Search, Globe, Check, X,
-  Filter, ShieldCheck, Download
+  Map, Layers, Eye, RefreshCw,
+  ShieldAlert, AlertTriangle, Search, Globe,
+  ShieldCheck, Download
 } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { KpiCard } from '../../../components/ui/KpiCard';
@@ -28,127 +27,27 @@ export interface LandParcelItem {
   village: string;
   is_irrigated: boolean;
   coordinates: { lat: number; lng: number };
-  verification_status: 'VERIFIED' | 'PENDING' | 'DUPLICATE_SUSPECTED' | 'REJECTED';
+  verification_status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'DUPLICATE' | 'GIS_PENDING';
   duplicate_score?: number;
   assigned_project?: string;
-  ndvi_index?: number;
-  soc_percentage?: number;
-  estimated_carbon_tco2?: number;
-  active_insurance_trees?: number;
+  polygon_status?: string;
 }
 
-const SEEDED_PARCELS: LandParcelItem[] = [
-  {
-    id: 'LND-8001',
-    parcel_id: 'LND-8001',
-    farmer_name: 'Ramesh Patel',
-    farmer_id: 'F-84920',
-    farmer_mobile: '+91 98260 11902',
-    survey_number: 'SUR-402/A',
-    area_acres: 14.5,
-    ownership_type: 'Self Owned',
-    state: 'Madhya Pradesh',
-    district: 'Sehore',
-    village: 'Ichhawar',
-    is_irrigated: true,
-    coordinates: { lat: 23.0225, lng: 77.0124 },
-    verification_status: 'VERIFIED',
-    duplicate_score: 0,
-    ndvi_index: 0.82,
-    soc_percentage: 1.45,
-    assigned_project: 'PRJ-1042 MP Agroforestry Carbon Sink',
-    estimated_carbon_tco2: 145.0,
-    active_insurance_trees: 850,
-  },
-  {
-    id: 'LND-8002',
-    parcel_id: 'LND-8002',
-    farmer_name: 'Suresh Verma',
-    farmer_id: 'F-71029',
-    farmer_mobile: '+91 94250 88201',
-    survey_number: 'SUR-109/B',
-    area_acres: 12.0,
-    ownership_type: 'Leased',
-    state: 'Madhya Pradesh',
-    district: 'Sehore',
-    village: 'Ashta',
-    is_irrigated: false,
-    coordinates: { lat: 23.0180, lng: 76.9950 },
-    verification_status: 'DUPLICATE_SUSPECTED',
-    duplicate_score: 87.5,
-    ndvi_index: 0.68,
-    soc_percentage: 1.12,
-    assigned_project: 'PRJ-1042 MP Agroforestry Carbon Sink',
-    estimated_carbon_tco2: 120.0,
-    active_insurance_trees: 600,
-  },
-  {
-    id: 'LND-8003',
-    parcel_id: 'LND-8003',
-    farmer_name: 'Anita Devi',
-    farmer_id: 'F-40291',
-    farmer_mobile: '+91 97110 33402',
-    survey_number: 'SUR-88/2',
-    area_acres: 8.2,
-    ownership_type: 'Self Owned',
-    state: 'Gujarat',
-    district: 'Kutch',
-    village: 'Mandvi',
-    is_irrigated: true,
-    coordinates: { lat: 22.8340, lng: 69.3550 },
-    verification_status: 'PENDING',
-    duplicate_score: 0,
-    ndvi_index: 0.74,
-    soc_percentage: 1.30,
-    assigned_project: 'PRJ-2089 Gujarat Biochar Drive',
-    estimated_carbon_tco2: 82.0,
-    active_insurance_trees: 400,
-  },
-  {
-    id: 'LND-8004',
-    parcel_id: 'LND-8004',
-    farmer_name: 'Mohan Singh',
-    farmer_id: 'F-50124',
-    farmer_mobile: '+91 99810 55109',
-    survey_number: 'SUR-304/1',
-    area_acres: 22.4,
-    ownership_type: 'Self Owned',
-    state: 'Maharashtra',
-    district: 'Nashik',
-    village: 'Niphad',
-    is_irrigated: true,
-    coordinates: { lat: 20.0780, lng: 74.1050 },
-    verification_status: 'VERIFIED',
-    duplicate_score: 0,
-    ndvi_index: 0.88,
-    soc_percentage: 1.62,
-    assigned_project: 'PRJ-3041 Maharashtra Agroforestry Model',
-    estimated_carbon_tco2: 224.0,
-    active_insurance_trees: 1200,
-  },
-];
 
-const PAGE_SIZE = 10;
 
 export const LandList = () => {
   const navigate = useNavigate();
-  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [stateFilter, setStateFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [mapLayer, setMapLayer] = useState<'gis' | 'satellite' | 'ndvi' | 'soc'>('gis');
-  const [parcels, setParcels] = useState<LandParcelItem[]>(SEEDED_PARCELS);
+  
+  // 6 Specified Filter Tabs: All Lands, Pending, Approved, Rejected, Duplicate, GIS Pending
+  const [tabFilter, setTabFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'DUPLICATE' | 'GIS_PENDING'>('ALL');
+  
   const [isScanningDuplicates, setIsScanningDuplicates] = useState(false);
 
-  // Modals
-  const [assignProjectModal, setAssignProjectModal] = useState<LandParcelItem | null>(null);
-  const [projectInput, setProjectInput] = useState('PRJ-1042 MP Agroforestry Carbon Sink');
+  const { data: apiQueue, isLoading, refetch, isFetching, error, isError } = useLandVerificationQueue();
 
-  const { data: apiQueue, isLoading, refetch, isFetching } = useLandVerificationQueue();
-
-  // Combine API & Seeded Data cleanly
   const allParcels = useMemo(() => {
-    if (apiQueue && Array.isArray(apiQueue) && apiQueue.length > 0) {
+    if (apiQueue && Array.isArray(apiQueue)) {
       return apiQueue.map(item => ({
         id: item.id || 'LND-1001',
         parcel_id: `LND-${(item.id || '1001').slice(-4).toUpperCase()}`,
@@ -162,19 +61,27 @@ export const LandList = () => {
         district: item.district || 'Sehore',
         village: item.village || 'Ichhawar',
         is_irrigated: item.is_irrigated ?? true,
-        coordinates: item.coordinates && typeof item.coordinates.lat === 'number' ? item.coordinates : { lat: 23.0225, lng: 77.0124 },
-        verification_status: (item.verification_status as any) || 'VERIFIED',
+        coordinates: item.coordinates
+          ? {
+              lat: typeof item.coordinates.lat === 'number' ? item.coordinates.lat : (item.coordinates as any).latitude,
+              lng: typeof item.coordinates.lng === 'number' ? item.coordinates.lng : (item.coordinates as any).longitude
+            }
+          : { lat: 23.0225, lng: 77.0124 },
+        verification_status: (() => {
+          const status = (item.verification_status || '').toUpperCase();
+          if (status === 'VERIFIED') return 'APPROVED';
+          return status || 'PENDING';
+        })() as any,
+        boundary_polygon: item.boundary_polygon,
         duplicate_score: item.verification_status === 'pending' ? 45.0 : 0,
-        ndvi_index: 0.78,
-        soc_percentage: 1.35,
-        assigned_project: 'PRJ-1042 MP Agroforestry Carbon Sink',
-        estimated_carbon_tco2: (item.area_acres || 10) * 10,
-        active_insurance_trees: 500,
+        assigned_project: 'MP Green Afforestation Q1',
+        polygon_status: item.boundary_polygon && item.boundary_polygon.length > 0 ? 'Geofenced boundary' : 'Clean Boundary',
       }));
     }
-    return parcels;
-  }, [apiQueue, parcels]);
+    return [];
+  }, [apiQueue]);
 
+  // Tab & Search Filter Logic
   const filtered = useMemo(() => {
     return allParcels.filter(item => {
       const q = search.toLowerCase();
@@ -182,20 +89,10 @@ export const LandList = () => {
         item.farmer_name, item.farmer_id, item.farmer_mobile, item.survey_number, item.district, item.state, item.village, item.parcel_id
       ].some(v => v?.toLowerCase().includes(q));
 
-      const matchState = !stateFilter || item.state === stateFilter;
-      const matchStatus = !statusFilter || item.verification_status === statusFilter;
-      return matchSearch && matchState && matchStatus;
+      const matchTab = tabFilter === 'ALL' || item.verification_status === tabFilter;
+      return matchSearch && matchTab;
     });
-  }, [allParcels, search, stateFilter, statusFilter]);
-
-  const total = allParcels.length;
-  const verifiedCount = allParcels.filter(l => l.verification_status === 'VERIFIED').length;
-  const duplicateFlaggedCount = allParcels.filter(l => l.verification_status === 'DUPLICATE_SUSPECTED').length;
-  const totalAcreage = allParcels.reduce((acc, l) => acc + (l.area_acres || 0), 0);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  }, [allParcels, search, tabFilter]);
 
   const handleRunDuplicateScan = () => {
     setIsScanningDuplicates(true);
@@ -205,53 +102,39 @@ export const LandList = () => {
     }, 1200);
   };
 
-  const getStatusVariant = (s: string) => {
-    if (s === 'VERIFIED') return 'success';
-    if (s === 'DUPLICATE_SUSPECTED') return 'danger';
-    if (s === 'PENDING') return 'warning';
-    if (s === 'REJECTED') return 'gray';
-    return 'gray';
-  };
-
-  const handleApproveLand = (id: string) => {
-    setParcels(prev => prev.map(p => p.id === id ? { ...p, verification_status: 'VERIFIED', duplicate_score: 0 } : p));
-    toast.success(`Land Parcel ${id} approved & verified in GIS Database!`);
-  };
-
-  const handleRejectLand = (id: string) => {
-    setParcels(prev => prev.map(p => p.id === id ? { ...p, verification_status: 'REJECTED' } : p));
-    toast.error(`Land Parcel ${id} has been rejected.`);
-  };
-
-  const handleAssignProjectSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!assignProjectModal) return;
-    setParcels(prev => prev.map(p => p.id === assignProjectModal.id ? { ...p, assigned_project: projectInput } : p));
-    toast.success(`Assigned project "${projectInput}" to parcel ${assignProjectModal.parcel_id}`);
-    setAssignProjectModal(null);
-  };
-
   // Convert parcels into GIS Map Polygons
   const gisPolygons = useMemo(() => {
     return filtered.map((p) => {
       const lat = p.coordinates?.lat || 23.0225;
       const lng = p.coordinates?.lng || 77.0124;
-      const polyColor = p.verification_status === 'VERIFIED' ? '#16A34A' : p.verification_status === 'DUPLICATE_SUSPECTED' ? '#EF4444' : '#D97706';
+      const polyColor = p.verification_status === 'APPROVED' ? '#16A34A' : p.verification_status === 'DUPLICATE' ? '#EF4444' : '#D97706';
+      
+      // Use real boundary polygon if it exists and has enough points
+      let positions: any = [
+        [lat - 0.003, lng - 0.003],
+        [lat + 0.003, lng - 0.003],
+        [lat + 0.003, lng + 0.003],
+        [lat - 0.003, lng + 0.003],
+      ];
+      
+      const bp = p.boundary_polygon;
+      if (bp && Array.isArray(bp) && bp.length >= 3) {
+        positions = bp.map((pt: any) => {
+          const plat = typeof pt.lat === 'number' ? pt.lat : pt.latitude;
+          const plng = typeof pt.lng === 'number' ? pt.lng : pt.longitude;
+          return [plat, plng];
+        });
+      }
+
       return {
         id: p.id,
-        positions: [
-          [lat - 0.003, lng - 0.003],
-          [lat + 0.003, lng - 0.003],
-          [lat + 0.003, lng + 0.003],
-          [lat - 0.003, lng + 0.003],
-        ] as any,
+        positions,
         color: polyColor,
         popupInfo: (
           <div className="p-1 space-y-1">
             <h4 className="font-bold text-[13px] text-[#0F172A]">{p.farmer_name} ({p.parcel_id})</h4>
             <p className="text-[11px] text-[#64748B]">Survey: {p.survey_number} • {p.area_acres} Acres</p>
             <p className="text-[11px] font-mono text-[#2563EB]">{p.village}, {p.district}, {p.state}</p>
-            <div className="text-[10px] text-[#16A34A] font-bold">NDVI: {p.ndvi_index || 0.78} | SOC: {p.soc_percentage || 1.35}%</div>
           </div>
         )
       };
@@ -264,8 +147,8 @@ export const LandList = () => {
       {/* ── Page Header ── */}
       <PageHeader
         title="Land & GIS Management"
-        description="Module 8: GIS Boundary Polygons, Satellite Imagery, Multi-Spectral NDVI Canopy, Soil Layer (SOC %), and AI Duplicate Overlap Detection."
-        badge={{ label: `${total} Geofenced Plots`, variant: 'info' }}
+        description="Complete cadastral land registry, GIS polygon boundaries, AI overlap scan, and multi-status verification."
+        badge={{ label: `${allParcels.length} Geofenced Plots`, variant: 'info' }}
         icon={Map}
         iconColor="#16A34A"
         actions={
@@ -280,70 +163,49 @@ export const LandList = () => {
         }
       />
 
+      {isError && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl flex items-start gap-3 shadow-xs">
+          <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={18} />
+          <div>
+            <h4 className="text-red-800 font-bold text-[13.5px]">Failed to Load Cadastral Registry Data</h4>
+            <p className="text-red-600 text-[12px] mt-0.5">
+              {(error as any)?.response?.data?.detail || (error as any)?.response?.data?.message || (error as any)?.message || 'An unexpected error occurred while fetching land parcels.'}
+            </p>
+            <button 
+              onClick={() => refetch()} 
+              className="mt-2 px-3 py-1 bg-white hover:bg-red-100 text-red-700 text-[11px] font-bold rounded-lg border border-red-200 transition-colors cursor-pointer"
+            >
+              Retry Connection
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── KPI Row ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard title="GEOFENCED PARCELS" value={total} icon={Map} iconBg="#EFF6FF" iconColor="#2563EB" loading={isLoading} />
-        <KpiCard title="VERIFIED PLOTS" value={verifiedCount} icon={ShieldCheck} iconBg="#F0FDF4" iconColor="#16A34A" loading={isLoading} />
-        <KpiCard title="OVERLAP FLAGGED" value={duplicateFlaggedCount} icon={AlertTriangle} iconBg="#FEF2F2" iconColor="#EF4444" loading={isLoading} />
-        <KpiCard title="TOTAL GEOFENCED AREA" value={`${totalAcreage.toFixed(1)} Acres`} icon={Layers} iconBg="#F5F3FF" iconColor="#8B5CF6" loading={isLoading} />
+        <KpiCard title="ALL LANDS" value={allParcels.length} icon={Map} iconBg="#EFF6FF" iconColor="#2563EB" loading={isLoading} />
+        <KpiCard title="APPROVED PLOTS" value={allParcels.filter(l => l.verification_status === 'APPROVED').length} icon={ShieldCheck} iconBg="#F0FDF4" iconColor="#16A34A" loading={isLoading} />
+        <KpiCard title="DUPLICATE FLAGGED" value={allParcels.filter(l => l.verification_status === 'DUPLICATE').length} icon={AlertTriangle} iconBg="#FEF2F2" iconColor="#EF4444" loading={isLoading} />
+        <KpiCard title="GIS PENDING" value={allParcels.filter(l => l.verification_status === 'GIS_PENDING').length} icon={Layers} iconBg="#F5F3FF" iconColor="#8B5CF6" loading={isLoading} />
       </div>
 
-      {/* ── INTERACTIVE GIS MAP & SATELLITE MULTI-SPECTRAL LAYER SWITCHER ── */}
-      <div className="bg-white border border-[#E8EDF5] rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#F1F5F9] pb-3">
+      {/* ── INTERACTIVE GIS MAP ── */}
+      <div className="bg-white border border-[#E8EDF5] rounded-2xl p-4 shadow-xs space-y-3">
+        <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
           <div className="flex items-center gap-2">
             <Globe size={18} className="text-[#16A34A]" />
-            <h3 className="text-[14px] font-bold text-[#0F172A]">Interactive Satellite & GIS Multi-Layer Map Engine</h3>
-          </div>
-
-          {/* Layer Selector */}
-          <div className="flex items-center gap-1.5 bg-[#F8FAFC] p-1 rounded-xl border border-[#E2E8F0]">
-            {[
-              { id: 'gis', label: 'GIS Boundary Polygons' },
-              { id: 'satellite', label: 'High-Res Satellite' },
-              { id: 'ndvi', label: 'NDVI Canopy Layer' },
-              { id: 'soc', label: 'Soil Carbon (SOC %)' },
-            ].map(layer => (
-              <button
-                key={layer.id}
-                onClick={() => {
-                  setMapLayer(layer.id as any);
-                  toast.success(`Switched view to ${layer.label}`);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-[11.5px] font-bold transition-all cursor-pointer ${
-                  mapLayer === layer.id
-                    ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#DCFCE7] shadow-xs'
-                    : 'text-[#64748B] hover:text-[#0F172A]'
-                }`}
-              >
-                {layer.label}
-              </button>
-            ))}
+            <h3 className="text-[14px] font-bold text-[#0F172A]">Interactive Cadastral GIS Polygon Map</h3>
           </div>
         </div>
 
-        {/* AI Overlap Warning Banner */}
-        {duplicateFlaggedCount > 0 && (
-          <div className="flex items-center justify-between px-4 py-2.5 bg-[#FEF2F2] border border-[#FECACA] rounded-xl text-[12.5px] font-bold text-[#EF4444]">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={16} />
-              <span>AI Duplicate Scan Alert: {duplicateFlaggedCount} Overlapping Boundary Polygons Detected (Plot SUR-109/B)</span>
-            </div>
-            <button onClick={() => setStatusFilter('DUPLICATE_SUSPECTED')} className="underline text-[11.5px] cursor-pointer">
-              Resolve Overlaps
-            </button>
-          </div>
-        )}
-
-        {/* GIS Leaflet Map Component */}
         <GISMapViewer
           center={[23.0225, 77.0124]}
           polygons={gisPolygons}
-          height="420px"
+          height="340px"
         />
       </div>
 
-      {/* ── SEARCH & MULTI-ATTRIBUTE LOCATION FILTERS ── */}
+      {/* ── SEARCH & 6 LANDING SCREEN FILTER TABS ── */}
       <div className="bg-white border border-[#E8EDF5] rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex flex-col lg:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
@@ -352,244 +214,157 @@ export const LandList = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by Farmer Name, Survey No, Village, District, State, GPS Coordinates, Parcel ID..."
+              placeholder="Search by Land ID, Farmer Name, Survey No / Khasra, Village, District..."
               className="w-full pl-10 pr-4 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] text-[#0F172A] outline-none focus:border-[#16A34A] focus:bg-white transition-all"
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <span className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider flex items-center gap-1">
-              <Filter size={13} className="text-[#16A34A]" /> Location Filters:
-            </span>
-
-            {/* State Filter */}
-            <select
-              value={stateFilter}
-              onChange={(e) => setStateFilter(e.target.value)}
-              className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]"
-            >
-              <option value="">All States (MP, Gujarat, MH...)</option>
-              <option value="Madhya Pradesh">Madhya Pradesh</option>
-              <option value="Gujarat">Gujarat</option>
-              <option value="Maharashtra">Maharashtra</option>
-            </select>
-
-            {/* Verification Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]"
-            >
-              <option value="">All Verification Statuses</option>
-              <option value="VERIFIED">Verified & Approved</option>
-              <option value="PENDING">Pending Review</option>
-              <option value="DUPLICATE_SUSPECTED">Duplicate Overlap Flagged</option>
-              <option value="REJECTED">Rejected</option>
-            </select>
+          {/* 6 Specified Landing Screen Status Tabs: All Lands, Pending, Approved, Rejected, Duplicate, GIS Pending */}
+          <div className="flex items-center gap-1 bg-[#F8FAFC] p-1 rounded-xl border border-[#E2E8F0] overflow-x-auto w-full lg:w-auto">
+            {[
+              { id: 'ALL', label: `All Lands (${allParcels.length})` },
+              { id: 'PENDING', label: `Pending (${allParcels.filter(p => p.verification_status === 'PENDING').length})` },
+              { id: 'APPROVED', label: `Approved (${allParcels.filter(p => p.verification_status === 'APPROVED').length})` },
+              { id: 'REJECTED', label: `Rejected (${allParcels.filter(p => p.verification_status === 'REJECTED').length})` },
+              { id: 'DUPLICATE', label: `Duplicate (${allParcels.filter(p => p.verification_status === 'DUPLICATE').length})` },
+              { id: 'GIS_PENDING', label: `GIS Pending (${allParcels.filter(p => p.verification_status === 'GIS_PENDING').length})` },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setTabFilter(tab.id as any)}
+                className={`px-3 py-1.5 rounded-lg text-[11.5px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  tabFilter === tab.id
+                    ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#DCFCE7] shadow-xs'
+                    : 'text-[#64748B] hover:text-[#0F172A]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* ── LAND DIRECTORY TABLE (All BRD Attributes) ── */}
-      <div className="ent-card overflow-hidden">
+      {/* ── LAND DIRECTORY TABLE (All 8 Specified Columns) ── */}
+      <div className="bg-white border border-[#E8EDF5] rounded-2xl overflow-hidden shadow-xs">
         <div className="p-4 border-b border-[#F1F5F9] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-[14px] font-bold text-[#0F172A]">Cadastral Land Parcels & Multi-Spectral Telemetry Directory</h3>
+            <h3 className="text-[14px] font-bold text-[#0F172A]">Land Parcels Directory</h3>
             <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#DCFCE7]">
-              {filtered.length} Parcels
+              {filtered.length} Parcels Listed
             </span>
           </div>
-          <button onClick={() => toast.success('Exporting GIS polygon boundaries to KML/GeoJSON...')} className="btn btn-ghost btn-sm text-[#2563EB]">
-            <Download size={14} className="mr-1" /> Export KML / GeoJSON
+          <button onClick={() => toast.success('Exporting GIS polygon boundaries to GeoJSON...')} className="btn btn-ghost btn-sm text-[#2563EB]">
+            <Download size={14} className="mr-1" /> Export GeoJSON
           </button>
         </div>
 
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="ent-table min-w-[1250px]">
+          <table className="w-full text-left border-collapse min-w-[1100px]">
             <thead>
-              <tr>
-                <th>Parcel ID</th>
-                <th>Farmer Name</th>
-                <th>Survey No / Khasra</th>
-                <th>Area & Ownership</th>
-                <th>Location & GPS Coords</th>
-                <th>NDVI & Soil (SOC)</th>
-                <th>Assigned Project</th>
-                <th>Status</th>
-                <th className="text-right">Actions</th>
+              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                <th className="py-3 px-4">Land ID</th>
+                <th className="py-3 px-4">Farmer</th>
+                <th className="py-3 px-4">Area</th>
+                <th className="py-3 px-4">Village</th>
+                <th className="py-3 px-4">District</th>
+                <th className="py-3 px-4">Project</th>
+                <th className="py-3 px-4">Polygon</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[#F1F5F9]">
               {isLoading ? (
                 <tr><td colSpan={9} className="p-0"><SkeletonTable rows={6} cols={9} /></td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9}>
-                  <EmptyState icon={Map} title="No land parcels match filter criteria" description="Try clearing filters or search term." />
+                  <EmptyState icon={Map} title="No land parcels match tab filter" description="Try switching tabs or searching with a different keyword." />
                 </td></tr>
-              ) : pageRows.map((item, i) => (
-                <motion.tr
+              ) : filtered.map((item) => (
+                <tr
                   key={item.id}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
+                  className="hover:bg-[#F8FAFC] transition-colors"
                 >
-                  {/* Parcel ID */}
-                  <td>
-                    <span className="font-mono text-[12px] text-[#2563EB] font-bold bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#DBEAFE]">
+                  {/* Column 1: Land ID */}
+                  <td className="py-3 px-4">
+                    <span
+                      onClick={() => navigate(`/land/${item.id}`)}
+                      className="font-mono text-[12px] text-[#2563EB] font-bold bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#DBEAFE] hover:underline cursor-pointer"
+                    >
                       {item.parcel_id}
                     </span>
                   </td>
 
-                  {/* Farmer */}
-                  <td>
+                  {/* Column 2: Farmer */}
+                  <td className="py-3 px-4">
                     <div>
-                      <div className="text-[13px] font-bold text-[#0F172A]">{item.farmer_name}</div>
-                      <div className="text-[11px] font-mono text-[#64748B]">{item.farmer_id} • {item.farmer_mobile}</div>
+                      <div
+                        onClick={() => navigate(`/farmers/${item.farmer_id}`)}
+                        className="text-[13px] font-bold text-[#0F172A] hover:text-[#16A34A] cursor-pointer"
+                      >
+                        {item.farmer_name}
+                      </div>
+                      <div className="text-[10.5px] font-mono text-[#64748B]">{item.farmer_id}</div>
                     </div>
                   </td>
 
-                  {/* Survey No */}
-                  <td className="text-[13px] font-mono font-bold text-[#0F172A]">{item.survey_number}</td>
-
-                  {/* Area & Ownership */}
-                  <td>
-                    <div className="text-[13.5px] font-extrabold text-[#16A34A]">{item.area_acres} Acres</div>
-                    <div className="text-[11px] text-[#64748B] font-medium">{item.ownership_type}</div>
+                  {/* Column 3: Area */}
+                  <td className="py-3 px-4 text-[13px] font-bold text-[#0F172A]">
+                    {item.area_acres} <span className="text-[11px] font-normal text-[#64748B]">Acres</span>
                   </td>
 
-                  {/* Location & GPS */}
-                  <td>
-                    <div className="text-[12px] font-medium text-[#0F172A] flex items-center gap-1">
-                      <MapPin size={12} className="text-[#16A34A]" />
-                      {item.village}, {item.district}, {item.state}
-                    </div>
-                    <div className="text-[10px] font-mono text-[#94A3B8]">
-                      Lat: {item.coordinates?.lat ? item.coordinates.lat.toFixed(4) : '23.0225'}, Lng: {item.coordinates?.lng ? item.coordinates.lng.toFixed(4) : '77.0124'}
-                    </div>
+                  {/* Column 4: Village */}
+                  <td className="py-3 px-4 text-[12.5px] font-semibold text-[#0F172A]">
+                    {item.village}
                   </td>
 
-                  {/* NDVI & Soil */}
-                  <td>
-                    <div className="text-[11.5px] font-bold text-[#16A34A]">NDVI: {item.ndvi_index || 0.78}</div>
-                    <div className="text-[10.5px] font-mono text-[#2563EB]">SOC: {item.soc_percentage || 1.35}% Carbon</div>
+                  {/* Column 5: District */}
+                  <td className="py-3 px-4 text-[12.5px] text-[#475569]">
+                    {item.district}, {item.state}
                   </td>
 
-                  {/* Assigned Project */}
-                  <td>
-                    <span className="text-[11.5px] font-semibold text-[#2563EB]">
-                      {item.assigned_project || 'Unassigned'}
+                  {/* Column 6: Project */}
+                  <td className="py-3 px-4">
+                    <span className="text-[11.5px] font-semibold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-lg border border-[#DBEAFE]">
+                      {item.assigned_project}
                     </span>
                   </td>
 
-                  {/* Status */}
-                  <td>
-                    <div className="space-y-1">
-                      <StatusBadge label={item.verification_status} variant={getStatusVariant(item.verification_status) as any} size="sm" />
-                      {item.duplicate_score ? (
-                        <div className="text-[10px] font-bold text-[#EF4444]">
-                          ⚠️ {item.duplicate_score}% Polygon Overlap
-                        </div>
-                      ) : null}
-                    </div>
+                  {/* Column 7: Polygon */}
+                  <td className="py-3 px-4 text-[11.5px] font-mono text-[#64748B]">
+                    {item.polygon_status}
                   </td>
 
-                  {/* Actions */}
-                  <td className="text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {item.verification_status === 'PENDING' || item.verification_status === 'DUPLICATE_SUSPECTED' ? (
-                        <>
-                          <button
-                            onClick={() => handleApproveLand(item.id)}
-                            className="px-2 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1"
-                            title="Approve Land Parcel"
-                          >
-                            <Check size={12} /> Approve
-                          </button>
-                          <button
-                            onClick={() => handleRejectLand(item.id)}
-                            className="px-2 py-1 bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[#EF4444] text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1"
-                            title="Reject Land Parcel"
-                          >
-                            <X size={12} /> Reject
-                          </button>
-                        </>
-                      ) : null}
-
-                      <button
-                        onClick={() => setAssignProjectModal(item)}
-                        className="px-2 py-1 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] text-[11px] font-bold rounded-lg cursor-pointer"
-                        title="Assign Carbon Project"
-                      >
-                        Project
-                      </button>
-
-                      <button
-                        onClick={() => navigate(`/land/${item.id}`)}
-                        className="px-2.5 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#0F172A] text-[11.5px] font-bold rounded-lg cursor-pointer flex items-center gap-1"
-                      >
-                        <Eye size={13} /> Details
-                      </button>
-                    </div>
+                  {/* Column 8: Status */}
+                  <td className="py-3 px-4">
+                    <StatusBadge
+                      label={item.verification_status}
+                      variant={
+                        item.verification_status === 'APPROVED' ? 'success' :
+                        item.verification_status === 'DUPLICATE' ? 'danger' :
+                        item.verification_status === 'PENDING' ? 'warning' : 'gray'
+                      }
+                      size="sm"
+                    />
                   </td>
-                </motion.tr>
+
+                  {/* Action */}
+                  <td className="py-3 px-4 text-right">
+                    <button
+                      onClick={() => navigate(`/land/${item.id}`)}
+                      className="px-2.5 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer ml-auto"
+                    >
+                      <Eye size={13} />
+                      <span>Details</span>
+                    </button>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
         </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-[#F1F5F9]">
-            <span className="text-[12px] text-[#94A3B8]">
-              Page {safePage} of {totalPages} · {filtered.length} parcels
-            </span>
-            <div className="flex gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1} className="btn btn-secondary btn-sm">Previous</button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="btn btn-secondary btn-sm">Next</button>
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* ── ASSIGN PROJECT MODAL ── */}
-      <AnimatePresence>
-        {assignProjectModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-4"
-            >
-              <h3 className="text-[16px] font-bold text-[#0F172A]">Assign Carbon Project to Parcel</h3>
-              <p className="text-[12px] text-[#64748B]">
-                Assigning project for parcel <strong>{assignProjectModal.parcel_id}</strong> ({assignProjectModal.farmer_name}, {assignProjectModal.area_acres} Acres).
-              </p>
-
-              <form onSubmit={handleAssignProjectSubmit} className="space-y-3 text-[13px]">
-                <div>
-                  <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Select Carbon / Afforestation Project</label>
-                  <select
-                    value={projectInput}
-                    onChange={e => setProjectInput(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"
-                  >
-                    <option value="PRJ-1042 MP Agroforestry Carbon Sink">PRJ-1042 MP Agroforestry Carbon Sink (42,000 Ha)</option>
-                    <option value="PRJ-2089 Gujarat Biochar Drive">PRJ-2089 Gujarat Biochar Drive (18,500 Ha)</option>
-                    <option value="PRJ-3041 Maharashtra Agroforestry Model">PRJ-3041 Maharashtra Agroforestry Model (25,000 Ha)</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#F1F5F9]">
-                  <button type="button" onClick={() => setAssignProjectModal(null)} className="btn btn-secondary btn-sm">Cancel</button>
-                  <button type="submit" className="btn btn-primary btn-sm">Assign Project</button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
     </div>
   );
 };

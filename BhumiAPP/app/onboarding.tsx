@@ -10,7 +10,7 @@ import * as Haptics from 'expo-haptics';
 
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../src/theme/theme';
 import { useAuthStore } from '../src/store/authStore';
-import api from '../src/api/apiClient';
+import api, { API_BASE_URL } from '../src/api/apiClient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isValidEmail, isNonEmptyStr, isValidAadhaar, isValidPAN, isValidDate, isOnlyLettersAndSpaces, sanitizeLettersOnly } from '../src/utils/validation';
 import AutocompleteDropdown from '../components/AutocompleteDropdown';
@@ -59,6 +59,8 @@ export default function OnboardingScreen() {
   const [gramPanchayat, setGramPanchayat] = useState(user?.gramPanchayat || '');
   const [vikashKhand, setVikashKhand] = useState(user?.vikashKhand || '');
   const [fullAddress, setFullAddress] = useState(user?.fullAddress || '');
+  const [tehsil, setTehsil] = useState(user?.tehsil || '');
+  const [pincode, setPincode] = useState(user?.pincode || '');
 
   const [identityType, setIdentityType] = useState<'Aadhaar' | 'PAN'>('Aadhaar');
   const [identityNumber, setIdentityNumber] = useState('');
@@ -195,32 +197,47 @@ export default function OnboardingScreen() {
       const formData = new FormData();
       formData.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
 
-      if (key === 'farmerPhoto') {
-        console.log('[onboarding] Uploading farmer photo...', { filename });
-        const res = await api.post('/farmer/profile/photo', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        console.log('[onboarding] Upload response:', res.data);
-        const url: string | undefined = res.data?.data?.url;
-        if (url) updateOnboardingData({ farmerPhoto: url });
-      } else if (key === 'idProof') {
+      const accessToken = useAuthStore.getState().accessToken;
+      const uploadPath = key === 'farmerPhoto' ? '/farmer/profile/photo' : '/farmer/identity/document';
+      const uploadUrl = `${API_BASE_URL}${uploadPath}`;
+
+      if (key === 'idProof') {
         const docType = identityType === 'Aadhaar' ? 'aadhaar' : 'pan';
         formData.append('document_type', docType);
-        console.log('[onboarding] Uploading Aadhaar...', { filename, document_type: docType });
-        const res = await api.post('/farmer/identity/document', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        console.log('[onboarding] Upload response:', res.data);
+      }
+
+      console.log(`[onboarding] Native uploading via fetch to ${uploadUrl}...`);
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.log('[onboarding] Upload response error:', errText);
+        throw new Error(`Upload failed with status ${response.status}`);
+      }
+
+      const resData = await response.json();
+      console.log('[onboarding] Upload response:', resData);
+
+      if (key === 'farmerPhoto') {
+        const url: string | undefined = resData?.data?.url;
+        if (url) updateOnboardingData({ farmerPhoto: url });
       }
 
       setDocStates(prev => ({ ...prev, [key]: 'Approved' }));
+      setErrors(prev => ({ ...prev, [key]: '' }));
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (error: any) {
-      console.log('[onboarding] Upload failed:', error?.response?.data || error?.message);
+      console.log('[onboarding] Upload failed:', error?.message);
       setDocStates(prev => ({ ...prev, [key]: 'None' }));
-      const msg: string = error?.response?.data?.message || 'Upload failed. Please try again.';
+      const msg: string = error?.message || 'Upload failed. Please try again.';
       Alert.alert('Upload Error', msg);
     }
   };
@@ -264,6 +281,7 @@ export default function OnboardingScreen() {
         ['stateName', stateName, 'State'],
         ['district', district, 'District'],
         ['city', city, 'City'],
+        ['tehsil', tehsil, 'Tehsil'],
         ['gramPanchayat', gramPanchayat, 'Gram Panchayat'],
         ['vikashKhand', vikashKhand, 'Vikas Khand'],
         ['village', village, 'Village'],
@@ -274,6 +292,14 @@ export default function OnboardingScreen() {
         } else if (!isOnlyLettersAndSpaces(val)) {
           newErrors[key] = 'Only letters and spaces are allowed.'; hasError = true;
         }
+      }
+
+      if (!isNonEmptyStr(pincode)) {
+        newErrors.pincode = 'PIN Code required';
+        hasError = true;
+      } else if (!/^[1-9][0-9]{5}$/.test(pincode)) {
+        newErrors.pincode = 'PIN Code must be exactly 6 digits';
+        hasError = true;
       }
 
       if (!isNonEmptyStr(fullAddress)) { newErrors.fullAddress = 'Address required'; hasError = true; }
@@ -287,7 +313,7 @@ export default function OnboardingScreen() {
         return;
       }
       updateOnboardingData({ 
-        state: stateName, district, village, city, country, gramPanchayat, vikashKhand, fullAddress 
+        state: stateName, district, tehsil, village, city, country, gramPanchayat, vikashKhand, fullAddress, pincode 
       });
       setOnboardingStep(3);
     } 
@@ -296,6 +322,10 @@ export default function OnboardingScreen() {
       const newErrors: Record<string, string> = {};
       if (!identityVerified) { newErrors.identityVerified = 'Please verify ID'; hasError = true; }
       if (docStates.farmerPhoto !== 'Approved') { newErrors.farmerPhoto = 'Photo required'; hasError = true; }
+      if (identityType === 'PAN' && docStates.idProof !== 'Approved') {
+        newErrors.idProof = 'PAN Photo upload is required / पैन की फोटो अपलोड करना आवश्यक है';
+        hasError = true;
+      }
       
       if (hasError) {
         setErrors(newErrors);
@@ -532,6 +562,19 @@ export default function OnboardingScreen() {
                 {errors.village && <Text style={styles.errorText}>{errors.village}</Text>}
               </View>
 
+              <View style={[styles.dualInputsRow, { zIndex: 6 }]}>
+                <View style={[styles.formField, { flex: 1, marginRight: 10 }]} onLayout={(e) => fieldPositions.current['tehsil'] = e.nativeEvent.layout.y}>
+                  <Text style={styles.label}>Tehsil / तहसील *</Text>
+                  <TextInput style={[styles.input, errors.tehsil && styles.inputError]} placeholder="e.g. Jaithari" placeholderTextColor="#64748B" value={tehsil} onChangeText={(val) => { setTehsil(sanitizeLettersOnly(val)); setErrors(prev => ({ ...prev, tehsil: '' })); }} />
+                  {errors.tehsil && <Text style={styles.errorText}>{errors.tehsil}</Text>}
+                </View>
+                <View style={[styles.formField, { flex: 1 }]} onLayout={(e) => fieldPositions.current['pincode'] = e.nativeEvent.layout.y}>
+                  <Text style={styles.label}>PIN Code / पिनकोड *</Text>
+                  <TextInput style={[styles.input, errors.pincode && styles.inputError]} placeholder="e.g. 484224" placeholderTextColor="#64748B" value={pincode} onChangeText={(val) => { setPincode(val.replace(/[^0-9]/g, '')); setErrors(prev => ({ ...prev, pincode: '' })); }} keyboardType="numeric" maxLength={6} />
+                  {errors.pincode && <Text style={styles.errorText}>{errors.pincode}</Text>}
+                </View>
+              </View>
+
               <View style={styles.formField} onLayout={(e) => fieldPositions.current['fullAddress'] = e.nativeEvent.layout.y}>
                 <Text style={styles.label}>Full Address / पूरा पता *</Text>
                 <TextInput style={[styles.input, { height: 80 }, errors.fullAddress && styles.inputError]} multiline numberOfLines={3} placeholder="House no, Street name, Land boundaries" placeholderTextColor="#64748B" value={fullAddress} onChangeText={(val) => { setFullAddress(val); setErrors(prev => ({ ...prev, fullAddress: '' })); }} />
@@ -552,13 +595,23 @@ export default function OnboardingScreen() {
               <View style={{ flexDirection: 'row', marginBottom: 12 }}>
                 <TouchableOpacity 
                   style={[styles.radioBtn, identityType === 'Aadhaar' && styles.radioBtnActive]}
-                  onPress={() => { setIdentityType('Aadhaar'); setIdentityVerified(false); }}
+                  onPress={() => {
+                    setIdentityType('Aadhaar');
+                    setIdentityVerified(false);
+                    setDocStates(prev => ({ ...prev, idProof: 'None' }));
+                    setErrors(prev => ({ ...prev, idProof: '', identityNumber: '', identityVerified: '' }));
+                  }}
                 >
                   <Text style={[styles.radioText, identityType === 'Aadhaar' && styles.radioTextActive]}>Aadhaar Card</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={[styles.radioBtn, identityType === 'PAN' && styles.radioBtnActive, { marginLeft: 10 }]}
-                  onPress={() => { setIdentityType('PAN'); setIdentityVerified(false); }}
+                  onPress={() => {
+                    setIdentityType('PAN');
+                    setIdentityVerified(false);
+                    setDocStates(prev => ({ ...prev, idProof: 'None' }));
+                    setErrors(prev => ({ ...prev, idProof: '', identityNumber: '', identityVerified: '' }));
+                  }}
                 >
                   <Text style={[styles.radioText, identityType === 'PAN' && styles.radioTextActive]}>PAN Card</Text>
                 </TouchableOpacity>
@@ -596,12 +649,15 @@ export default function OnboardingScreen() {
               {errors.farmerPhoto && <Text style={styles.errorText}>{errors.farmerPhoto}</Text>}
             </View>
 
-            {renderDocCard({ 
-              key: 'idProof', 
-              title: `${identityType} Photo (Optional)`, 
-              subtitle: 'Upload physical copy image', 
-              icon: 'credit-card-outline' 
-            })}
+            <View onLayout={(e) => fieldPositions.current['idProof'] = e.nativeEvent.layout.y}>
+              {renderDocCard({ 
+                key: 'idProof', 
+                title: identityType === 'PAN' ? 'PAN Photo / पैन की फोटो *' : `${identityType} Photo (Optional)`, 
+                subtitle: 'Upload physical copy image', 
+                icon: 'credit-card-outline' 
+              })}
+              {errors.idProof && <Text style={styles.errorText}>{errors.idProof}</Text>}
+            </View>
 
             <View onLayout={(e) => fieldPositions.current['farmerPhoto'] = e.nativeEvent.layout.y}>
               {renderDocCard({ 

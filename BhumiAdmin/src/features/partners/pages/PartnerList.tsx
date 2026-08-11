@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Handshake, Plus, Eye, Users, ShieldCheck, Wallet,
-  Building, Search, Filter, RefreshCw, Award
+  Building, Search, Filter, RefreshCw, Award, CheckCircle, X
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { KpiCard } from '../../../components/ui/KpiCard';
@@ -12,16 +12,18 @@ import { EmptyState } from '../../../components/ui/EmptyState';
 import { usePartners } from '../api/usePartners';
 import toast from 'react-hot-toast';
 
+// 10 Specified Partner Types
 export const PARTNER_TYPES = [
-  'Carbon Partner',
+  'Carbon Developer',
   'Insurance',
-  'Lab',
-  'MRV',
+  'Soil Lab',
   'GIS',
-  'Marketplace Vendor',
+  'Marketplace',
   'Buyer',
   'NGO',
-  'Government'
+  'Government',
+  'Verifier',
+  'Registry'
 ] as const;
 
 const SEEDED_PARTNERS = [
@@ -29,19 +31,18 @@ const SEEDED_PARTNERS = [
     id: 'PRT-1001',
     vendor_id: 'PRT-1001',
     company_name: 'AgriCorp Solutions Pvt Ltd',
-    partner_type: 'Carbon Partner',
+    partner_type: 'Carbon Developer',
     reg_number: 'CIN-U01100MP2021PTC054129',
     gst_number: '23AAACA9012A1Z5',
     pan_number: 'AAACA9012A',
-    contact_person: 'Vikram Mehta (Managing Director)',
+    contact_person: 'Vikram Mehta (MD)',
     phone: '+91 98260 11902',
     email: 'v.mehta@agricorp.in',
     agreement_validity: '31 Dec 2027',
     projects_count: 14,
-    performance_score: 96.5,
-    commission_rate: '8.5%',
+    performance_rating: 4.8,
+    revenue_generated: '₹46.5 Lakhs',
     wallet_balance: 345000,
-    is_verified: true,
     status: 'Active',
   },
   {
@@ -52,58 +53,37 @@ const SEEDED_PARTNERS = [
     reg_number: 'IRDAI-REG-2022-890',
     gst_number: '27AABCE4412B1ZX',
     pan_number: 'AABCE4412B',
-    contact_person: 'Priya Sundaram (Head of Agri Underwriting)',
+    contact_person: 'Priya Sundaram (Head Underwriter)',
     phone: '+91 98221 44019',
     email: 'p.sundaram@ecoshield.com',
     agreement_validity: '15 Aug 2026',
     projects_count: 8,
-    performance_score: 94.0,
-    commission_rate: '5.0%',
+    performance_rating: 4.7,
+    revenue_generated: '₹27.0 Lakhs',
     wallet_balance: 890000,
-    is_verified: true,
     status: 'Active',
   },
   {
     id: 'PRT-1003',
     vendor_id: 'PRT-1003',
-    company_name: 'BioLab Testing & Soil Diagnostics Ltd',
-    partner_type: 'Lab',
+    company_name: 'BioLab Soil Diagnostics Ltd',
+    partner_type: 'Soil Lab',
     reg_number: 'NABL-LAB-2023-412',
     gst_number: '24AAACB1102C1Z8',
     pan_number: 'AAACB1102C',
-    contact_person: 'Dr. Suresh Joshi (Chief Pathologist)',
+    contact_person: 'Dr. Suresh Joshi (Pathologist)',
     phone: '+91 97120 55412',
     email: 'lab@biolab.co.in',
     agreement_validity: '30 Jun 2026',
     projects_count: 6,
-    performance_score: 91.2,
-    commission_rate: '10.0%',
+    performance_rating: 4.6,
+    revenue_generated: '₹14.2 Lakhs',
     wallet_balance: 142000,
-    is_verified: true,
     status: 'Active',
   },
   {
     id: 'PRT-1004',
     vendor_id: 'PRT-1004',
-    company_name: 'GreenEarth MRV & Remote Sensing Solutions',
-    partner_type: 'MRV',
-    reg_number: 'CIN-U72900DL2020PTC099120',
-    gst_number: '07AAACG8890D1Z2',
-    pan_number: 'AAACG8890D',
-    contact_person: 'Anil Kulkarni (VP Remote Sensing)',
-    phone: '+91 98110 33491',
-    email: 'mrv@greenearth.org',
-    agreement_validity: '10 Nov 2026',
-    projects_count: 12,
-    performance_score: 98.2,
-    commission_rate: '12.0%',
-    wallet_balance: 512000,
-    is_verified: true,
-    status: 'Active',
-  },
-  {
-    id: 'PRT-1005',
-    vendor_id: 'PRT-1005',
     company_name: 'GeoMap GIS Spatial Intelligence',
     partner_type: 'GIS',
     reg_number: 'GIS-CERT-2021-009',
@@ -114,17 +94,16 @@ const SEEDED_PARTNERS = [
     email: 'meghna@geomap.io',
     agreement_validity: '31 Jan 2026',
     projects_count: 9,
-    performance_score: 93.8,
-    commission_rate: '7.5%',
+    performance_rating: 4.9,
+    revenue_generated: '₹21.0 Lakhs',
     wallet_balance: 210000,
-    is_verified: true,
     status: 'Active',
   },
   {
-    id: 'PRT-1006',
-    vendor_id: 'PRT-1006',
-    company_name: 'KisanCare Bio-Inputs & Sapling Nursery',
-    partner_type: 'Marketplace Vendor',
+    id: 'PRT-1005',
+    vendor_id: 'PRT-1005',
+    company_name: 'KisanCare Bio-Inputs Nursery',
+    partner_type: 'Marketplace',
     reg_number: 'MSME-MP-09-00124',
     gst_number: '23AAACK5512F1Z1',
     pan_number: 'AAACK5512F',
@@ -133,67 +112,99 @@ const SEEDED_PARTNERS = [
     email: 'sales@kisancare.in',
     agreement_validity: '31 Dec 2025',
     projects_count: 4,
-    performance_score: 89.5,
-    commission_rate: '15.0%',
+    performance_rating: 4.5,
+    revenue_generated: '₹9.8 Lakhs',
     wallet_balance: 98000,
-    is_verified: true,
+    status: 'Active',
+  },
+  {
+    id: 'PRT-1006',
+    vendor_id: 'PRT-1006',
+    company_name: 'Global EcoCredits Buyer Corp',
+    partner_type: 'Buyer',
+    reg_number: 'EU-REG-2020-99821',
+    gst_number: '9924AAAFF1102A1',
+    pan_number: 'AAAFF1102A',
+    contact_person: 'Marc Van Der Berg',
+    phone: '+44 20 7946 0912',
+    email: 'trading@ecocredits.eu',
+    agreement_validity: '31 Mar 2028',
+    projects_count: 18,
+    performance_rating: 4.95,
+    revenue_generated: '₹450.0 Lakhs',
+    wallet_balance: 4500000,
     status: 'Active',
   },
   {
     id: 'PRT-1007',
     vendor_id: 'PRT-1007',
-    company_name: 'Global EcoCredits Buyer Corp (EU)',
-    partner_type: 'Buyer',
-    reg_number: 'EU-REG-2020-99821',
-    gst_number: '9924AAAFF1102A1',
-    pan_number: 'AAAFF1102A',
-    contact_person: 'Marc Van Der Berg (Head of Trading)',
-    phone: '+44 20 7946 0912',
-    email: 'trading@ecocredits.eu',
-    agreement_validity: '31 Mar 2028',
-    projects_count: 18,
-    performance_score: 99.0,
-    commission_rate: '2.5%',
-    wallet_balance: 4500000,
-    is_verified: true,
-    status: 'Active',
-  },
-  {
-    id: 'PRT-1008',
-    vendor_id: 'PRT-1008',
     company_name: 'Vriksha Foundation NGO',
     partner_type: 'NGO',
     reg_number: 'NGO-DARPAN-MP-2018-912',
     gst_number: 'EXEMPTED-80G',
     pan_number: 'AAATV9012N',
-    contact_person: 'Sunita Deshmukh (Secretary)',
+    contact_person: 'Sunita Deshmukh',
     phone: '+91 94250 44910',
     email: 'info@vrikshafoundation.org',
     agreement_validity: '15 May 2026',
     projects_count: 11,
-    performance_score: 92.4,
-    commission_rate: '0.0%',
+    performance_rating: 4.6,
+    revenue_generated: '₹7.5 Lakhs',
     wallet_balance: 75000,
-    is_verified: true,
     status: 'Active',
   },
   {
-    id: 'PRT-1009',
-    vendor_id: 'PRT-1009',
+    id: 'PRT-1008',
+    vendor_id: 'PRT-1008',
     company_name: 'State Forest Development Board',
     partner_type: 'Government',
     reg_number: 'GOVT-DEPT-MP-401',
     gst_number: 'EXEMPTED-GOVT',
     pan_number: 'AAATG8812G',
-    contact_person: 'Rajesh Sharma (Joint Secretary)',
+    contact_person: 'Rajesh Sharma (Sec)',
     phone: '+91 11 2338 2012',
     email: 'r.sharma@agri.gov.in',
     agreement_validity: '31 Dec 2030',
     projects_count: 24,
-    performance_score: 97.8,
-    commission_rate: '0.0%',
+    performance_rating: 4.8,
+    revenue_generated: '₹120.0 Lakhs',
     wallet_balance: 12000000,
-    is_verified: true,
+    status: 'Active',
+  },
+  {
+    id: 'PRT-1009',
+    vendor_id: 'PRT-1009',
+    company_name: 'Verra Gold Standard Auditor',
+    partner_type: 'Verifier',
+    reg_number: 'AUDIT-VERRA-9021',
+    gst_number: '27AABCV8812K1Z4',
+    pan_number: 'AABCV8812K',
+    contact_person: 'Dr. Helene Dupont',
+    phone: '+33 1 42 68 55 00',
+    email: 'h.dupont@verra-audit.org',
+    agreement_validity: '31 Dec 2029',
+    projects_count: 15,
+    performance_rating: 4.9,
+    revenue_generated: '₹35.0 Lakhs',
+    wallet_balance: 350000,
+    status: 'Active',
+  },
+  {
+    id: 'PRT-1010',
+    vendor_id: 'PRT-1010',
+    company_name: 'International Carbon Registry',
+    partner_type: 'Registry',
+    reg_number: 'REGISTRY-ICR-2024',
+    gst_number: '9924AAACR4412B1',
+    pan_number: 'AAACR4412B',
+    contact_person: 'Siddharth Nair',
+    phone: '+91 22 6120 4400',
+    email: 'registry@icr-carbon.org',
+    agreement_validity: '31 Dec 2032',
+    projects_count: 30,
+    performance_rating: 5.0,
+    revenue_generated: '₹180.0 Lakhs',
+    wallet_balance: 1800000,
     status: 'Active',
   },
 ];
@@ -204,7 +215,21 @@ export const PartnerList: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page] = useState(1);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [partnerList, setPartnerList] = useState(SEEDED_PARTNERS);
+
+  // Modal State for Onboarding New Partner
+  const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
+  const [newPartner, setNewPartner] = useState({
+    company_name: '',
+    partner_type: 'Carbon Developer' as (typeof PARTNER_TYPES)[number],
+    gst_number: '',
+    pan_number: '',
+    reg_number: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    agreement_validity: '31 Dec 2027',
+  });
 
   const { data: apiData, refetch } = usePartners(page, 30, search || undefined);
 
@@ -213,7 +238,7 @@ export const PartnerList: React.FC = () => {
     id: p.id,
     vendor_id: p.vendor_id || p.id,
     company_name: p.store_name || p.name || 'Agri Partner',
-    partner_type: p.partner_type || 'Carbon Partner',
+    partner_type: p.partner_type || 'Carbon Developer',
     reg_number: 'CIN-U01100MP2021PTC054129',
     gst_number: p.gst_number || '23AAACA9012A1Z5',
     pan_number: 'AAACA9012A',
@@ -222,12 +247,11 @@ export const PartnerList: React.FC = () => {
     email: p.email || 'partner@bhumicred.com',
     agreement_validity: '31 Dec 2026',
     projects_count: 5,
-    performance_score: 95.0,
-    commission_rate: '8.0%',
+    performance_rating: 4.8,
+    revenue_generated: '₹15.0 Lakhs',
     wallet_balance: p.wallet_balance ?? 150000,
-    is_verified: p.is_verified ?? true,
     status: p.status || 'Active',
-  })) : SEEDED_PARTNERS;
+  })) : partnerList;
 
   const filtered = useMemo(() => {
     return partners.filter(p => {
@@ -239,50 +263,80 @@ export const PartnerList: React.FC = () => {
     });
   }, [partners, search, typeFilter, statusFilter]);
 
-  const toggleAll = () =>
-    setSelected(selected.length === filtered.length ? [] : filtered.map(p => p.id));
-  const toggleSelect = (id: string) =>
-    setSelected(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]));
+  const handleOnboardSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPartner.company_name || !newPartner.contact_person) {
+      toast.error('Please enter Company Name and Contact Person.');
+      return;
+    }
 
-  const getTypeBadgeVariant = (type: string) => {
-    if (type.includes('Carbon')) return 'success';
-    if (type.includes('Insurance')) return 'purple';
-    if (type.includes('MRV') || type.includes('GIS')) return 'info';
-    if (type.includes('Government')) return 'warning';
-    return 'cyan';
+    const randomId = `PRT-${Math.floor(2000 + Math.random() * 8000)}`;
+    const created = {
+      id: randomId,
+      vendor_id: randomId,
+      company_name: newPartner.company_name,
+      partner_type: newPartner.partner_type,
+      reg_number: newPartner.reg_number || 'CIN-U01100MP2025PTC099100',
+      gst_number: newPartner.gst_number || '23AAACC1001A1Z9',
+      pan_number: newPartner.pan_number || 'AAACC1001A',
+      contact_person: newPartner.contact_person,
+      phone: newPartner.phone || '+91 98261 00000',
+      email: newPartner.email || 'contact@partner.com',
+      agreement_validity: newPartner.agreement_validity,
+      projects_count: 1,
+      performance_rating: 5.0,
+      revenue_generated: '₹0.0 Lakhs',
+      wallet_balance: 100000,
+      status: 'Active',
+    };
+
+    setPartnerList(prev => [created, ...prev]);
+    toast.success(`Partner "${created.company_name}" (${created.vendor_id}) onboarded successfully!`);
+    setIsOnboardModalOpen(false);
+    setNewPartner({
+      company_name: '',
+      partner_type: 'Carbon Developer',
+      gst_number: '',
+      pan_number: '',
+      reg_number: '',
+      contact_person: '',
+      phone: '',
+      email: '',
+      agreement_validity: '31 Dec 2027',
+    });
   };
 
   return (
-    <div className="space-y-6 page-enter pb-8">
+    <div className="space-y-6 page-enter pb-12" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+
       {/* ── Page Header ── */}
       <PageHeader
         title="Partner Management"
-        description="Module 4: Manage Carbon Partners, Insurers, Labs, MRV/GIS Verifiers, Marketplace Vendors, Buyers, NGOs & Government Bodies."
-        badge={{ label: `${filtered.length} Active Partners`, variant: 'info' }}
+        description="Directory & SLA controls across Carbon Developers, Insurance, Soil Labs, GIS, Marketplace, Buyers, NGOs, Govt, Verifiers & Registries."
+        badge={{ label: `${partners.length} Ecosystem Partners`, variant: 'info' }}
         icon={Handshake}
         iconColor="#16A34A"
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => refetch()} className="btn btn-secondary btn-sm flex items-center gap-1.5 cursor-pointer">
-              <RefreshCw size={13} />
-              <span>Refresh</span>
+            <button onClick={() => refetch()} className="btn btn-secondary btn-sm gap-1.5 cursor-pointer">
+              <RefreshCw size={13} /> Refresh
             </button>
-            <button onClick={() => toast.success('Open Add Partner Modal')} className="btn btn-primary btn-sm gap-1.5 cursor-pointer">
-              <Plus size={14} /> Add Partner
+            <button onClick={() => setIsOnboardModalOpen(true)} className="btn btn-primary btn-sm gap-1.5 cursor-pointer">
+              <Plus size={14} /> Onboard New Partner
             </button>
           </div>
         }
       />
 
-      {/* ── KPI Metric Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="TOTAL PARTNERS" value={partners.length} icon={Users} iconBg="#EFF6FF" iconColor="#2563EB" />
-        <KpiCard title="VERIFIED ENTITIES" value={partners.filter(p=>p.is_verified).length} icon={ShieldCheck} iconBg="#F0FDF4" iconColor="#16A34A" />
-        <KpiCard title="CARBON & MRV PARTNERS" value={partners.filter(p=>p.partner_type.includes('Carbon')||p.partner_type.includes('MRV')).length} icon={Award} iconBg="#F5F3FF" iconColor="#8B5CF6" />
-        <KpiCard title="TOTAL WALLET BALANCE" value="₹1.92 Crore" icon={Wallet} iconBg="#ECFDF5" iconColor="#059669" />
+      {/* ── KPI Row ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard title="TOTAL PARTNERS" value={partners.length} icon={Handshake} iconBg="#F0FDF4" iconColor="#16A34A" />
+        <KpiCard title="CARBON DEVELOPERS" value={partners.filter(p=>p.partner_type==='Carbon Developer').length} icon={Building} iconBg="#EFF6FF" iconColor="#2563EB" />
+        <KpiCard title="VERIFIERS & REGISTRY" value={partners.filter(p=>p.partner_type==='Verifier'||p.partner_type==='Registry').length} icon={ShieldCheck} iconBg="#F5F3FF" iconColor="#8B5CF6" />
+        <KpiCard title="ACTIVE DISBURSEMENTS" value="₹72.5 Lakhs" icon={Wallet} iconBg="#ECFDF5" iconColor="#059669" />
       </div>
 
-      {/* ── SEARCH & BRD MODULE 4 FILTERS ── */}
+      {/* ── SEARCH & 10 PARTNER TYPE FILTERS ── */}
       <div className="bg-white border border-[#E8EDF5] rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
@@ -297,184 +351,246 @@ export const PartnerList: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider flex items-center gap-1">
-              <Filter size={13} className="text-[#16A34A]" /> Filters:
-            </span>
-
-            {/* 9 BRD Partner Type Dropdown Filter */}
+            {/* 10 Partner Types Filter */}
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]"
+              className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]"
             >
-              <option value="">All Partner Types (9 Categories)</option>
+              <option value="">All 10 Partner Types</option>
               {PARTNER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
 
-            {/* Status Dropdown Filter */}
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]"
+              className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]"
             >
               <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="pending">Pending</option>
-              <option value="suspended">Suspended</option>
+              <option value="Active">Active</option>
+              <option value="Pending">Pending</option>
+              <option value="Suspended">Suspended</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* ── PARTNER DIRECTORY TABLE (All 10 BRD Attributes Mapped) ── */}
-      <div className="ent-card overflow-hidden">
+      {/* ── PARTNERS DIRECTORY TABLE ── */}
+      <div className="bg-white border border-[#E8EDF5] rounded-2xl overflow-hidden shadow-xs">
         <div className="p-4 border-b border-[#F1F5F9] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-[14px] font-bold text-[#0F172A]">Partner Directory</h3>
+            <h3 className="text-[14px] font-bold text-[#0F172A]">Ecosystem Partners Directory</h3>
             <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#DCFCE7]">
               {filtered.length} Partners
             </span>
           </div>
-
-          {selected.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-[12px] font-medium text-[#64748B]">{selected.length} selected</span>
-              <button onClick={() => toast.success(`Exported ${selected.length} partners CSV`)} className="btn btn-secondary btn-sm">
-                Export Selected
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="ent-table min-w-[1150px]">
+          <table className="w-full text-left border-collapse min-w-[1150px]">
             <thead>
-              <tr>
-                <th className="w-10">
-                  <input
-                    type="checkbox"
-                    checked={selected.length === filtered.length && filtered.length > 0}
-                    onChange={toggleAll}
-                    className="rounded border-[#CBD5E1] accent-[#16A34A] cursor-pointer"
-                  />
-                </th>
-                <th>Company & Partner ID</th>
-                <th>Partner Category</th>
-                <th>Registration / GST & PAN</th>
-                <th>Contact Person</th>
-                <th>Assigned Projects</th>
-                <th>SLA Performance</th>
-                <th>Commission Rate</th>
-                <th>Wallet Balance</th>
-                <th>Status</th>
-                <th className="text-right">Actions</th>
+              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                <th className="py-3 px-4">Company</th>
+                <th className="py-3 px-4">Type</th>
+                <th className="py-3 px-4">GST & PAN</th>
+                <th className="py-3 px-4">Contact</th>
+                <th className="py-3 px-4">Agreement</th>
+                <th className="py-3 px-4">Projects</th>
+                <th className="py-3 px-4">Revenue</th>
+                <th className="py-3 px-4">Rating</th>
+                <th className="py-3 px-4 text-right">Action</th>
               </tr>
             </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={11}>
-                    <EmptyState icon={Handshake} title="No partners match filter criteria" description="Try clearing filters or search term." />
+            <tbody className="divide-y divide-[#F1F5F9]">
+              {filtered.map((p) => (
+                <tr key={p.id} className="hover:bg-[#F8FAFC] transition-colors">
+                  {/* Attribute 1: Company */}
+                  <td className="py-3 px-4">
+                    <div
+                      onClick={() => navigate(`/partners/${p.id}`)}
+                      className="text-[13px] font-bold text-[#0F172A] hover:text-[#16A34A] cursor-pointer"
+                    >
+                      {p.company_name}
+                    </div>
+                    <div className="text-[11px] font-mono text-[#64748B]">{p.vendor_id}</div>
+                  </td>
+
+                  {/* Attribute 2: Type */}
+                  <td className="py-3 px-4">
+                    <span className="text-[11.5px] font-semibold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-lg border border-[#DBEAFE]">
+                      {p.partner_type}
+                    </span>
+                  </td>
+
+                  {/* Attribute 3 & 4: GST & PAN */}
+                  <td className="py-3 px-4">
+                    <div className="text-[11.5px] font-mono text-[#0F172A]">GST: {p.gst_number}</div>
+                    <div className="text-[11px] font-mono text-[#64748B]">PAN: {p.pan_number}</div>
+                  </td>
+
+                  {/* Attribute 5: Contact */}
+                  <td className="py-3 px-4">
+                    <div className="text-[12.5px] font-semibold text-[#0F172A]">{p.contact_person}</div>
+                    <div className="text-[11px] text-[#64748B]">{p.phone}</div>
+                  </td>
+
+                  {/* Attribute 6: Agreement */}
+                  <td className="py-3 px-4 text-[12px] font-medium text-[#475569]">
+                    Valid: {p.agreement_validity}
+                  </td>
+
+                  {/* Attribute 7: Projects */}
+                  <td className="py-3 px-4 text-[13px] font-bold text-[#0F172A]">
+                    {p.projects_count} <span className="text-[11px] font-normal text-[#64748B]">Projects</span>
+                  </td>
+
+                  {/* Attribute 8: Revenue */}
+                  <td className="py-3 px-4 text-[13px] font-extrabold text-[#16A34A]">
+                    {p.revenue_generated}
+                  </td>
+
+                  {/* Attribute 9: Rating */}
+                  <td className="py-3 px-4">
+                    <span className="text-[12px] font-extrabold text-[#D97706] bg-[#FFFBEB] px-2 py-0.5 rounded-lg border border-[#FEF3C7]">
+                      ★ {p.performance_rating}
+                    </span>
+                  </td>
+
+                  {/* Action */}
+                  <td className="py-3 px-4 text-right">
+                    <button
+                      onClick={() => navigate(`/partners/${p.id}`)}
+                      className="px-3 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer ml-auto"
+                    >
+                      <Eye size={13} /> Dashboard
+                    </button>
                   </td>
                 </tr>
-              ) : (
-                filtered.map((p, i) => (
-                  <motion.tr
-                    key={p.id}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.03 }}
-                    className={selected.includes(p.id) ? 'selected' : ''}
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(p.id)}
-                        onChange={() => toggleSelect(p.id)}
-                        className="rounded border-[#CBD5E1] accent-[#16A34A] cursor-pointer"
-                      />
-                    </td>
-
-                    {/* Company */}
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-[#F0FDF4] text-[#16A34A] font-bold text-[12px] flex items-center justify-center border border-[#DCFCE7] shrink-0">
-                          <Building size={18} />
-                        </div>
-                        <div>
-                          <div
-                            onClick={() => navigate(`/partners/${p.id}`)}
-                            className="text-[13.5px] font-bold text-[#0F172A] hover:text-[#16A34A] cursor-pointer leading-tight"
-                          >
-                            {p.company_name}
-                          </div>
-                          <span className="font-mono text-[10.5px] text-[#64748B]">{p.vendor_id}</span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Partner Type */}
-                    <td>
-                      <StatusBadge label={p.partner_type} variant={getTypeBadgeVariant(p.partner_type) as any} size="sm" />
-                    </td>
-
-                    {/* Registration / GST */}
-                    <td>
-                      <div className="text-[11.5px] font-mono text-[#0F172A] font-bold">GST: {p.gst_number}</div>
-                      <div className="text-[10.5px] font-mono text-[#94A3B8]">PAN: {p.pan_number}</div>
-                    </td>
-
-                    {/* Contact Person */}
-                    <td>
-                      <div className="text-[12.5px] font-semibold text-[#0F172A]">{p.contact_person}</div>
-                      <div className="text-[10.5px] font-mono text-[#64748B]">{p.phone}</div>
-                    </td>
-
-                    {/* Projects */}
-                    <td className="text-[13px] font-bold text-[#2563EB]">
-                      {p.projects_count} Active
-                    </td>
-
-                    {/* Performance */}
-                    <td>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[12.5px] font-bold text-[#16A34A]">{p.performance_score}%</span>
-                        <div className="w-12 h-1.5 bg-[#DCFCE7] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#16A34A] rounded-full" style={{ width: `${p.performance_score}%` }} />
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Commission */}
-                    <td className="text-[13px] font-bold text-[#8B5CF6]">{p.commission_rate}</td>
-
-                    {/* Wallet Balance */}
-                    <td className="text-[13px] font-bold text-[#16A34A]">₹{p.wallet_balance.toLocaleString()}</td>
-
-                    {/* Status */}
-                    <td>
-                      <StatusBadge label={p.status} variant={p.status === 'Active' ? 'success' : 'warning'} size="sm" />
-                    </td>
-
-                    {/* Actions */}
-                    <td>
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => navigate(`/partners/${p.id}`)}
-                          className="px-2.5 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <Eye size={13} />
-                          <span>Details</span>
-                        </button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* ── ONBOARD NEW PARTNER MODAL ── */}
+      <AnimatePresence>
+        {isOnboardModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+                <div className="flex items-center gap-2">
+                  <Handshake size={20} className="text-[#16A34A]" />
+                  <h3 className="text-[16px] font-bold text-[#0F172A]">Onboard New Ecosystem Partner</h3>
+                </div>
+                <button onClick={() => setIsOnboardModalOpen(false)} className="text-[#94A3B8] hover:text-[#0F172A] text-lg font-bold cursor-pointer">
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleOnboardSubmit} className="space-y-3 text-[12.5px]">
+                <div>
+                  <label className="block font-bold text-[#0F172A] mb-1">Company / Organization Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newPartner.company_name}
+                    onChange={(e) => setNewPartner({ ...newPartner, company_name: e.target.value })}
+                    placeholder="e.g. GreenAgri Carbon Solutions Pvt Ltd"
+                    className="w-full px-3.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] font-semibold text-[#0F172A] outline-none focus:border-[#16A34A]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Partner Type</label>
+                    <select
+                      value={newPartner.partner_type}
+                      onChange={(e) => setNewPartner({ ...newPartner, partner_type: e.target.value as any })}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    >
+                      {PARTNER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Nodal Contact Person *</label>
+                    <input
+                      type="text"
+                      required
+                      value={newPartner.contact_person}
+                      onChange={(e) => setNewPartner({ ...newPartner, contact_person: e.target.value })}
+                      placeholder="e.g. Ramesh Verma (MD)"
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-semibold text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">GSTIN Number</label>
+                    <input
+                      type="text"
+                      value={newPartner.gst_number}
+                      onChange={(e) => setNewPartner({ ...newPartner, gst_number: e.target.value })}
+                      placeholder="23AAACA9012A1Z5"
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-mono text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">PAN Number</label>
+                    <input
+                      type="text"
+                      value={newPartner.pan_number}
+                      onChange={(e) => setNewPartner({ ...newPartner, pan_number: e.target.value })}
+                      placeholder="AAACA9012A"
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-mono text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Phone (+91)</label>
+                    <input
+                      type="text"
+                      value={newPartner.phone}
+                      onChange={(e) => setNewPartner({ ...newPartner, phone: e.target.value })}
+                      placeholder="+91 98260 11902"
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-mono text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={newPartner.email}
+                      onChange={(e) => setNewPartner({ ...newPartner, email: e.target.value })}
+                      placeholder="contact@partner.com"
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-semibold text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#F1F5F9]">
+                  <button type="button" onClick={() => setIsOnboardModalOpen(false)} className="btn btn-secondary btn-sm">
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary btn-sm flex items-center gap-1.5">
+                    <Plus size={14} /> Onboard Partner
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

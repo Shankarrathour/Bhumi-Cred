@@ -70,11 +70,14 @@ class CloudinaryService:
 
         original_filename = file.filename or ""
 
+        content_type = (file.content_type or "").split(";")[0].strip()
+        resource_type = "image" if (content_type.startswith("image/") or content_type == "application/pdf") else "raw"
+
         def _sync_upload() -> dict:
             return cloudinary.uploader.upload(
                 content,
                 folder=folder,
-                resource_type="auto",
+                resource_type=resource_type,
                 use_filename=True,
                 unique_filename=True,
                 overwrite=False,

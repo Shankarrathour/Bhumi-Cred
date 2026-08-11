@@ -140,7 +140,7 @@ class Farmer(Document):
     # KYC Status & Verification History
     kyc_status: KYCStatus = KYCStatus.UNVERIFIED
     kyc_remarks: Optional[str] = None
-    kyc_reviewed_by: Optional[PydanticObjectId] = None
+    kyc_reviewed_by: Optional[str] = None
     kyc_reviewed_at: Optional[datetime] = None
 
     # Platform Summaries & Denormalized Metrics
