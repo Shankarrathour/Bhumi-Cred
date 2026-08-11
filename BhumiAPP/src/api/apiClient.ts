@@ -67,7 +67,10 @@ api.interceptors.request.use((config: any) => {
 
 // ── Response / error logging ──────────────────────────────────────────────────
 let _isRefreshing = false;
-let _refreshQueue: Array<(token: string) => void> = [];
+let _refreshQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (err: any) => void;
+}> = [];
 
 api.interceptors.response.use(
   (response) => {
@@ -76,6 +79,11 @@ api.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
+    const is401WithRefreshToken =
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !!_refreshToken;
 
     if (error.response) {
       // Filter out Hindi messages
@@ -99,11 +107,17 @@ api.interceptors.response.use(
         error.response.data.detail = validationMsg;
         error.response.data.message = validationMsg;
       }
+      
       // Server returned an HTTP error (4xx / 5xx)
-      console.warn(
-        `[API] ERROR ${error.response.status} ${originalRequest?.url}`,
-        JSON.stringify(error.response.data),
-      );
+      // Suppress console.warn for expected 401 errors that we are about to refresh
+      if (!is401WithRefreshToken) {
+        console.warn(
+          `[API] ERROR ${error.response.status} ${originalRequest?.url}`,
+          JSON.stringify(error.response.data),
+        );
+      } else {
+        console.log(`[API] 401 for ${originalRequest?.url} - access token expired. Attempting refresh...`);
+      }
     } else if (error.request) {
       // Request was made but no response received — network unreachable
       console.error(
@@ -117,12 +131,17 @@ api.interceptors.response.use(
       console.error(`[API] REQUEST SETUP ERROR: ${error.message}`);
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry && _refreshToken) {
+    if (is401WithRefreshToken) {
       if (_isRefreshing) {
-        return new Promise((resolve) => {
-          _refreshQueue.push((newToken) => {
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            resolve(api(originalRequest));
+        return new Promise((resolve, reject) => {
+          _refreshQueue.push({
+            resolve: (newToken) => {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              resolve(api(originalRequest));
+            },
+            reject: (err) => {
+              reject(err);
+            },
           });
         });
       }
@@ -131,19 +150,24 @@ api.interceptors.response.use(
       _isRefreshing = true;
 
       try {
+        console.log(`[API] Requesting new tokens via /auth/refresh...`);
         const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
           refresh_token: _refreshToken,
         });
         const { access_token, refresh_token } = data;
         setAuthTokens(access_token, refresh_token);
         _onRefresh?.(access_token, refresh_token);
-        _refreshQueue.forEach((cb) => cb(access_token));
+        console.log(`[API] Token refresh succeeded. Retrying queued requests.`);
+        _refreshQueue.forEach((cb) => cb.resolve(access_token));
         _refreshQueue = [];
         originalRequest.headers.Authorization = `Bearer ${access_token}`;
         return api(originalRequest);
-      } catch {
+      } catch (err) {
+        console.warn(`[API] Token refresh failed. User will be logged out.`, err);
         setAuthTokens(null, null);
         _onUnauthorized?.();
+        _refreshQueue.forEach((cb) => cb.reject(err));
+        _refreshQueue = [];
         return Promise.reject(error);
       } finally {
         _isRefreshing = false;
