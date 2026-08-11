@@ -133,7 +133,7 @@ class LandSummaryResponse(BaseModel):
 
 class AdminLandVerificationItem(BaseModel):
     id: str
-    farmer_id: str
+    farmer_id: Optional[str] = None
     farmer_public_id: Optional[str] = None
     farmer_name: Optional[str] = None
     farmer_mobile: str
