@@ -12,9 +12,9 @@ class GeminiModel(EmbeddingModel):
         try:
             from google import genai
 
-            api_key = os.getenv("GOOGLE_API_KEY")
+            api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
             if not api_key:
-                raise ValueError("GOOGLE_API_KEY is missing from environment.")
+                raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY is missing from environment.")
             self.client = genai.Client(api_key=api_key)
             self.model_name = "text-embedding-004"
             logger.info("Loaded Gemini embedding model (text-embedding-004)")

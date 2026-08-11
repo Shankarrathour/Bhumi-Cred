@@ -222,12 +222,81 @@ class CMSTermsAndPolicy(Document):
 
 class SystemSetting(Document):
     setting_id: str = Field(default="GLOBAL_SYSTEM_SETTINGS")
+    
+    # 1. App Settings
+    platform_name: str = "BhumiCred Enterprise"
     app_name: str = "BHUMICRED"
     support_email: EmailStr = "support@bhumicred.com"
     support_phone: str = "1800-123-4567"
     maintenance_mode: bool = False
     default_currency: str = "INR"
     timezone: str = "Asia/Kolkata"
+
+    # 2. Commission & Fee Rates
+    commission_percent: float = Field(default=5.0, ge=0)
+    platform_fee_percent: float = Field(default=2.5, ge=0)
+    insurance_percent: float = Field(default=1.5, ge=0)
+    marketplace_percent: float = Field(default=3.0, ge=0)
+    carbon_percent: float = Field(default=4.0, ge=0)
+    carbon_price: float = Field(default=1500.0, ge=0)
+
+    # 3. Wallet Settings
+    min_wallet_balance_inr: float = Field(default=100.0, ge=0)
+    max_withdrawal_limit_inr: float = Field(default=500000.0, ge=0)
+    auto_payouts: bool = True
+    auto_settlement_days: int = Field(default=7, ge=1)
+
+    # 4. Tax & GST Settings
+    gst_percent: float = Field(default=18.0, ge=0)
+    tds_percent: float = Field(default=1.0, ge=0)
+    gstin_number: str = "27AAAAA0000A1Z5"
+    hsn_sac_code: str = "998313"
+
+    # 5. Payment Gateway Settings
+    razorpay_key: str = "rzp_test_902184920194"
+    razorpay_secret: str = "rzp_sec_90218492019482910"
+    payout_webhook: str = "whsec_90218492019482910"
+    cashfree_app_id: str = "cf_app_90218492"
+    cashfree_secret_key: str = "cf_sec_9021849201"
+    is_payment_test_mode: bool = True
+
+    # 6. API Keys & Scopes
+    partner_api_keys_count: int = 5
+    api_rate_limit_per_min: int = 100
+
+    # 7. SMS Gateway Settings
+    sms_provider: str = "Fast2SMS"
+    sms_api_key: str = "sms_key_90218492019482910"
+    sms_sender_id: str = "BHUMI"
+
+    # 8. Email Gateway Settings
+    smtp_host: str = "smtp.mailgun.org"
+    smtp_port: int = 587
+    smtp_username: str = "postmaster@mg.bhumicred.com"
+    smtp_password: str = "smtp_pass_9021849201"
+    sender_email: str = "noreply@bhumicred.com"
+    sender_name: str = "BhumiCred Platform"
+
+    # 9. Cloud Storage Settings
+    storage_provider: str = "Cloudinary"
+    cloudinary_cloud_name: str = "bhumicred"
+    cloudinary_api_key: str = "7294819482910"
+    cloudinary_api_secret: str = "cloudinary_sec_9021849201"
+    aws_s3_bucket: str = "bhumi-storage-prod"
+    aws_s3_region: str = "ap-south-1"
+
+    # 10. Maps Settings (Google Maps & Mapbox)
+    google_maps_api_key: str = "AIzaSyB_bhumi_maps_key_9021"
+    mapbox_access_token: str = "pk.eyJ1IjoiYmh1bWljcmVkIiwiYSI6ImNsaDF2..."
+
+    # 11. Analytics & Monitoring
+    google_analytics_id: str = "G-BHUMI202601"
+    posthog_project_api_key: str = "phc_90218492019482910"
+
+    # 12. Security Policies
+    require_mfa: bool = True
+    force_password_reset: bool = True
+
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:

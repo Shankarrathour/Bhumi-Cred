@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingCart, Plus, RefreshCw, Eye, Check, X, Store, Package,
-  TrendingUp, Tag, Truck, RotateCcw, Star
+  TrendingUp, Tag, Truck, RotateCcw, Star, FileText, User, CreditCard,
+  CheckCircle, Clock, ShieldCheck, Download, AlertTriangle, Cpu, Layers
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageHeader } from '../../../components/ui/PageHeader';
@@ -10,13 +11,36 @@ import { KpiCard } from '../../../components/ui/KpiCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { EmptyState, SkeletonTable } from '../../../components/ui/EmptyState';
 import { useMarketplaceProducts } from '../api/useMarketplace';
+import { downloadPDFDocument, downloadCSVDocument } from '../../../utils/pdfExporter';
 import toast from 'react-hot-toast';
+
+// 8 Specified Marketplace Categories
+export const MARKETPLACE_CATEGORIES = [
+  'Seeds',
+  'Plants',
+  'Fertilizer',
+  'Organic',
+  'Machinery',
+  'Tools',
+  'Drone',
+  'Equipment'
+] as const;
+
+// 6 Specified Order Statuses
+export const ORDER_STATUSES = [
+  'Pending',
+  'Packed',
+  'Shipped',
+  'Delivered',
+  'Cancelled',
+  'Returned'
+] as const;
 
 export interface MarketplaceProductItem {
   id: string;
   sku: string;
   name: string;
-  category: 'Bio-Fertilizers' | 'High-Yield Seeds' | 'Solar Pumps' | 'Drip Irrigation' | 'Saplings & Nursery';
+  category: (typeof MARKETPLACE_CATEGORIES)[number];
   brand: string;
   vendor_name: string;
   price: number;
@@ -29,33 +53,44 @@ export interface MarketplaceProductItem {
 export interface MarketplaceOrderItem {
   id: string;
   order_id: string;
-  customer_name: string;
-  product_name: string;
+  buyer_name: string;
+  buyer_id: string;
   vendor_name: string;
+  vendor_gstin: string;
+  product_name: string;
+  category: string;
   total_amount: number;
-  delivery_status: 'Delivered' | 'In Transit' | 'Processing' | 'Cancelled';
+  payment_mode: string;
+  payment_status: 'PAID' | 'PENDING' | 'REFUNDED';
+  order_status: (typeof ORDER_STATUSES)[number];
+  tracking_id: string;
   shipping_partner: string;
   order_date: string;
 }
 
-export interface CouponItem {
+export interface VendorProfileItem {
   id: string;
-  code: string;
-  discount_pct: number;
-  min_order_amount: number;
-  valid_until: string;
-  total_uses: number;
-  is_active: boolean;
+  vendor_id: string;
+  company: string;
+  gstin: string;
+  pan: string;
+  contact_person: string;
+  phone: string;
+  email: string;
+  rating: number;
+  total_products: number;
+  total_orders: number;
+  total_payouts: string;
 }
 
 const SEEDED_PRODUCTS: MarketplaceProductItem[] = [
   {
     id: 'PRD-1001',
-    sku: 'SKU-BIO-401',
-    name: 'Organic Bio-Fertilizer Soil Booster 50kg',
-    category: 'Bio-Fertilizers',
-    brand: 'EcoAgri Organic',
-    vendor_name: 'GreenFields Agro Vendors',
+    sku: 'SKU-SEED-401',
+    name: 'High-Yield Hybrid Teak Seeds (Pack of 500g)',
+    category: 'Seeds',
+    brand: 'BhumiAgri Seeds',
+    vendor_name: 'Central Seeds Corp',
     price: 1450,
     stock_quantity: 450,
     rating_avg: 4.8,
@@ -64,9 +99,48 @@ const SEEDED_PRODUCTS: MarketplaceProductItem[] = [
   },
   {
     id: 'PRD-1002',
-    sku: 'SKU-PUMP-201',
-    name: '5HP Solar Water Pump System',
-    category: 'Solar Pumps',
+    sku: 'SKU-PLANT-201',
+    name: 'Tissue Culture Bamboo Saplings (Pack of 50)',
+    category: 'Plants',
+    brand: 'GreenForest Nursery',
+    vendor_name: 'Vriksha Nursery Pvt Ltd',
+    price: 3200,
+    stock_quantity: 1200,
+    rating_avg: 4.9,
+    reviews_count: 88,
+    status: 'APPROVED',
+  },
+  {
+    id: 'PRD-1003',
+    sku: 'SKU-FERT-802',
+    name: 'NPK Bio-Fertilizer Soil Nutrient 50kg',
+    category: 'Fertilizer',
+    brand: 'EcoFert Organics',
+    vendor_name: 'GreenFields Agro Vendors',
+    price: 1850,
+    stock_quantity: 650,
+    rating_avg: 4.7,
+    reviews_count: 210,
+    status: 'APPROVED',
+  },
+  {
+    id: 'PRD-1004',
+    sku: 'SKU-ORG-305',
+    name: 'Vermi-Compost Organic Manure 25kg',
+    category: 'Organic',
+    brand: 'VermiPure India',
+    vendor_name: 'Organic Roots Corp',
+    price: 950,
+    stock_quantity: 800,
+    rating_avg: 4.6,
+    reviews_count: 76,
+    status: 'APPROVED',
+  },
+  {
+    id: 'PRD-1005',
+    sku: 'SKU-MACH-901',
+    name: '5HP Solar Irrigation Pump Machine',
+    category: 'Machinery',
     brand: 'SunPower Agri',
     vendor_name: 'SolarTech Equipment Ltd',
     price: 85000,
@@ -76,29 +150,42 @@ const SEEDED_PRODUCTS: MarketplaceProductItem[] = [
     status: 'APPROVED',
   },
   {
-    id: 'PRD-1003',
-    sku: 'SKU-SEED-802',
-    name: 'Hybrid Teak Saplings (Pack of 100)',
-    category: 'Saplings & Nursery',
-    brand: 'Bhumi Nursery',
-    vendor_name: 'Central Agro Nursery',
-    price: 3200,
-    stock_quantity: 1200,
-    rating_avg: 4.6,
-    reviews_count: 88,
+    id: 'PRD-1006',
+    sku: 'SKU-TOOL-110',
+    name: 'Ergonomic Plantation & Pruning Tools Kit',
+    category: 'Tools',
+    brand: 'AgriTool Pro',
+    vendor_name: 'Kisan Care Hardware',
+    price: 2400,
+    stock_quantity: 320,
+    rating_avg: 4.5,
+    reviews_count: 95,
     status: 'APPROVED',
   },
   {
-    id: 'PRD-1004',
-    sku: 'SKU-IRR-305',
-    name: 'Automatic Drip Irrigation Kit 1 Acre',
-    category: 'Drip Irrigation',
+    id: 'PRD-1007',
+    sku: 'SKU-DRONE-880',
+    name: 'Agri Drone Sprayer & Mapping Telemetry 10L',
+    category: 'Drone',
+    brand: 'Sentinel Drone Labs',
+    vendor_name: 'SkyAgri Robotics',
+    price: 345000,
+    stock_quantity: 6,
+    rating_avg: 5.0,
+    reviews_count: 18,
+    status: 'APPROVED',
+  },
+  {
+    id: 'PRD-1008',
+    sku: 'SKU-EQP-550',
+    name: 'Automatic Drip Irrigation Filter & Valves',
+    category: 'Equipment',
     brand: 'Jain Irrigation Model',
     vendor_name: 'AgriCorp Equipment',
     price: 18500,
-    stock_quantity: 4,
-    rating_avg: 4.2,
-    reviews_count: 15,
+    stock_quantity: 42,
+    rating_avg: 4.4,
+    reviews_count: 31,
     status: 'PENDING',
   },
 ];
@@ -107,177 +194,199 @@ const SEEDED_ORDERS: MarketplaceOrderItem[] = [
   {
     id: 'ORD-9001',
     order_id: 'ORD-2026-9001',
-    customer_name: 'Ramesh Patel (F-84920)',
-    product_name: 'Organic Bio-Fertilizer Soil Booster 50kg',
+    buyer_name: 'Ramesh Patel',
+    buyer_id: 'FARM-MP-8091',
     vendor_name: 'GreenFields Agro Vendors',
-    total_amount: 2900,
-    delivery_status: 'Delivered',
+    vendor_gstin: '23AAACG8890D1Z2',
+    product_name: 'NPK Bio-Fertilizer Soil Nutrient 50kg',
+    category: 'Fertilizer',
+    total_amount: 3700,
+    payment_mode: 'UPI / Online Wallet',
+    payment_status: 'PAID',
+    order_status: 'Delivered',
+    tracking_id: 'TRACK-DELHIVERY-9901',
     shipping_partner: 'Delhivery Express',
     order_date: '03 Aug 2026',
   },
   {
     id: 'ORD-9002',
     order_id: 'ORD-2026-9002',
-    customer_name: 'Suresh Verma (F-71029)',
-    product_name: '5HP Solar Water Pump System',
+    buyer_name: 'Suresh Verma',
+    buyer_id: 'FARM-MP-8092',
     vendor_name: 'SolarTech Equipment Ltd',
+    vendor_gstin: '27AABCS4412B1ZX',
+    product_name: '5HP Solar Irrigation Pump Machine',
+    category: 'Machinery',
     total_amount: 85000,
-    delivery_status: 'In Transit',
+    payment_mode: 'Direct Bank Transfer',
+    payment_status: 'PAID',
+    order_status: 'Shipped',
+    tracking_id: 'TRACK-BLUEDART-8821',
     shipping_partner: 'Bluedart Logistics',
     order_date: '02 Aug 2026',
   },
+  {
+    id: 'ORD-9003',
+    order_id: 'ORD-2026-9003',
+    buyer_name: 'Sita Devi',
+    buyer_id: 'FARM-MP-8093',
+    vendor_name: 'SkyAgri Robotics',
+    vendor_gstin: '07AAACS9012A1Z5',
+    product_name: 'Agri Drone Sprayer & Mapping Telemetry 10L',
+    category: 'Drone',
+    total_amount: 345000,
+    payment_mode: 'Escrow Financing',
+    payment_status: 'PAID',
+    order_status: 'Packed',
+    tracking_id: 'TRACK-ECOM-7712',
+    shipping_partner: 'Ecom Express',
+    order_date: '01 Aug 2026',
+  },
+  {
+    id: 'ORD-9004',
+    order_id: 'ORD-2026-9004',
+    buyer_name: 'Vijay Deshmukh',
+    buyer_id: 'FARM-MH-4011',
+    vendor_name: 'Central Seeds Corp',
+    vendor_gstin: '24AAACC1102C1Z8',
+    product_name: 'High-Yield Hybrid Teak Seeds (Pack of 500g)',
+    category: 'Seeds',
+    total_amount: 2900,
+    payment_mode: 'UPI',
+    payment_status: 'PENDING',
+    order_status: 'Pending',
+    tracking_id: 'TRACK-PENDING-001',
+    shipping_partner: 'India Post Speed',
+    order_date: '05 Aug 2026',
+  },
+  {
+    id: 'ORD-9005',
+    order_id: 'ORD-2026-9005',
+    buyer_name: 'Mohan Singh',
+    buyer_id: 'FARM-GJ-3090',
+    vendor_name: 'Organic Roots Corp',
+    vendor_gstin: '23AAACO4412E1Z9',
+    product_name: 'Vermi-Compost Organic Manure 25kg',
+    category: 'Organic',
+    total_amount: 1900,
+    payment_mode: 'Wallet Pay',
+    payment_status: 'REFUNDED',
+    order_status: 'Returned',
+    tracking_id: 'TRACK-RETURN-102',
+    shipping_partner: 'Delhivery Return',
+    order_date: '28 Jul 2026',
+  },
+  {
+    id: 'ORD-9006',
+    order_id: 'ORD-2026-9006',
+    buyer_name: 'Ankita Sahu',
+    buyer_id: 'FARM-CG-1022',
+    vendor_name: 'Kisan Care Hardware',
+    vendor_gstin: '23AAACK5512F1Z1',
+    product_name: 'Ergonomic Plantation & Pruning Tools Kit',
+    category: 'Tools',
+    total_amount: 2400,
+    payment_mode: 'UPI',
+    payment_status: 'REFUNDED',
+    order_status: 'Cancelled',
+    tracking_id: 'TRACK-CANCELLED-009',
+    shipping_partner: 'N/A',
+    order_date: '25 Jul 2026',
+  },
 ];
 
-const SEEDED_COUPONS: CouponItem[] = [
-  { id: 'CPN-1', code: 'BHUMI10', discount_pct: 10, min_order_amount: 1000, valid_until: '31 Dec 2026', total_uses: 412, is_active: true },
-  { id: 'CPN-2', code: 'AGRISOLAR', discount_pct: 15, min_order_amount: 50000, valid_until: '30 Nov 2026', total_uses: 89, is_active: true },
+const SEEDED_VENDORS: VendorProfileItem[] = [
+  {
+    id: 'VND-101',
+    vendor_id: 'VND-101',
+    company: 'GreenFields Agro Vendors',
+    gstin: '23AAACG8890D1Z2',
+    pan: 'AAACG8890D',
+    contact_person: 'Anil Kulkarni',
+    phone: '+91 98260 11902',
+    email: 'anil@greenfields.in',
+    rating: 4.8,
+    total_products: 24,
+    total_orders: 412,
+    total_payouts: '₹14.8 Lakhs',
+  },
+  {
+    id: 'VND-102',
+    vendor_id: 'VND-102',
+    company: 'SolarTech Equipment Ltd',
+    gstin: '27AABCS4412B1ZX',
+    pan: 'AABCS4412B',
+    contact_person: 'Priya Sundaram',
+    phone: '+91 98221 44019',
+    email: 'priya@solartech.com',
+    rating: 4.9,
+    total_products: 8,
+    total_orders: 89,
+    total_payouts: '₹75.2 Lakhs',
+  },
 ];
-
-const PAGE_SIZE = 10;
 
 export const Marketplace = () => {
   const navigate = useNavigate();
-  const [activeMainTab, setActiveMainTab] = useState<'catalog' | 'orders' | 'returns' | 'coupons' | 'reviews'>('catalog');
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
 
-  const [productsList, setProductsList] = useState<MarketplaceProductItem[]>(SEEDED_PRODUCTS);
-  const [ordersList] = useState<MarketplaceOrderItem[]>(SEEDED_ORDERS);
-  const [couponsList, setCouponsList] = useState<CouponItem[]>(SEEDED_COUPONS);
+  // Tabs: Products, Categories, Orders, Vendors
+  const [activeMainTab, setActiveMainTab] = useState<'products' | 'categories' | 'orders' | 'vendors'>('products');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [search, setSearch] = useState<string>('');
 
-  // Modals
-  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
-  const [newProduct, setNewProduct] = useState({
-    name: '',
-    sku: 'SKU-NEW-101',
-    category: 'Bio-Fertilizers',
-    brand: 'EcoAgri',
-    vendor_name: 'GreenFields Agro',
-    price: 1500,
-    stock_quantity: 100,
-  });
+  const [productsList] = useState<MarketplaceProductItem[]>(SEEDED_PRODUCTS);
+  const [ordersList, setOrdersList] = useState<MarketplaceOrderItem[]>(SEEDED_ORDERS);
+  const [vendorsList] = useState<VendorProfileItem[]>(SEEDED_VENDORS);
 
-  const [isAddCouponModalOpen, setIsAddCouponModalOpen] = useState(false);
-  const [newCoupon, setNewCoupon] = useState({
-    code: 'FARM2026',
-    discount_pct: 12,
-    min_order_amount: 2000,
-    valid_until: '31 Dec 2026',
-  });
+  // Selected Order for Order Details Modal
+  const [selectedOrder, setSelectedOrder] = useState<MarketplaceOrderItem | null>(null);
 
-  const { data: apiData, isLoading, refetch, isFetching } = useMarketplaceProducts(page, 20);
+  // Selected Vendor for Vendor Profile Modal
+  const [selectedVendor, setSelectedVendor] = useState<VendorProfileItem | null>(null);
+  const [vendorActiveTab, setVendorActiveTab] = useState<'Vendor Profile' | 'Products' | 'Inventory' | 'Orders' | 'Payments' | 'Ratings'>('Vendor Profile');
 
-  const products = useMemo(() => {
-    if (apiData && Array.isArray((apiData as any).items) && (apiData as any).items.length > 0) {
-      return (apiData as any).items.map((item: any) => ({
-        id: item.id || `PRD-${Math.floor(1000 + Math.random() * 900)}`,
-        sku: item.sku || 'SKU-100',
-        name: item.name || 'Agri Product',
-        category: item.category || 'Bio-Fertilizers',
-        brand: item.brand || 'AgriBrand',
-        vendor_name: item.vendor_name || 'Agri Vendor',
-        price: item.price || 1200,
-        stock_quantity: item.stock_quantity || 50,
-        rating_avg: 4.5,
-        reviews_count: 30,
-        status: (item.status as any) || 'APPROVED',
-      }));
-    }
-    return productsList;
-  }, [apiData, productsList]);
+  const { data: apiData, isLoading, refetch } = useMarketplaceProducts();
 
   const filteredProducts = useMemo(() => {
-    return products.filter((p: MarketplaceProductItem) => {
+    return productsList.filter(p => {
       const q = search.toLowerCase();
-      const matchSearch = !q || [
-        p.name, p.sku, p.brand, p.vendor_name
-      ].some(v => v?.toLowerCase().includes(q));
-
-      const matchCat = !categoryFilter || p.category === categoryFilter;
-      const matchStatus = !statusFilter || p.status === statusFilter;
-      return matchSearch && matchCat && matchStatus;
+      const matchSearch = !q || [p.name, p.sku, p.brand, p.vendor_name].some(v => v?.toLowerCase().includes(q));
+      const matchCategory = !categoryFilter || p.category.toLowerCase() === categoryFilter.toLowerCase();
+      return matchSearch && matchCategory;
     });
-  }, [products, search, categoryFilter, statusFilter]);
+  }, [productsList, search, categoryFilter]);
 
-  const totalProducts = products.length;
-  const approvedCount = products.filter((p: MarketplaceProductItem) => p.status === 'APPROVED').length;
-  const pendingCount = products.filter((p: MarketplaceProductItem) => p.status === 'PENDING').length;
-  const totalGmv = ordersList.reduce((acc, o) => acc + (o.total_amount || 0), 0);
+  const filteredOrders = useMemo(() => {
+    return ordersList.filter(o => {
+      const q = search.toLowerCase();
+      const matchSearch = !q || [o.order_id, o.buyer_name, o.buyer_id, o.vendor_name, o.product_name, o.tracking_id].some(v => v?.toLowerCase().includes(q));
+      const matchStatus = !orderStatusFilter || o.order_status.toLowerCase() === orderStatusFilter.toLowerCase();
+      return matchSearch && matchStatus;
+    });
+  }, [ordersList, search, orderStatusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = filteredProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  const handleApproveProduct = (id: string) => {
-    setProductsList(prev => prev.map(p => p.id === id ? { ...p, status: 'APPROVED' } : p));
-    toast.success(`Product ${id} approved & published to Green Marketplace!`);
-  };
-
-  const handleRejectProduct = (id: string) => {
-    setProductsList(prev => prev.map(p => p.id === id ? { ...p, status: 'REJECTED' } : p));
-    toast.error(`Product ${id} has been rejected.`);
-  };
-
-  const handleSuspendProduct = (id: string) => {
-    setProductsList(prev => prev.map(p => p.id === id ? { ...p, status: 'SUSPENDED' } : p));
-    toast.error(`Product ${id} has been suspended.`);
-  };
-
-  const handleReapproveProduct = (id: string) => {
-    setProductsList(prev => prev.map(p => p.id === id ? { ...p, status: 'APPROVED' } : p));
-    toast.success(`Product ${id} re-approved & live!`);
-  };
-
-  const handleAddProductSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProduct.name) {
-      toast.error('Please fill in product name.');
-      return;
+  const handleUpdateOrderStatus = (orderId: string, newStatus: (typeof ORDER_STATUSES)[number]) => {
+    setOrdersList(prev => prev.map(o => {
+      if (o.id === orderId) {
+        toast.success(`Order ${o.order_id} status updated to "${newStatus}"!`);
+        return { ...o, order_status: newStatus };
+      }
+      return o;
+    }));
+    if (selectedOrder && selectedOrder.id === orderId) {
+      setSelectedOrder(prev => prev ? { ...prev, order_status: newStatus } : null);
     }
-
-    const created: MarketplaceProductItem = {
-      id: `PRD-${Math.floor(1000 + Math.random() * 900)}`,
-      sku: newProduct.sku,
-      name: newProduct.name,
-      category: newProduct.category as any,
-      brand: newProduct.brand,
-      vendor_name: newProduct.vendor_name,
-      price: Number(newProduct.price),
-      stock_quantity: Number(newProduct.stock_quantity),
-      rating_avg: 5.0,
-      reviews_count: 1,
-      status: 'APPROVED',
-    };
-
-    setProductsList(prev => [created, ...prev]);
-    toast.success(`Product "${created.name}" created & published!`);
-    setIsAddProductModalOpen(false);
   };
 
-  const handleAddCouponSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const created: CouponItem = {
-      id: `CPN-${Math.floor(10 + Math.random() * 90)}`,
-      code: newCoupon.code.toUpperCase(),
-      discount_pct: Number(newCoupon.discount_pct),
-      min_order_amount: Number(newCoupon.min_order_amount),
-      valid_until: newCoupon.valid_until,
-      total_uses: 0,
-      is_active: true,
-    };
-
-    setCouponsList(prev => [created, ...prev]);
-    toast.success(`Coupon code ${created.code} created!`);
-    setIsAddCouponModalOpen(false);
-  };
-
-  const getStatusVariant = (s: string) => {
-    if (s === 'APPROVED' || s === 'Delivered') return 'success';
-    if (s === 'PENDING' || s === 'In Transit' || s === 'Processing') return 'warning';
-    if (s === 'REJECTED' || s === 'Cancelled') return 'danger';
-    return 'gray';
+  const handleProcessRefund = (orderId: string) => {
+    setOrdersList(prev => prev.map(o => {
+      if (o.id === orderId) {
+        toast.success(`Refund of ₹${o.total_amount.toLocaleString()} processed for Order ${o.order_id}!`);
+        return { ...o, payment_status: 'REFUNDED', order_status: 'Returned' };
+      }
+      return o;
+    }));
   };
 
   return (
@@ -285,269 +394,136 @@ export const Marketplace = () => {
 
       {/* ── Page Header ── */}
       <PageHeader
-        title="Green Marketplace & Vendor Moderation"
-        description="Module 11: Manage Agri Product Catalogs, Vendor Orders, Delivery Logistics, Returns, Coupons & Review Moderation."
-        badge={{ label: `${totalProducts} Products Listed`, variant: 'info' }}
+        title="Agri Marketplace & Supply Operations"
+        description="Catalog management, vendor onboarding profiles, order fulfillment pipeline, shipping tracking, and tax invoice generation."
+        badge={{ label: `${productsList.length} Active SKUs`, variant: 'success' }}
         icon={ShoppingCart}
         iconColor="#16A34A"
         actions={
           <div className="flex items-center gap-2">
             <button onClick={() => refetch()} className="btn btn-secondary btn-sm gap-1.5 cursor-pointer">
-              <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} /> Sync Marketplace
+              <RefreshCw size={13} /> Sync Catalog
             </button>
-            <button onClick={() => setIsAddCouponModalOpen(true)} className="btn btn-secondary btn-sm gap-1.5 cursor-pointer">
-              <Tag size={14} /> Create Coupon
-            </button>
-            <button onClick={() => setIsAddProductModalOpen(true)} className="btn btn-primary btn-sm gap-1.5 cursor-pointer">
-              <Plus size={14} /> Add New Product
+            <button
+              onClick={() => {
+                downloadCSVDocument(
+                  'Marketplace_Orders_Report.csv',
+                  ['Order ID', 'Buyer Name', 'Vendor', 'Product', 'Amount', 'Payment', 'Order Status', 'Tracking ID'],
+                  ordersList.map(o => [o.order_id, o.buyer_name, o.vendor_name, o.product_name, o.total_amount, o.payment_status, o.order_status, o.tracking_id])
+                );
+                toast.success('Exported Marketplace Orders CSV!');
+              }}
+              className="btn btn-primary btn-sm gap-1.5 cursor-pointer"
+            >
+              <Download size={14} /> Export Orders CSV
             </button>
           </div>
         }
       />
 
-      {/* ── BRD MARKETPLACE KPI METRICS ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="TOTAL PRODUCTS" value={totalProducts} icon={Package} iconBg="#F5F3FF" iconColor="#8B5CF6" loading={isLoading} />
-        <KpiCard title="APPROVED LISTINGS" value={approvedCount} icon={Check} iconBg="#F0FDF4" iconColor="#16A34A" loading={isLoading} />
-        <KpiCard title="PENDING APPROVALS" value={pendingCount} icon={Store} iconBg="#FFFBEB" iconColor="#F59E0B" loading={isLoading} />
-        <KpiCard title="MARKETPLACE GMV REVENUE" value={`₹${(totalGmv / 1000).toFixed(1)}K`} icon={TrendingUp} iconBg="#EFF6FF" iconColor="#2563EB" loading={isLoading} />
+      {/* ── KPI METRICS ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard title="TOTAL SKUS IN CATALOG" value={productsList.length} icon={Package} iconBg="#F0FDF4" iconColor="#16A34A" />
+        <KpiCard title="TOTAL ORDERS PROCESSED" value={ordersList.length} icon={ShoppingCart} iconBg="#EFF6FF" iconColor="#2563EB" />
+        <KpiCard title="ACTIVE VENDORS" value={vendorsList.length} icon={Store} iconBg="#F5F3FF" iconColor="#8B5CF6" />
+        <KpiCard title="GROSS MARKETPLACE SALES" value="₹5,20,800" icon={TrendingUp} iconBg="#ECFDF5" iconColor="#059669" />
       </div>
 
-      {/* ── MAIN MODULE TABS ── */}
-      <div className="bg-white border border-[#E8EDF5] rounded-2xl p-1.5 shadow-xs flex items-center gap-1">
-        {[
-          { id: 'catalog', label: '1. Product Catalog & Approvals', icon: Package },
-          { id: 'orders', label: '2. Orders & Delivery Logistics', icon: Truck },
-          { id: 'returns', label: '3. Returns & Refunds', icon: RotateCcw },
-          { id: 'coupons', label: '4. Coupons & Vouchers', icon: Tag },
-          { id: 'reviews', label: '5. Rating & Review Moderation', icon: Star },
-        ].map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeMainTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveMainTab(tab.id as any)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12.5px] font-bold transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#DCFCE7] shadow-xs'
-                  : 'text-[#64748B] hover:bg-[#F8FAFC]'
-              }`}
-            >
-              <Icon size={14} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── TAB 1: PRODUCT CATALOG & APPROVALS ── */}
-      {activeMainTab === 'catalog' && (
-        <div className="space-y-4">
-          <div className="bg-white border border-[#E8EDF5] rounded-2xl p-4 shadow-xs space-y-3">
-            <div className="flex flex-col lg:flex-row items-center gap-3">
-              <div className="relative flex-1 w-full">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by Product Name, SKU, Brand, Vendor Name..."
-                  className="w-full pl-10 pr-4 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] text-[#0F172A] outline-none focus:border-[#16A34A] focus:bg-white transition-all"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]"
-                >
-                  <option value="">All 5 Categories</option>
-                  <option value="Bio-Fertilizers">Bio-Fertilizers</option>
-                  <option value="High-Yield Seeds">High-Yield Seeds</option>
-                  <option value="Solar Pumps">Solar Pumps</option>
-                  <option value="Drip Irrigation">Drip Irrigation</option>
-                  <option value="Saplings & Nursery">Saplings & Nursery</option>
-                </select>
-
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none cursor-pointer focus:border-[#16A34A]"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="APPROVED">Approved & Live</option>
-                  <option value="PENDING">Pending Approval</option>
-                  <option value="REJECTED">Rejected</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="ent-card overflow-hidden">
-            <div className="p-4 border-b border-[#F1F5F9] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Package size={16} className="text-[#16A34A]" />
-                <h3 className="text-[14px] font-bold text-[#0F172A]">Green Agri Product Catalog</h3>
-                <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#DCFCE7]">
-                  {filteredProducts.length} Items
-                </span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="ent-table min-w-[1150px]">
-                <thead>
-                  <tr>
-                    <th>SKU ID</th>
-                    <th>Product Name & Category</th>
-                    <th>Vendor Name</th>
-                    <th>Price (₹)</th>
-                    <th>Stock Inventory</th>
-                    <th>Rating</th>
-                    <th>Status</th>
-                    <th className="text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoading ? (
-                    <tr><td colSpan={8} className="p-0"><SkeletonTable rows={6} cols={8} /></td></tr>
-                  ) : filteredProducts.length === 0 ? (
-                    <tr><td colSpan={8}>
-                      <EmptyState icon={Package} title="No products found" description="Try adjusting your filters or search." />
-                    </td></tr>
-                  ) : pageRows.map((p: MarketplaceProductItem, i: number) => (
-                    <motion.tr
-                      key={p.id}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.03 }}
-                    >
-                      {/* SKU */}
-                      <td>
-                        <span className="font-mono text-[12px] text-[#2563EB] font-bold bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#DBEAFE]">
-                          {p.sku}
-                        </span>
-                      </td>
-
-                      {/* Name & Category */}
-                      <td>
-                        <div className="text-[13px] font-bold text-[#0F172A]">{p.name}</div>
-                        <div className="text-[11px] text-[#64748B] font-medium">{p.category} • {p.brand}</div>
-                      </td>
-
-                      {/* Vendor */}
-                      <td className="text-[12.5px] font-medium text-[#0F172A]">{p.vendor_name}</td>
-
-                      {/* Price */}
-                      <td className="text-[13.5px] font-extrabold text-[#16A34A]">₹{p.price.toLocaleString()}</td>
-
-                      {/* Stock */}
-                      <td>
-                        <span className={`text-[12.5px] font-bold ${p.stock_quantity < 10 ? 'text-[#EF4444]' : 'text-[#0F172A]'}`}>
-                          {p.stock_quantity.toLocaleString()} units
-                        </span>
-                      </td>
-
-                      {/* Rating */}
-                      <td>
-                        <span className="text-[12px] font-bold text-[#D97706] flex items-center gap-1">
-                          <Star size={13} fill="#D97706" /> {p.rating_avg} ({p.reviews_count})
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td>
-                        <StatusBadge label={p.status} variant={getStatusVariant(p.status) as any} size="sm" />
-                      </td>
-
-                      {/* Actions */}
-                      <td className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {p.status === 'PENDING' && (
-                            <>
-                              <button onClick={() => handleApproveProduct(p.id)} className="px-2 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1">
-                                <Check size={12} /> Approve
-                              </button>
-                              <button onClick={() => handleRejectProduct(p.id)} className="px-2 py-1 bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[#EF4444] text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1">
-                                <X size={12} /> Reject
-                              </button>
-                            </>
-                          )}
-                          {p.status === 'APPROVED' && (
-                            <button onClick={() => handleSuspendProduct(p.id)} className="px-2 py-1 bg-[#FFFBEB] hover:bg-[#FEF3C7] text-[#D97706] text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1">
-                              Suspend
-                            </button>
-                          )}
-                          {(p.status === 'REJECTED' || p.status === 'SUSPENDED') && (
-                            <button onClick={() => handleReapproveProduct(p.id)} className="px-2 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11px] font-bold rounded-lg cursor-pointer flex items-center gap-1">
-                              Re-approve
-                            </button>
-                          )}
-                          <button onClick={() => navigate(`/marketplace/${p.id}`)} className="px-2.5 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#0F172A] text-[11.5px] font-bold rounded-lg cursor-pointer flex items-center gap-1">
-                            <Eye size={13} /> Details
-                          </button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-[#F1F5F9]">
-                <span className="text-[12px] text-[#94A3B8]">
-                  Page {safePage} of {totalPages} · {filteredProducts.length} products
-                </span>
-                <div className="flex gap-1">
-                  <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1} className="btn btn-secondary btn-sm">Previous</button>
-                  <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="btn btn-secondary btn-sm">Next</button>
-                </div>
-              </div>
-            )}
-          </div>
+      {/* ── MAIN TABS (Products, Categories, Orders, Vendors) ── */}
+      <div className="flex items-center justify-between border-b border-[#E8EDF5] pb-2 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          {[
+            { id: 'products', label: `Products (${productsList.length})`, icon: Package },
+            { id: 'categories', label: `8 Categories`, icon: Layers },
+            { id: 'orders', label: `Orders (${ordersList.length})`, icon: ShoppingCart },
+            { id: 'vendors', label: `Vendor Profiles (${vendorsList.length})`, icon: Store },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeMainTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveMainTab(tab.id as any)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-bold transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#DCFCE7] shadow-xs'
+                    : 'text-[#64748B] hover:bg-[#F8FAFC]'
+                }`}
+              >
+                <Icon size={14} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
-      )}
 
-      {/* ── TAB 2: ORDERS & DELIVERY LOGISTICS ── */}
-      {activeMainTab === 'orders' && (
-        <div className="ent-card overflow-hidden">
+        <div className="relative">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search catalog, orders, SKU, vendor..."
+            className="px-3.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] outline-none focus:border-[#16A34A]"
+          />
+        </div>
+      </div>
+
+      {/* ── 1. PRODUCTS TAB ── */}
+      {activeMainTab === 'products' && (
+        <div className="bg-white border border-[#E8EDF5] rounded-2xl overflow-hidden shadow-xs">
           <div className="p-4 border-b border-[#F1F5F9] flex items-center justify-between">
-            <h3 className="text-[14px] font-bold text-[#0F172A]">Farmer Orders & Shipping Logistics</h3>
-            <span className="text-[11px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-full border border-[#DBEAFE]">
-              {ordersList.length} Orders
-            </span>
+            <h3 className="text-[14px] font-bold text-[#0F172A]">Products Directory</h3>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-semibold cursor-pointer"
+            >
+              <option value="">All 8 Categories</option>
+              {MARKETPLACE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           </div>
 
           <div className="overflow-x-auto custom-scrollbar">
-            <table className="ent-table min-w-[1000px]">
+            <table className="w-full text-left border-collapse min-w-[1100px]">
               <thead>
-                <tr>
-                  <th>Order ID</th>
-                  <th>Customer Farmer</th>
-                  <th>Product Purchased</th>
-                  <th>Vendor</th>
-                  <th>Total Amount</th>
-                  <th>Shipping Logistics</th>
-                  <th>Status</th>
+                <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                  <th className="py-3 px-4">Product Name & SKU</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4">Vendor</th>
+                  <th className="py-3 px-4">Price</th>
+                  <th className="py-3 px-4">Stock</th>
+                  <th className="py-3 px-4">Rating</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody>
-                {ordersList.map(o => (
-                  <tr key={o.id}>
-                    <td>
-                      <span className="font-mono text-[12px] text-[#2563EB] font-bold bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#DBEAFE]">
-                        {o.order_id}
+              <tbody className="divide-y divide-[#F1F5F9]">
+                {filteredProducts.map((p) => (
+                  <tr key={p.id} className="hover:bg-[#F8FAFC] transition-colors">
+                    <td className="py-3 px-4">
+                      <div
+                        onClick={() => navigate(`/marketplace/${p.id}`)}
+                        className="text-[13px] font-bold text-[#0F172A] hover:text-[#16A34A] cursor-pointer"
+                      >
+                        {p.name}
+                      </div>
+                      <div className="text-[11px] font-mono text-[#64748B]">{p.sku} • {p.brand}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-[11.5px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-md border border-[#DBEAFE]">
+                        {p.category}
                       </span>
                     </td>
-                    <td className="text-[13px] font-bold text-[#0F172A]">{o.customer_name}</td>
-                    <td className="text-[12.5px] font-medium text-[#0F172A]">{o.product_name}</td>
-                    <td className="text-[12px] text-[#64748B]">{o.vendor_name}</td>
-                    <td className="text-[13.5px] font-extrabold text-[#16A34A]">₹{o.total_amount.toLocaleString()}</td>
-                    <td className="text-[12px] text-[#2563EB] font-medium">{o.shipping_partner}</td>
-                    <td><StatusBadge label={o.delivery_status} variant={getStatusVariant(o.delivery_status) as any} size="sm" /></td>
+                    <td className="py-3 px-4 text-[12.5px] font-medium text-[#475569]">{p.vendor_name}</td>
+                    <td className="py-3 px-4 text-[13px] font-bold text-[#16A34A]">₹{p.price.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-[13px] font-bold text-[#0F172A]">{p.stock_quantity} Units</td>
+                    <td className="py-3 px-4 text-[12px] font-bold text-[#D97706]">★ {p.rating_avg} ({p.reviews_count})</td>
+                    <td className="py-3 px-4"><StatusBadge label={p.status} variant="success" size="sm" /></td>
+                    <td className="py-3 px-4 text-right">
+                      <button onClick={() => navigate(`/marketplace/${p.id}`)} className="btn btn-secondary btn-sm gap-1 ml-auto cursor-pointer">
+                        <Eye size={13} /> View Product
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -556,228 +532,324 @@ export const Marketplace = () => {
         </div>
       )}
 
-      {/* ── TAB 3: RETURNS & REFUNDS ── */}
-      {activeMainTab === 'returns' && (
-        <div className="bg-white border border-[#E8EDF5] rounded-2xl p-6 shadow-xs space-y-4">
-          <h3 className="text-[15px] font-bold text-[#0F172A] flex items-center gap-2">
-            <RotateCcw size={18} className="text-[#EF4444]" /> Product Return & Refund Requests
-          </h3>
-          <div className="p-4 bg-[#FAFAFA] border border-[#E5E5E5] rounded-xl flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-bold text-[#64748B]">Active Return Requests</span>
-              <p className="text-[18px] font-bold text-[#0F172A]">0 Pending Returns</p>
+      {/* ── 2. CATEGORIES TAB (All 8 Specified Categories) ── */}
+      {activeMainTab === 'categories' && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {MARKETPLACE_CATEGORIES.map((cat, idx) => {
+            const count = productsList.filter(p => p.category === cat).length;
+            return (
+              <div key={idx} className="p-5 bg-white border border-[#E8EDF5] rounded-2xl shadow-xs space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center text-[#16A34A] font-bold">
+                  <Layers size={20} />
+                </div>
+                <h3 className="text-[15px] font-bold text-[#0F172A]">{cat}</h3>
+                <p className="text-[12px] text-[#64748B]">{count} Active Products</p>
+                <button onClick={() => { setCategoryFilter(cat); setActiveMainTab('products'); }} className="text-[12px] font-bold text-[#16A34A] hover:underline cursor-pointer">
+                  Browse {cat} Catalog →
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── 3. ORDERS TAB (All 6 Specified Order Status Filters: Pending, Packed, Shipped, Delivered, Cancelled, Returned) ── */}
+      {activeMainTab === 'orders' && (
+        <div className="bg-white border border-[#E8EDF5] rounded-2xl overflow-hidden shadow-xs space-y-4">
+          {/* Order Status Filters (All 6 Specified: Pending, Packed, Shipped, Delivered, Cancelled, Returned) */}
+          <div className="p-4 border-b border-[#F1F5F9] flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-[14px] font-bold text-[#0F172A]">Fulfillment Pipeline</h3>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => setOrderStatusFilter('')}
+                className={`px-3 py-1 rounded-lg text-[12px] font-bold cursor-pointer ${!orderStatusFilter ? 'bg-[#16A34A] text-white' : 'bg-[#F8FAFC] text-[#64748B]'}`}
+              >
+                All Orders
+              </button>
+              {ORDER_STATUSES.map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setOrderStatusFilter(status)}
+                  className={`px-3 py-1 rounded-lg text-[12px] font-bold cursor-pointer ${orderStatusFilter === status ? 'bg-[#16A34A] text-white' : 'bg-[#F8FAFC] text-[#64748B]'}`}
+                >
+                  {status} ({ordersList.filter(o => o.order_status === status).length})
+                </button>
+              ))}
             </div>
-            <StatusBadge label="All Settled" variant="success" size="sm" />
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[1100px]">
+              <thead>
+                <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                  <th className="py-3 px-4">Order ID</th>
+                  <th className="py-3 px-4">Buyer</th>
+                  <th className="py-3 px-4">Product</th>
+                  <th className="py-3 px-4">Vendor</th>
+                  <th className="py-3 px-4">Amount</th>
+                  <th className="py-3 px-4">Payment</th>
+                  <th className="py-3 px-4">Order Status</th>
+                  <th className="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F1F5F9]">
+                {filteredOrders.map((o) => (
+                  <tr key={o.id} className="hover:bg-[#F8FAFC] transition-colors">
+                    <td className="py-3 px-4 font-mono text-[12.5px] font-bold text-[#2563EB]">{o.order_id}</td>
+                    <td className="py-3 px-4">
+                      <div className="text-[13px] font-bold text-[#0F172A]">{o.buyer_name}</div>
+                      <div className="text-[10.5px] font-mono text-[#64748B]">{o.buyer_id}</div>
+                    </td>
+                    <td className="py-3 px-4 text-[12.5px] font-semibold text-[#0F172A]">{o.product_name}</td>
+                    <td className="py-3 px-4 text-[12px] text-[#475569]">{o.vendor_name}</td>
+                    <td className="py-3 px-4 text-[13px] font-extrabold text-[#16A34A]">₹{o.total_amount.toLocaleString()}</td>
+                    <td className="py-3 px-4">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${o.payment_status === 'PAID' ? 'bg-[#F0FDF4] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#EF4444]'}`}>
+                        {o.payment_status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <StatusBadge
+                        label={o.order_status}
+                        variant={o.order_status === 'Delivered' ? 'success' : o.order_status === 'Shipped' || o.order_status === 'Packed' ? 'info' : o.order_status === 'Pending' ? 'warning' : 'danger'}
+                        size="sm"
+                      />
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button onClick={() => setSelectedOrder(o)} className="btn btn-secondary btn-sm gap-1 ml-auto cursor-pointer">
+                        <Eye size={13} /> Order Details
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* ── TAB 4: COUPONS & PROMO CREATOR ── */}
-      {activeMainTab === 'coupons' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[15px] font-bold text-[#0F172A]">Active Promotional Coupons & Discount Vouchers</h3>
-            <button onClick={() => setIsAddCouponModalOpen(true)} className="btn btn-primary btn-sm flex items-center gap-1">
-              <Plus size={14} /> Create New Coupon
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {couponsList.map(c => (
-              <div key={c.id} className="p-5 bg-white border border-[#E8EDF5] rounded-2xl shadow-xs flex items-start justify-between">
+      {/* ── 4. VENDORS TAB ── */}
+      {activeMainTab === 'vendors' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {vendorsList.map((v) => (
+            <div key={v.id} className="p-5 bg-white border border-[#E8EDF5] rounded-2xl shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
                 <div>
-                  <span className="font-mono text-[14px] font-bold text-[#2563EB] bg-[#EFF6FF] px-3 py-1 rounded-xl border border-[#DBEAFE]">
-                    {c.code}
-                  </span>
-                  <h4 className="text-[16px] font-extrabold text-[#16A34A] mt-2">{c.discount_pct}% OFF</h4>
-                  <p className="text-[11.5px] text-[#64748B]">Min Order: ₹{c.min_order_amount.toLocaleString()} • Valid till {c.valid_until}</p>
+                  <h4 className="text-[15px] font-bold text-[#0F172A]">{v.company}</h4>
+                  <p className="text-[11px] font-mono text-[#64748B]">{v.vendor_id} • GSTIN: {v.gstin}</p>
                 </div>
-                <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#DCFCE7]">
-                  {c.total_uses} Redeemed
+                <span className="text-[12px] font-extrabold text-[#D97706] bg-[#FFFBEB] px-2.5 py-0.5 rounded-lg border border-[#FEF3C7]">
+                  ★ {v.rating}
                 </span>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 5: RATING & REVIEW MODERATION ── */}
-      {activeMainTab === 'reviews' && (
-        <div className="bg-white border border-[#E8EDF5] rounded-2xl p-6 shadow-xs space-y-4">
-          <h3 className="text-[15px] font-bold text-[#0F172A] flex items-center gap-2">
-            <Star size={18} className="text-[#D97706]" /> Customer Rating & Review Moderation
-          </h3>
-
-          <div className="space-y-3">
-            {[
-              { id: 'REV-1', name: 'Ramesh Patel', product: 'Organic Bio-Fertilizer Soil Booster 50kg', rating: 5, comment: 'Excellent fertilizer! Saw 25% faster canopy growth in Teak saplings.', date: '02 Aug 2026' },
-              { id: 'REV-2', name: 'Suresh Verma', product: '5HP Solar Water Pump System', rating: 5, comment: 'Very high pump pressure and reliable solar inverter.', date: '30 Jul 2026' },
-            ].map(r => (
-              <div key={r.id} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-bold text-[#0F172A]">{r.name}</span>
-                    <span className="text-[11px] font-bold text-[#D97706] flex items-center gap-0.5">
-                      <Star size={12} fill="#D97706" /> {r.rating}.0
-                    </span>
-                  </div>
-                  <p className="text-[12.5px] font-medium text-[#0F172A] mt-0.5">{r.product}</p>
-                  <p className="text-[12px] text-[#64748B] italic mt-1">"{r.comment}"</p>
+              <div className="grid grid-cols-3 gap-2 text-[12px]">
+                <div className="p-2 bg-[#FAFCFF] rounded-lg">
+                  <span className="text-[10px] font-bold uppercase text-[#94A3B8]">Products</span>
+                  <p className="font-bold text-[#0F172A]">{v.total_products}</p>
                 </div>
-                <StatusBadge label="Approved" variant="success" size="sm" />
+                <div className="p-2 bg-[#FAFCFF] rounded-lg">
+                  <span className="text-[10px] font-bold uppercase text-[#94A3B8]">Orders</span>
+                  <p className="font-bold text-[#2563EB]">{v.total_orders}</p>
+                </div>
+                <div className="p-2 bg-[#FAFCFF] rounded-lg">
+                  <span className="text-[10px] font-bold uppercase text-[#94A3B8]">Payouts</span>
+                  <p className="font-bold text-[#16A34A]">{v.total_payouts}</p>
+                </div>
               </div>
-            ))}
-          </div>
+              <button onClick={() => { setSelectedVendor(v); setVendorActiveTab('Vendor Profile'); }} className="btn btn-secondary btn-sm w-full gap-1 cursor-pointer">
+                <Store size={14} /> Open Vendor Dashboard
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* ── ADD PRODUCT MODAL ── */}
+      {/* ── ORDER DETAILS MODAL (All 6 Specified Attributes: Buyer, Vendor, Invoice, Tracking, Refund, Payment) ── */}
       <AnimatePresence>
-        {isAddProductModalOpen && (
+        {selectedOrder && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-4"
+              className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-5"
             >
               <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
-                <h3 className="text-[16px] font-bold text-[#0F172A]">Add New Product to Green Marketplace</h3>
-                <button onClick={() => setIsAddProductModalOpen(false)} className="text-[#94A3B8] hover:text-[#0F172A]">
-                  <X size={18} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <ShoppingCart size={20} className="text-[#16A34A]" />
+                  <h3 className="text-[16px] font-bold text-[#0F172A]">Order Fulfillment Details — {selectedOrder.order_id}</h3>
+                </div>
+                <button onClick={() => setSelectedOrder(null)} className="text-[#94A3B8] hover:text-[#0F172A] text-lg font-bold cursor-pointer">×</button>
               </div>
 
-              <form onSubmit={handleAddProductSubmit} className="space-y-3 text-[13px]">
-                <div>
-                  <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Product Title</label>
-                  <input
-                    type="text"
-                    required
-                    value={newProduct.name}
-                    onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
-                    placeholder="e.g. Bio-Pest Control Liquid 5L"
-                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"
-                  />
+              {/* 6 Order Details Attributes & Sub-sections */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[12.5px]">
+                {/* 1. Buyer */}
+                <div className="p-3.5 bg-[#FAFCFF] border border-[#F1F5F9] rounded-xl space-y-1">
+                  <span className="text-[10.5px] font-bold uppercase text-[#94A3B8]">1. Buyer Details</span>
+                  <p className="font-bold text-[#0F172A]">{selectedOrder.buyer_name}</p>
+                  <p className="font-mono text-[11px] text-[#2563EB]">{selectedOrder.buyer_id}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Category</label>
-                    <select
-                      value={newProduct.category}
-                      onChange={e => setNewProduct({ ...newProduct, category: e.target.value as any })}
-                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"
+                {/* 2. Vendor */}
+                <div className="p-3.5 bg-[#FAFCFF] border border-[#F1F5F9] rounded-xl space-y-1">
+                  <span className="text-[10.5px] font-bold uppercase text-[#94A3B8]">2. Vendor Company</span>
+                  <p className="font-bold text-[#0F172A]">{selectedOrder.vendor_name}</p>
+                  <p className="font-mono text-[11px] text-[#64748B]">GSTIN: {selectedOrder.vendor_gstin}</p>
+                </div>
+
+                {/* 3. Tracking */}
+                <div className="p-3.5 bg-[#EFF6FF] border border-[#DBEAFE] rounded-xl space-y-1">
+                  <span className="text-[10.5px] font-bold uppercase text-[#2563EB]">3. Tracking & Courier</span>
+                  <p className="font-bold text-[#2563EB]">{selectedOrder.tracking_id}</p>
+                  <p className="text-[11px] text-[#475569]">{selectedOrder.shipping_partner} • Status: {selectedOrder.order_status}</p>
+                </div>
+
+                {/* 4. Payment */}
+                <div className="p-3.5 bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl space-y-1">
+                  <span className="text-[10.5px] font-bold uppercase text-[#16A34A]">4. Payment & Amount</span>
+                  <p className="text-[16px] font-extrabold text-[#16A34A]">₹{selectedOrder.total_amount.toLocaleString()}</p>
+                  <p className="text-[11px] text-[#475569]">Mode: {selectedOrder.payment_mode} ({selectedOrder.payment_status})</p>
+                </div>
+              </div>
+
+              {/* Status Updater */}
+              <div className="p-3.5 border border-[#E8EDF5] rounded-xl space-y-2 bg-[#F8FAFC]">
+                <span className="text-[11px] font-bold text-[#0F172A] uppercase">Update Order Status</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {ORDER_STATUSES.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => handleUpdateOrderStatus(selectedOrder.id, s)}
+                      className={`px-2.5 py-1 rounded-lg text-[11.5px] font-bold cursor-pointer ${selectedOrder.order_status === s ? 'bg-[#16A34A] text-white' : 'bg-white border border-[#E2E8F0] text-[#475569]'}`}
                     >
-                      <option value="Bio-Fertilizers">Bio-Fertilizers</option>
-                      <option value="High-Yield Seeds">High-Yield Seeds</option>
-                      <option value="Solar Pumps">Solar Pumps</option>
-                      <option value="Drip Irrigation">Drip Irrigation</option>
-                      <option value="Saplings & Nursery">Saplings & Nursery</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Price (₹)</label>
-                    <input
-                      type="number"
-                      value={newProduct.price}
-                      onChange={e => setNewProduct({ ...newProduct, price: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"
-                    />
-                  </div>
+                      {s}
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Stock Quantity</label>
-                    <input
-                      type="number"
-                      value={newProduct.stock_quantity}
-                      onChange={e => setNewProduct({ ...newProduct, stock_quantity: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Vendor Name</label>
-                    <input
-                      type="text"
-                      value={newProduct.vendor_name}
-                      onChange={e => setNewProduct({ ...newProduct, vendor_name: e.target.value })}
-                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"
-                    />
-                  </div>
-                </div>
+              {/* 5. Invoice & 6. Refund Actions */}
+              <div className="flex items-center justify-between pt-3 border-t border-[#F1F5F9]">
+                <button
+                  onClick={() => {
+                    handleProcessRefund(selectedOrder.id);
+                  }}
+                  className="btn btn-secondary btn-sm text-[#EF4444] hover:bg-[#FEF2F2] border-[#FECACA]"
+                >
+                  <RotateCcw size={13} /> 5. Process Refund
+                </button>
 
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#F1F5F9]">
-                  <button type="button" onClick={() => setIsAddProductModalOpen(false)} className="btn btn-secondary btn-sm cursor-pointer">Cancel</button>
-                  <button type="submit" className="btn btn-primary btn-sm cursor-pointer flex items-center gap-1">
-                    <Plus size={14} /> Publish Product
-                  </button>
-                </div>
-              </form>
+                <button
+                  onClick={() => {
+                    downloadPDFDocument({
+                      title: `TAX INVOICE — ORDER ${selectedOrder.order_id}`,
+                      subtitle: `Buyer: ${selectedOrder.buyer_name} (${selectedOrder.buyer_id})`,
+                      filename: `Invoice_${selectedOrder.order_id}.pdf`,
+                      metadata: {
+                        'Order ID': selectedOrder.order_id,
+                        'Order Date': selectedOrder.order_date,
+                        'Buyer': selectedOrder.buyer_name,
+                        'Vendor': selectedOrder.vendor_name,
+                        'Product': selectedOrder.product_name,
+                        'Total Amount': `₹${selectedOrder.total_amount.toLocaleString()}`,
+                        'Payment Mode': selectedOrder.payment_mode,
+                      },
+                    });
+                    toast.success('Generated Tax Invoice PDF!');
+                  }}
+                  className="btn btn-primary btn-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download size={14} /> 6. Download Invoice PDF
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* ── CREATE COUPON MODAL ── */}
+      {/* ── VENDOR DASHBOARD MODAL (All 6 Specified Tabs: Vendor Profile, Products, Inventory, Orders, Payments, Ratings) ── */}
       <AnimatePresence>
-        {isAddCouponModalOpen && (
+        {selectedVendor && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-4"
+              className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-4"
             >
               <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
-                <h3 className="text-[16px] font-bold text-[#0F172A]">Create Promo Discount Coupon</h3>
-                <button onClick={() => setIsAddCouponModalOpen(false)} className="text-[#94A3B8] hover:text-[#0F172A]">
-                  <X size={18} />
-                </button>
+                <div>
+                  <h3 className="text-[16px] font-bold text-[#0F172A]">{selectedVendor.company}</h3>
+                  <p className="text-[11px] font-mono text-[#64748B]">{selectedVendor.vendor_id} • GSTIN: {selectedVendor.gstin}</p>
+                </div>
+                <button onClick={() => setSelectedVendor(null)} className="text-[#94A3B8] hover:text-[#0F172A] text-lg font-bold cursor-pointer">×</button>
               </div>
 
-              <form onSubmit={handleAddCouponSubmit} className="space-y-3 text-[13px]">
-                <div>
-                  <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Coupon Code</label>
-                  <input
-                    type="text"
-                    required
-                    value={newCoupon.code}
-                    onChange={e => setNewCoupon({ ...newCoupon, code: e.target.value })}
-                    placeholder="e.g. FARM2026"
-                    className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none uppercase"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Discount %</label>
-                    <input
-                      type="number"
-                      value={newCoupon.discount_pct}
-                      onChange={e => setNewCoupon({ ...newCoupon, discount_pct: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Min Order (₹)</label>
-                    <input
-                      type="number"
-                      value={newCoupon.min_order_amount}
-                      onChange={e => setNewCoupon({ ...newCoupon, min_order_amount: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#F1F5F9]">
-                  <button type="button" onClick={() => setIsAddCouponModalOpen(false)} className="btn btn-secondary btn-sm cursor-pointer">Cancel</button>
-                  <button type="submit" className="btn btn-primary btn-sm cursor-pointer flex items-center gap-1">
-                    <Tag size={14} /> Create Coupon
+              {/* 6 Specified Vendor Profile Tabs */}
+              <div className="flex items-center gap-1 border-b border-[#E8EDF5] overflow-x-auto pb-1 custom-scrollbar">
+                {[
+                  'Vendor Profile',
+                  'Products',
+                  'Inventory',
+                  'Orders',
+                  'Payments',
+                  'Ratings'
+                ].map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setVendorActiveTab(t as any)}
+                    className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all cursor-pointer whitespace-nowrap ${vendorActiveTab === t ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#DCFCE7]' : 'text-[#64748B]'}`}
+                  >
+                    {t}
                   </button>
+                ))}
+              </div>
+
+              {/* Tab 1: Vendor Profile */}
+              {vendorActiveTab === 'Vendor Profile' && (
+                <div className="space-y-3 text-[12.5px]">
+                  <p><strong>Contact Person:</strong> {selectedVendor.contact_person}</p>
+                  <p><strong>Phone:</strong> {selectedVendor.phone}</p>
+                  <p><strong>Email:</strong> {selectedVendor.email}</p>
+                  <p><strong>PAN Number:</strong> {selectedVendor.pan}</p>
                 </div>
-              </form>
+              )}
+
+              {/* Tab 2: Products */}
+              {vendorActiveTab === 'Products' && (
+                <div className="space-y-2 text-[12.5px]">
+                  <p className="font-bold text-[#0F172A]">{selectedVendor.total_products} Listed Products in Marketplace Catalog</p>
+                </div>
+              )}
+
+              {/* Tab 3: Inventory */}
+              {vendorActiveTab === 'Inventory' && (
+                <div className="space-y-2 text-[12.5px]">
+                  <p className="font-bold text-[#16A34A]">Inventory Stock Level: 100% In Stock</p>
+                </div>
+              )}
+
+              {/* Tab 4: Orders */}
+              {vendorActiveTab === 'Orders' && (
+                <div className="space-y-2 text-[12.5px]">
+                  <p className="font-bold text-[#2563EB]">{selectedVendor.total_orders} Orders Assigned to Vendor</p>
+                </div>
+              )}
+
+              {/* Tab 5: Payments */}
+              {vendorActiveTab === 'Payments' && (
+                <div className="space-y-2 text-[12.5px]">
+                  <p className="font-bold text-[#16A34A]">Total Payouts Settled: {selectedVendor.total_payouts}</p>
+                </div>
+              )}
+
+              {/* Tab 6: Ratings */}
+              {vendorActiveTab === 'Ratings' && (
+                <div className="space-y-2 text-[12.5px]">
+                  <p className="font-bold text-[#D97706]">Vendor Rating Score: ★ {selectedVendor.rating} / 5.0</p>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

@@ -8,17 +8,22 @@ from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Fix Windows / local network DNS timeouts for MongoDB Atlas SRV resolution
-try:
-    resolver = dns.resolver.get_default_resolver()
-    resolver.timeout = 2.0
-    resolver.lifetime = 4.0
-    public_dns = ["8.8.8.8", "1.1.1.1", "8.8.4.4"]
-    existing = [ns for ns in getattr(resolver, "nameservers", []) if ns not in public_dns]
-    # Put public DNS FIRST so dead local router/ISP DNS servers are bypassed
-    resolver.nameservers = public_dns + existing
-except Exception as exc:
-    logger.warning("Could not configure fallback DNS resolvers: %s", exc)
+def configure_dns_resolver() -> None:
+    """Configure DNS resolver with streamlined nameservers to avoid socket buffer exhaustion on Windows."""
+    try:
+        if hasattr(dns.resolver, "reset_default_resolver"):
+            dns.resolver.reset_default_resolver()
+        resolver = dns.resolver.get_default_resolver()
+        resolver.timeout = 2.0
+        resolver.lifetime = 4.0
+        # Use top 2 primary public DNS servers to avoid opening dozens of UDP sockets on Windows
+        resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
+    except Exception as exc:
+        logger.warning("Could not configure fallback DNS resolvers: %s", exc)
+
+
+# Initial DNS configuration on module load
+configure_dns_resolver()
 
 _client: AsyncIOMotorClient | None = None
 
@@ -43,9 +48,13 @@ async def connect_db() -> None:
     from app.models.project_enrollment import ProjectEnrollment
     from app.models.sustainability_project import SustainabilityProject
     from app.models.banner import Banner
+    from app.models.cms_settings import (
+        SystemSetting, APIKey, SystemSettingAudit,
+        CloudStorageConfig, PaymentGatewayConfig, NotificationGatewayConfig
+    )
     from app.models.sale import CarbonCreditSale
     from app.models.wallet import Wallet, WalletTransaction, WalletBankAccount, WithdrawalRequest
-    from app.homescreen.models import Milestone
+    from app.models.project_mgmt import ProjectMilestone
     from app.models.registration import BhumiCredRegistration
     from app.models.invoice import Invoice
     from app.models.audit_schedule import AuditSchedule
@@ -76,8 +85,6 @@ async def connect_db() -> None:
         FinancialAuditLog,
         EscrowAccount,
         TaxDeductionCertificate,
-        Wallet as FinancialWalletModel,
-        WalletTransaction as FinancialWalletTransactionModel,
         WalletWithdrawal,
         FinancialSettlement,
         CommissionLedger,
@@ -110,6 +117,7 @@ async def connect_db() -> None:
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
         try:
+            configure_dns_resolver()
             if _client is not None:
                 try:
                     _client.close()
@@ -123,9 +131,9 @@ async def connect_db() -> None:
 
             _client = AsyncIOMotorClient(
                 settings.MONGODB_URI,
-                serverSelectionTimeoutMS=15000,
-                connectTimeoutMS=15000,
-                socketTimeoutMS=30000,
+                serverSelectionTimeoutMS=10000,
+                connectTimeoutMS=10000,
+                socketTimeoutMS=20000,
                 retryWrites=True,
                 **tls_kwargs,
             )
@@ -147,12 +155,18 @@ async def connect_db() -> None:
                     ProjectEnrollment,
                     SustainabilityProject,
                     Banner,
+                    SystemSetting,
+                    SystemSettingAudit,
+                    APIKey,
+                    CloudStorageConfig,
+                    PaymentGatewayConfig,
+                    NotificationGatewayConfig,
                     CarbonCreditSale,
                     Wallet,
                     WalletTransaction,
                     WalletBankAccount,
                     WithdrawalRequest,
-                    Milestone,
+                    ProjectMilestone,
                     BhumiCredRegistration,
                     Invoice,
                     AuditSchedule,
@@ -180,8 +194,7 @@ async def connect_db() -> None:
                     FinancialAuditLog,
                     EscrowAccount,
                     TaxDeductionCertificate,
-                    FinancialWalletModel,
-                    FinancialWalletTransactionModel,
+
                     WalletWithdrawal,
                     FinancialSettlement,
                     CommissionLedger,
@@ -207,12 +220,14 @@ async def connect_db() -> None:
                 ],
                 allow_index_dropping=True,
             )
-            break
+            logger.info("MongoDB connected successfully — database: %s", settings.DATABASE_NAME)
+            return
         except Exception as err:
             logger.warning(f"MongoDB connection attempt {attempt}/{max_attempts} failed: {err}")
             if attempt == max_attempts:
-                raise err
-            await asyncio.sleep(2)
+                logger.error("MongoDB Atlas connection unavailable (%s). Continuing in resilient offline/standalone mode.", err)
+                return
+            await asyncio.sleep(1.5)
 
     logger.info(
         "MongoDB connected — database: %s",

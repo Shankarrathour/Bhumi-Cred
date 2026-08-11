@@ -3,24 +3,26 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle, Building, User,
   FileText, Download, Award, ShieldCheck, Clock, Ban, Key,
-  DollarSign
+  DollarSign, CheckSquare, CreditCard, Sparkles, Folder
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
+import { downloadPDFDocument } from '../../../utils/pdfExporter';
 import toast from 'react-hot-toast';
 
 export const PartnerDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'registration' | 'contact' | 'agreement' | 'projects' | 'performance' | 'commission' | 'status'>('registration');
+
+  // 6 Specified Partner Dashboard Tabs: Projects, Pending Tasks, Documents, Invoices, Payments, Carbon Projects
+  const [activeTab, setActiveTab] = useState<'Projects' | 'Pending Tasks' | 'Documents' | 'Invoices' | 'Payments' | 'Carbon Projects'>('Projects');
   const [partnerStatus, setPartnerStatus] = useState<'Active' | 'Pending' | 'Suspended'>('Active');
-  const [commissionRate] = useState<string>('8.5%');
   const [actionModal, setActionModal] = useState<string | null>(null);
 
   const partner = {
     id: id || 'PRT-1001',
     companyName: 'AgriCorp Solutions Pvt Ltd',
-    partnerType: 'Carbon Partner',
+    partnerType: 'Carbon Developer',
     cinNumber: 'CIN-U01100MP2021PTC054129',
     gstNumber: '23AAACA9012A1Z5',
     panNumber: 'AAACA9012A',
@@ -35,9 +37,9 @@ export const PartnerDetails = () => {
     agreementExpiry: '31 Dec 2027 (3 Years Remaining)',
     assignedProjectsCount: 14,
     coveredLandArea: '1,42,500 Acres',
-    performanceScore: 96.5,
+    performanceRating: 4.8,
     walletBalance: '₹3,45,000',
-    totalPayouts: '₹48.2 Lakhs',
+    totalPayouts: '₹46.5 Lakhs',
   };
 
   const handleAction = (actionName: string) => {
@@ -100,16 +102,15 @@ export const PartnerDetails = () => {
         </div>
       </div>
 
-      {/* ── TABS BAR (7 BRD Sections) ── */}
-      <div className="flex items-center gap-2 border-b border-[#E8EDF5] overflow-x-auto pb-1 scrollbar-none">
+      {/* ── 6 SPECIFIED PARTNER DASHBOARD TABS ── */}
+      <div className="flex items-center gap-2 border-b border-[#E8EDF5] overflow-x-auto pb-1 custom-scrollbar">
         {[
-          { id: 'registration', label: 'Company & Registration', icon: Building },
-          { id: 'contact', label: 'Contact Person', icon: User },
-          { id: 'agreement', label: 'Agreement & SLA', icon: FileText },
-          { id: 'projects', label: 'Projects Assigned', icon: ShieldCheck },
-          { id: 'performance', label: 'SLA Performance', icon: Award },
-          { id: 'commission', label: 'Commission & Wallet', icon: DollarSign },
-          { id: 'status', label: 'Status Audit Logs', icon: Clock },
+          { id: 'Projects', label: 'Projects', icon: ShieldCheck },
+          { id: 'Pending Tasks', label: 'Pending Tasks', icon: CheckSquare },
+          { id: 'Documents', label: 'Documents', icon: Folder },
+          { id: 'Invoices', label: 'Invoices', icon: FileText },
+          { id: 'Payments', label: 'Payments', icon: CreditCard },
+          { id: 'Carbon Projects', label: 'Carbon Projects', icon: Sparkles },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -130,155 +131,149 @@ export const PartnerDetails = () => {
         })}
       </div>
 
-      {/* ── TAB CONTENT ── */}
-      <div className="bg-white border border-[#E8EDF5] rounded-2xl p-6 shadow-xs min-h-[360px]">
+      {/* ── TAB CONTENT AREA ── */}
+      <div className="bg-white border border-[#E8EDF5] rounded-2xl p-6 shadow-xs min-h-[380px]">
 
-        {/* 1. COMPANY & REGISTRATION */}
-        {activeTab === 'registration' && (
+        {/* 1. PROJECTS TAB */}
+        {activeTab === 'Projects' && (
           <div className="space-y-6">
             <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
-              <Building size={18} className="text-[#16A34A]" /> Company & Incorporation Details
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <p className="text-[11px] font-bold uppercase text-[#94A3B8]">Company Name</p>
-                <p className="text-[14px] font-bold text-[#0F172A]">{partner.companyName}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase text-[#94A3B8]">Partner Category</p>
-                <p className="text-[13.5px] font-bold text-[#2563EB]">{partner.partnerType}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase text-[#94A3B8]">Incorporation / CIN</p>
-                <p className="text-[13.5px] font-mono font-semibold text-[#0F172A]">{partner.cinNumber}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase text-[#94A3B8]">GSTIN Number</p>
-                <p className="text-[13.5px] font-mono font-bold text-[#16A34A]">{partner.gstNumber}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase text-[#94A3B8]">Company PAN</p>
-                <p className="text-[13.5px] font-mono font-bold text-[#0F172A]">{partner.panNumber}</p>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold uppercase text-[#94A3B8]">Incorporation Date</p>
-                <p className="text-[13.5px] font-semibold text-[#0F172A]">{partner.incorporationDate}</p>
-              </div>
-              <div className="md:col-span-3">
-                <p className="text-[11px] font-bold uppercase text-[#94A3B8]">Registered Corporate Office</p>
-                <p className="text-[13.5px] font-medium text-[#475569] mt-0.5">{partner.regAddress}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 2. CONTACT PERSON */}
-        {activeTab === 'contact' && (
-          <div className="space-y-6">
-            <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
-              <User size={18} className="text-[#2563EB]" /> Primary Contact & Escrow Account
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-4 bg-[#FAFCFF] border border-[#F1F5F9] rounded-2xl space-y-3">
-                <div className="text-[13px] font-bold text-[#0F172A]">Nodal Contact Officer</div>
-                <div className="space-y-2 text-[13px]">
-                  <div><span className="text-[#94A3B8] text-[11px] uppercase font-bold block">Name & Designation</span><span className="font-bold text-[#0F172A]">{partner.contactPerson} ({partner.designation})</span></div>
-                  <div><span className="text-[#94A3B8] text-[11px] uppercase font-bold block">Official Email</span><span className="font-semibold text-[#2563EB]">{partner.email}</span></div>
-                  <div><span className="text-[#94A3B8] text-[11px] uppercase font-bold block">Mobile Phone</span><span className="font-mono font-semibold text-[#0F172A]">{partner.phone}</span></div>
-                </div>
-              </div>
-              <div className="p-4 bg-[#FAFCFF] border border-[#F1F5F9] rounded-2xl space-y-3">
-                <div className="text-[13px] font-bold text-[#0F172A]">Escrow Disbursement Account</div>
-                <div className="space-y-2 text-[13px]">
-                  <div><span className="text-[#94A3B8] text-[11px] uppercase font-bold block">Bank & Account</span><span className="font-mono font-semibold text-[#0F172A]">{partner.bankAccount}</span></div>
-                  <div><span className="text-[#94A3B8] text-[11px] uppercase font-bold block">Wallet Available Balance</span><span className="font-extrabold text-[#16A34A]">{partner.walletBalance}</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 3. AGREEMENT */}
-        {activeTab === 'agreement' && (
-          <div className="space-y-6">
-            <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
-              <FileText size={18} className="text-[#16A34A]" /> Legal Agreement & MoU Contract
-            </h3>
-            <div className="p-5 border border-[#E8EDF5] rounded-2xl bg-[#FAFCFF] flex items-center justify-between">
-              <div>
-                <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded-md border border-[#DCFCE7]">ACTIVE CONTRACT</span>
-                <h4 className="text-[14px] font-bold text-[#0F172A] mt-1.5">BhumiCred Master Partner Service Agreement (MPSA)</h4>
-                <p className="text-[11.5px] text-[#64748B]">Effective Date: {partner.agreementDate} • Expiry: {partner.agreementExpiry}</p>
-              </div>
-              <button onClick={() => toast.success('Downloading Master Agreement PDF')} className="btn btn-secondary btn-sm flex items-center gap-1.5">
-                <Download size={14} /> Download Contract
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 4. PROJECTS */}
-        {activeTab === 'projects' && (
-          <div className="space-y-6">
-            <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
-              <ShieldCheck size={18} className="text-[#2563EB]" /> Assigned Carbon & Agroforestry Projects ({partner.assignedProjectsCount})
+              <ShieldCheck size={18} className="text-[#2563EB]" /> Assigned Projects ({partner.assignedProjectsCount})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 border border-[#E8EDF5] rounded-xl bg-white space-y-1">
-                <span className="text-[11px] font-bold text-[#2563EB]">PRJ-1042</span>
-                <p className="text-[13px] font-bold text-[#0F172A]">MP Agroforestry Carbon Sink Drive</p>
-                <p className="text-[11.5px] text-[#64748B]">Land Area: {partner.coveredLandArea} • Status: Active</p>
+              <div className="p-4 border border-[#E8EDF5] rounded-xl bg-[#FAFCFF] space-y-2">
+                <span className="text-[11px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-md border border-[#DBEAFE]">PRJ-1042</span>
+                <h4 className="text-[14px] font-bold text-[#0F172A]">MP Agroforestry Carbon Sink Drive</h4>
+                <p className="text-[11.5px] text-[#64748B]">Land Area: {partner.coveredLandArea} • Rating: ★ {partner.performanceRating}</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* 5. PERFORMANCE */}
-        {activeTab === 'performance' && (
+        {/* 2. PENDING TASKS TAB */}
+        {activeTab === 'Pending Tasks' && (
           <div className="space-y-6">
             <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
-              <Award size={18} className="text-[#8B5CF6]" /> SLA Performance & Verification Rating
+              <CheckSquare size={18} className="text-[#D97706]" /> Action Items & SLA Verification Queue
             </h3>
-            <div className="p-5 border border-[#DCFCE7] bg-[#F0FDF4] rounded-2xl flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase text-[#16A34A]">Overall SLA Compliance Score</p>
-                <p className="text-[28px] font-extrabold text-[#16A34A]">{partner.performanceScore}%</p>
+            <div className="space-y-3">
+              <div className="p-4 border border-[#E8EDF5] rounded-xl bg-[#FAFCFF] flex items-center justify-between">
+                <div>
+                  <h4 className="text-[13px] font-bold text-[#0F172A]">Upload Q3 Drone Canopy Imagery Batch</h4>
+                  <p className="text-[11px] text-[#64748B]">Project: MP Agroforestry Carbon Sink • Due: 15 Aug 2026</p>
+                </div>
+                <button onClick={() => toast.success('Task marked in progress')} className="btn btn-secondary btn-sm">Take Action</button>
               </div>
-              <StatusBadge status="success" label="EXCELLENT RATING" />
             </div>
           </div>
         )}
 
-        {/* 6. COMMISSION */}
-        {activeTab === 'commission' && (
+        {/* 3. DOCUMENTS TAB */}
+        {activeTab === 'Documents' && (
           <div className="space-y-6">
             <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
-              <DollarSign size={18} className="text-[#16A34A]" /> Revenue Share & Commission Settings
+              <Folder size={18} className="text-[#16A34A]" /> Legal Contracts & Statutory Certificates
             </h3>
-            <div className="p-5 border border-[#E8EDF5] rounded-2xl bg-[#FAFCFF] flex items-center justify-between">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { name: 'Master_Partner_Service_Agreement_MPSA.pdf', date: '01 Jan 2024' },
+                { name: 'GSTIN_Registration_Certificate.pdf', date: '14 May 2021' },
+                { name: 'Company_PAN_Card_Copy.pdf', date: '14 May 2021' },
+                { name: 'NABL_MoU_Compliance_Certification.pdf', date: '10 Feb 2024' },
+              ].map((doc, idx) => (
+                <div key={idx} className="p-4 border border-[#E8EDF5] rounded-2xl bg-[#FAFCFF] flex items-center justify-between">
+                  <div>
+                    <h4 className="text-[13px] font-bold text-[#0F172A]">{doc.name}</h4>
+                    <p className="text-[11px] text-[#64748B]">Issued: {doc.date}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      downloadPDFDocument({
+                        title: doc.name.replace('.pdf', '').replace(/_/g, ' '),
+                        subtitle: `Issued To: ${partner.companyName} (${partner.id})`,
+                        filename: doc.name,
+                        metadata: {
+                          'Partner Name': partner.companyName,
+                          'Partner ID': partner.id,
+                          'Partner Type': partner.partnerType,
+                          'GSTIN Number': partner.gstNumber,
+                          'PAN Number': partner.panNumber,
+                          'Issue Date': doc.date,
+                        },
+                      });
+                      toast.success(`Generated official ${doc.name}!`);
+                    }}
+                    className="p-2 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] rounded-xl cursor-pointer"
+                  >
+                    <Download size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 4. INVOICES TAB */}
+        {activeTab === 'Invoices' && (
+          <div className="space-y-6">
+            <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
+              <FileText size={18} className="text-[#2563EB]" /> Tax Invoices & Fee Statements
+            </h3>
+            <div className="p-4 border border-[#E8EDF5] rounded-xl bg-[#FAFCFF] flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase text-[#94A3B8]">Active Platform Commission Rate</p>
-                <p className="text-[24px] font-extrabold text-[#0F172A] mt-0.5">{commissionRate}</p>
+                <h4 className="text-[13.5px] font-bold text-[#0F172A]">Invoice #INV-2026-8801 — Commission Share Q2</h4>
+                <p className="text-[11.5px] text-[#64748B]">Amount: ₹4,65,000 • Date: 01 Jul 2026</p>
               </div>
-              <button onClick={() => setActionModal('Update Commission')} className="btn btn-secondary btn-sm">
-                Update Rate
+              <button
+                onClick={() => {
+                  downloadPDFDocument({
+                    title: 'TAX INVOICE — COMMISSION SHARE Q2',
+                    subtitle: 'Invoice Number: INV-2026-8801',
+                    filename: 'Invoice_INV-2026-8801.pdf',
+                    metadata: {
+                      'Invoice Number': 'INV-2026-8801',
+                      'Invoice Date': '01 Jul 2026',
+                      'Billed To': partner.companyName,
+                      'GSTIN': partner.gstNumber,
+                      'Net Amount': '₹4,65,000',
+                      'Payment Status': 'Paid via Escrow Settlement',
+                    },
+                  });
+                  toast.success('Generated Tax Invoice PDF!');
+                }}
+                className="btn btn-secondary btn-sm flex items-center gap-1 cursor-pointer"
+              >
+                <Download size={14} /> Download Invoice PDF
               </button>
             </div>
           </div>
         )}
 
-        {/* 7. STATUS LOGS */}
-        {activeTab === 'status' && (
+        {/* 5. PAYMENTS TAB */}
+        {activeTab === 'Payments' && (
           <div className="space-y-6">
             <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
-              <Clock size={18} className="text-[#2563EB]" /> Audit & Status Change Logs
+              <CreditCard size={18} className="text-[#16A34A]" /> Disbursement & Escrow Payments
             </h3>
-            <div className="relative pl-6 space-y-4">
-              <div className="relative">
-                <span className="absolute -left-[31px] top-1 w-3 h-3 rounded-full bg-[#16A34A]" />
-                <p className="text-[11px] font-bold text-[#94A3B8]">01 Jan 2024</p>
-                <p className="text-[13px] font-bold text-[#0F172A]">Partner Account Approved & MOU Activated</p>
+            <div className="p-4 bg-[#F0FDF4] border border-[#DCFCE7] rounded-2xl flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase text-[#16A34A]">Total Payouts Settled</p>
+                <p className="text-[22px] font-extrabold text-[#16A34A]">{partner.totalPayouts}</p>
               </div>
+              <p className="text-[12px] text-[#64748B] font-mono">{partner.bankAccount}</p>
+            </div>
+          </div>
+        )}
+
+        {/* 6. CARBON PROJECTS TAB */}
+        {activeTab === 'Carbon Projects' && (
+          <div className="space-y-6">
+            <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
+              <Sparkles size={18} className="text-[#059669]" /> Carbon Sequestration Projects & Credit Yield
+            </h3>
+            <div className="p-4 border border-[#DCFCE7] bg-[#F0FDF4] rounded-2xl space-y-2">
+              <h4 className="text-[14px] font-bold text-[#16A34A]">MP Agroforestry Carbon Sink (310,000 tCO₂e Issued)</h4>
+              <p className="text-[12px] text-[#64748B]">Verra Registry Batch: #VR-8091 • Offtake Agreement: EcoCredits EU</p>
             </div>
           </div>
         )}
@@ -297,11 +292,11 @@ export const PartnerDetails = () => {
             >
               <h3 className="text-[15px] font-bold text-[#0F172A]">Confirm {actionModal}</h3>
               <p className="text-[12px] text-[#64748B]">
-                Are you sure you want to perform <strong>{actionModal}</strong> for {partner.companyName}?
+                Are you sure you want to perform <strong>{actionModal}</strong> for {partner.companyName} ({partner.id})?
               </p>
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#F1F5F9]">
                 <button onClick={() => setActionModal(null)} className="btn btn-secondary btn-sm">Cancel</button>
-                <button onClick={() => handleAction(actionModal)} className="btn btn-primary btn-sm">Confirm</button>
+                <button onClick={() => handleAction(actionModal)} className="btn btn-primary btn-sm">Confirm Action</button>
               </div>
             </motion.div>
           </div>

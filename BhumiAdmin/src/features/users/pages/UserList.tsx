@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Plus, UserCheck, KeyRound, RefreshCw, Eye,
@@ -22,28 +23,43 @@ const PAGE_SIZE = 10;
 
 // ── Permission Matrix Definition ──────────────────────────────────────────────
 const IAM_MODULES = [
-  'Dashboard', 'User Management', 'Farmer Management', 'Government & Schemes',
+  'Dashboard', 'User & Role Mgmt', 'Farmer Management', 'Government Bodies',
   'Partner Management', 'Land & GIS', 'Projects', 'Carbon Registry',
-  'Tree Insurance', 'Green Marketplace', 'Wallet & Payouts', 'MRV Operations',
-  'Reports & Analytics', 'CMS & Content', 'System Settings'
+  'Tree Insurance', 'Marketplace', 'Wallet & Payments', 'Finance',
+  'Support Center', 'Reports & Analytics', 'CMS & Content', 'Notifications',
+  'Audit Logs', 'System Settings', 'API Management', 'System Health'
 ];
 
+// All 14 Specified Granular Actions
 const IAM_ACTIONS = [
-  'View', 'Create', 'Edit', 'Delete', 'Approve', 'Reject', 'Assign', 'Export', 'Manage Wallet'
+  'View',
+  'Add',
+  'Edit',
+  'Delete',
+  'Approve',
+  'Reject',
+  'Assign',
+  'Export',
+  'Download',
+  'Print',
+  'Send Notification',
+  'Manage Wallet',
+  'Manage Payments',
+  'Access Reports'
 ];
 
 // Initial matrix state
 const DEFAULT_MATRIX: Record<string, Record<string, Record<string, boolean>>> = {
   'Super Admin': IAM_MODULES.reduce((acc, m) => ({ ...acc, [m]: IAM_ACTIONS.reduce((a, act) => ({ ...a, [act]: true }), {}) }), {}),
   'Operations Admin': {
-    'Farmer Management': { View: true, Create: true, Edit: true, Delete: false, Approve: true, Reject: true, Assign: true, Export: true, 'Manage Wallet': false },
-    'Land & GIS': { View: true, Create: true, Edit: true, Delete: false, Approve: true, Reject: true, Assign: true, Export: true, 'Manage Wallet': false },
-    'Projects': { View: true, Create: true, Edit: true, Delete: false, Approve: false, Reject: false, Assign: true, Export: true, 'Manage Wallet': false },
-    'Dashboard': { View: true, Create: false, Edit: false, Delete: false, Approve: false, Reject: false, Assign: false, Export: true, 'Manage Wallet': false },
+    'Farmer Management': { View: true, Add: true, Edit: true, Delete: false, Approve: true, Reject: true, Assign: true, Export: true, Download: true, Print: true, 'Send Notification': true, 'Manage Wallet': false, 'Manage Payments': false, 'Access Reports': true },
+    'Land & GIS': { View: true, Add: true, Edit: true, Delete: false, Approve: true, Reject: true, Assign: true, Export: true, Download: true, Print: true, 'Send Notification': false, 'Manage Wallet': false, 'Manage Payments': false, 'Access Reports': true },
+    'Projects': { View: true, Add: true, Edit: true, Delete: false, Approve: false, Reject: false, Assign: true, Export: true, Download: true, Print: true, 'Send Notification': true, 'Manage Wallet': false, 'Manage Payments': false, 'Access Reports': true },
+    'Dashboard': { View: true, Add: false, Edit: false, Delete: false, Approve: false, Reject: false, Assign: false, Export: true, Download: true, Print: false, 'Send Notification': false, 'Manage Wallet': false, 'Manage Payments': false, 'Access Reports': true },
   },
   'Finance Manager': {
-    'Wallet & Payouts': { View: true, Create: true, Edit: true, Delete: false, Approve: true, Reject: true, Assign: false, Export: true, 'Manage Wallet': true },
-    'Reports & Analytics': { View: true, Create: false, Edit: false, Delete: false, Approve: false, Reject: false, Assign: false, Export: true, 'Manage Wallet': false },
+    'Wallet & Payments': { View: true, Add: true, Edit: true, Delete: false, Approve: true, Reject: true, Assign: false, Export: true, Download: true, Print: true, 'Send Notification': true, 'Manage Wallet': true, 'Manage Payments': true, 'Access Reports': true },
+    'Reports & Analytics': { View: true, Add: false, Edit: false, Delete: false, Approve: false, Reject: false, Assign: false, Export: true, Download: true, Print: true, 'Send Notification': false, 'Manage Wallet': false, 'Manage Payments': false, 'Access Reports': true },
   },
 };
 
@@ -67,7 +83,28 @@ const ROLE_DISTRIBUTION = [
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export const UserList = () => {
-  const [viewMode, setViewMode] = useState<'directory' | 'matrix' | 'analytics'>('directory');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Sync viewMode with URL ?tab= param
+  const tabParam = searchParams.get('tab');
+  const [viewMode, setViewMode] = useState<'directory' | 'matrix' | 'analytics'>(
+    tabParam === 'roles' ? 'matrix' :
+    tabParam === 'permissions' ? 'matrix' :
+    'directory'
+  );
+
+  useEffect(() => {
+    if (tabParam === 'users') setViewMode('directory');
+    else if (tabParam === 'roles' || tabParam === 'permissions') setViewMode('matrix');
+  }, [tabParam]);
+
+  // When viewMode changes internally, update URL tab
+  const handleSetViewMode = (mode: 'directory' | 'matrix' | 'analytics') => {
+    setViewMode(mode);
+    if (mode === 'directory') setSearchParams({ tab: 'users' });
+    else if (mode === 'matrix') setSearchParams({ tab: 'roles' });
+    else setSearchParams({ tab: 'users' });
+  };
   const [selectedUser, setSelectedUser] = useState<AdminUserItem | null>(null);
   const [drawerTab, setDrawerTab] = useState<'overview' | 'roles' | 'locations' | 'timeline' | 'security'>('overview');
 
@@ -87,8 +124,12 @@ export const UserList = () => {
   const { data: rolesData } = useRoles();
   const users = apiUsers || SEEDED_ADMIN_USERS;
 
-  // Use dynamic matrix or default
-  const activeMatrix = rolesData?.find(r => r.name === matrixRole)?.permissions || localMatrixState[matrixRole] || DEFAULT_MATRIX['Super Admin'] || {};
+  // Use localMatrixState first, then API, then default
+  const activeMatrix = localMatrixState[matrixRole]
+    || rolesData?.find(r => r.name === matrixRole)?.permissions
+    || DEFAULT_MATRIX[matrixRole]
+    || DEFAULT_MATRIX['Super Admin']
+    || {};
 
 
   // Filtered Directory
@@ -135,18 +176,19 @@ export const UserList = () => {
 
   const handleMatrixToggle = (mod: string, act: string) => {
     setLocalMatrixState(prev => {
-      const currentRoleObj = prev[matrixRole] || activeMatrix || {};
-      const currentModObj  = currentRoleObj[mod] || {};
-      const newModObj      = { ...currentModObj, [act]: !currentModObj[act] };
+      // Start from current local state OR default matrix for this role
+      const baseRoleObj = prev[matrixRole] || DEFAULT_MATRIX[matrixRole] || DEFAULT_MATRIX['Super Admin'] || {};
+      const currentModObj = baseRoleObj[mod] || {};
+      const newModObj = { ...currentModObj, [act]: !currentModObj[act] };
       return {
         ...prev,
         [matrixRole]: {
-          ...currentRoleObj,
+          ...baseRoleObj,
           [mod]: newModObj,
         },
       };
     });
-    toast.success(`Permission updated for ${matrixRole} (Local State)`);
+    toast.success(`Permission updated`);
   };
 
   return (
@@ -162,19 +204,19 @@ export const UserList = () => {
             {/* View switcher */}
             <div className="flex items-center p-1 bg-[#F1F5F9] rounded-[10px] gap-1">
               <button
-                onClick={() => setViewMode('directory')}
+                onClick={() => handleSetViewMode('directory')}
                 className={`btn btn-sm ${viewMode === 'directory' ? 'btn-primary shadow-sm' : 'btn-ghost text-[#64748B]'}`}
               >
                 <Users size={14} /> Directory
               </button>
               <button
-                onClick={() => setViewMode('matrix')}
+                onClick={() => handleSetViewMode('matrix')}
                 className={`btn btn-sm ${viewMode === 'matrix' ? 'btn-primary shadow-sm' : 'btn-ghost text-[#64748B]'}`}
               >
                 <KeyRound size={14} /> Permission Matrix
               </button>
               <button
-                onClick={() => setViewMode('analytics')}
+                onClick={() => handleSetViewMode('analytics')}
                 className={`btn btn-sm ${viewMode === 'analytics' ? 'btn-primary shadow-sm' : 'btn-ghost text-[#64748B]'}`}
               >
                 <BarChart2 size={14} /> IAM Analytics
@@ -461,9 +503,8 @@ export const UserList = () => {
                               <input
                                 type="checkbox"
                                 checked={isChecked}
-                                disabled={isSuper}
                                 onChange={() => handleMatrixToggle(mod, act)}
-                                className="w-4 h-4 rounded border-[#CBD5E1] accent-[#16A34A] cursor-pointer disabled:opacity-50"
+                                className="w-4 h-4 rounded border-[#CBD5E1] accent-[#16A34A] cursor-pointer"
                               />
                             </td>
                           );

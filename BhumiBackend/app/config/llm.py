@@ -6,6 +6,11 @@ from langchain_ollama import ChatOllama
 
 load_dotenv()
 
+# Map GEMINI_API_KEY to GOOGLE_API_KEY if not explicitly defined
+if not os.getenv("GOOGLE_API_KEY") and os.getenv("GEMINI_API_KEY"):
+    os.environ["GOOGLE_API_KEY"] = os.getenv("GEMINI_API_KEY")
+
+
 
 class LLMConfig:
     PRIMARY_MODEL = "gemini-3.5-flash"

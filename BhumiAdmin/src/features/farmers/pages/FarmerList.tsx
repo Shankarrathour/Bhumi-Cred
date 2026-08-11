@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Sprout, Plus, Eye, UserCheck, UserX, RefreshCw, MapPin,
   Building2, ShieldCheck, CheckCircle, XCircle, Ban, Lock, FileText,
-  Search, Filter, MoreVertical, Send
+  Search, Filter, MoreVertical, Send, Wallet, CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useFarmers, FarmerListItem } from '../api/useFarmers';
@@ -15,7 +15,7 @@ import toast from 'react-hot-toast';
 
 const PAGE_SIZE = 12;
 
-// Enhanced Seeded Farmers Data with Village, District, State, Project, Wallet, Insurance, Photo
+// Seeded Farmers Dataset matching all 10 Columns
 const EXTENDED_FARMER_LIST: FarmerListItem[] = [
   {
     id: 'f-101',
@@ -124,12 +124,15 @@ export const FarmerList = () => {
   const [page] = useState(1);
   const [search, setSearch] = useState('');
   
-  // Explicit BRD Module 2 Filters
-  const [villageFilter, setVillageFilter] = useState('');
-  const [districtFilter, setDistrictFilter] = useState('');
+  // 8 Filters: State, District, Village, Status, Project, Approval, Insurance, Wallet
   const [stateFilter, setStateFilter] = useState('');
-  const [projectFilter, setProjectFilter] = useState('');
+  const [districtFilter, setDistrictFilter] = useState('');
+  const [villageFilter, setVillageFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
+  const [approvalFilter, setApprovalFilter] = useState('');
+  const [insuranceFilter, setInsuranceFilter] = useState('');
+  const [walletFilter, setWalletFilter] = useState('');
   
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [actionModal, setActionModal] = useState<{ type: string; farmer: FarmerListItem } | null>(null);
@@ -137,28 +140,35 @@ export const FarmerList = () => {
   const { data: apiData, isLoading, refetch, isFetching } = useFarmers(page, PAGE_SIZE);
   const farmers = (apiData?.data && apiData.data.length > 0) ? apiData.data : EXTENDED_FARMER_LIST;
 
-  // Filter options lists extracted from data
-  const villages = useMemo(() => Array.from(new Set(farmers.map(f => f.village).filter(Boolean))), [farmers]);
-  const districts = useMemo(() => Array.from(new Set(farmers.map(f => f.district).filter(Boolean))), [farmers]);
+  // Options lists for dropdown filters
   const states = useMemo(() => Array.from(new Set(farmers.map(f => f.state).filter(Boolean))), [farmers]);
+  const districts = useMemo(() => Array.from(new Set(farmers.map(f => f.district).filter(Boolean))), [farmers]);
+  const villages = useMemo(() => Array.from(new Set(farmers.map(f => f.village).filter(Boolean))), [farmers]);
   const projects = useMemo(() => Array.from(new Set(farmers.map(f => (f as any).project_name).filter(Boolean))), [farmers]);
 
-  // Filtering Logic
+  // Multi-Filter Algorithm
   const filtered = useMemo(() => {
     return farmers.filter(f => {
       const q = search.toLowerCase();
       const matchSearch = !q || [f.first_name, f.last_name, f.mobile, f.farmer_id, f.village, f.district, f.state]
         .some(v => v?.toLowerCase().includes(q));
       
-      const matchVillage = !villageFilter || f.village?.toLowerCase() === villageFilter.toLowerCase();
-      const matchDistrict = !districtFilter || f.district?.toLowerCase() === districtFilter.toLowerCase();
       const matchState = !stateFilter || f.state?.toLowerCase() === stateFilter.toLowerCase();
+      const matchDistrict = !districtFilter || f.district?.toLowerCase() === districtFilter.toLowerCase();
+      const matchVillage = !villageFilter || f.village?.toLowerCase() === villageFilter.toLowerCase();
+      const matchStatus = !statusFilter || (statusFilter === 'ACTIVE' && f.is_active) || (statusFilter === 'INACTIVE' && !f.is_active);
       const matchProject = !projectFilter || (f as any).project_name?.toLowerCase() === projectFilter.toLowerCase();
-      const matchStatus = !statusFilter || f.kyc_status === statusFilter || (statusFilter === 'ACTIVE' && f.is_active) || (statusFilter === 'INACTIVE' && !f.is_active);
+      const matchApproval = !approvalFilter || f.kyc_status === approvalFilter;
+      
+      const insCount = (f as any).insurance_count ?? 0;
+      const matchInsurance = !insuranceFilter || (insuranceFilter === 'HAS_INSURANCE' && insCount > 0) || (insuranceFilter === 'NO_INSURANCE' && insCount === 0);
+      
+      const walletBal = (f as any).wallet_balance ?? 0;
+      const matchWallet = !walletFilter || (walletFilter === 'HAS_BALANCE' && walletBal > 0) || (walletFilter === 'ZERO_BALANCE' && walletBal === 0);
 
-      return matchSearch && matchVillage && matchDistrict && matchState && matchProject && matchStatus;
+      return matchSearch && matchState && matchDistrict && matchVillage && matchStatus && matchProject && matchApproval && matchInsurance && matchWallet;
     });
-  }, [farmers, search, villageFilter, districtFilter, stateFilter, projectFilter, statusFilter]);
+  }, [farmers, search, stateFilter, districtFilter, villageFilter, statusFilter, projectFilter, approvalFilter, insuranceFilter, walletFilter]);
 
   const toggleSelectAll = () => {
     setSelectedIds(selectedIds.length === filtered.length ? [] : filtered.map(f => f.id));
@@ -170,15 +180,15 @@ export const FarmerList = () => {
 
   const handleFarmerAction = (actionType: string, farmerName: string) => {
     setActionModal(null);
-    toast.success(`Action "${actionType}" executed successfully for ${farmerName}!`);
+    toast.success(`Action "${actionType}" completed for ${farmerName}!`);
   };
 
   return (
-    <div className="space-y-6 page-enter pb-8">
+    <div className="space-y-6 page-enter pb-8" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       {/* ── Page Header ── */}
       <PageHeader
-        title="Farmer Management"
-        description="Module 2: Complete farmer directory, multi-parameter filtering, KYC review & administrative action controls."
+        title="Farmer Directory"
+        description="Complete farmer directory, multi-parameter filtering, KYC review & administrative action controls."
         badge={{ label: `${filtered.length} Farmers Listed`, variant: 'info' }}
         icon={Sprout}
         actions={
@@ -203,7 +213,7 @@ export const FarmerList = () => {
         <KpiCard title="ACTIVE FARMERS" value={farmers.filter(f=>f.is_active).length} icon={MapPin} iconBg="#F5F3FF" iconColor="#8B5CF6" loading={isLoading} />
       </div>
 
-      {/* ── SEARCH & MULTI-FILTER BAR (BRD Module 2 Specification) ── */}
+      {/* ── SEARCH & 8 FILTER CONTROLS ── */}
       <div className="bg-white border border-[#E8EDF5] rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row items-center gap-3">
           {/* Main Search */}
@@ -213,7 +223,7 @@ export const FarmerList = () => {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by Farmer Name, Mobile (+91), Farmer ID, Village, District..."
+              placeholder="Search by Farmer Name, Mobile (+91), Farmer ID, Village, District, State..."
               className="w-full pl-10 pr-4 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] text-[#0F172A] placeholder-[#94A3B8] outline-none focus:border-[#16A34A] focus:bg-white transition-all"
             />
           </div>
@@ -221,17 +231,20 @@ export const FarmerList = () => {
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider flex items-center gap-1">
               <Filter size={13} className="text-[#16A34A]" />
-              Filters:
+              8 Filters:
             </span>
-            {(villageFilter || districtFilter || stateFilter || projectFilter || statusFilter || search) && (
+            {(stateFilter || districtFilter || villageFilter || statusFilter || projectFilter || approvalFilter || insuranceFilter || walletFilter || search) && (
               <button
                 onClick={() => {
                   setSearch('');
-                  setVillageFilter('');
-                  setDistrictFilter('');
                   setStateFilter('');
-                  setProjectFilter('');
+                  setDistrictFilter('');
+                  setVillageFilter('');
                   setStatusFilter('');
+                  setProjectFilter('');
+                  setApprovalFilter('');
+                  setInsuranceFilter('');
+                  setWalletFilter('');
                 }}
                 className="text-[11.5px] font-semibold text-[#EF4444] hover:underline cursor-pointer"
               >
@@ -241,69 +254,100 @@ export const FarmerList = () => {
           </div>
         </div>
 
-        {/* 5 Dropdown Filters: Village, District, State, Project, Status */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 pt-2 border-t border-[#F1F5F9]">
-          {/* Village Filter */}
-          <select
-            value={villageFilter}
-            onChange={(e) => setVillageFilter(e.target.value)}
-            className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer"
-          >
-            <option value="">All Villages ({villages.length})</option>
-            {villages.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-
-          {/* District Filter */}
-          <select
-            value={districtFilter}
-            onChange={(e) => setDistrictFilter(e.target.value)}
-            className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer"
-          >
-            <option value="">All Districts ({districts.length})</option>
-            {districts.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
-
-          {/* State Filter */}
+        {/* 8 Dropdown Filters Grid: State, District, Village, Status, Project, Approval, Insurance, Wallet */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 pt-2 border-t border-[#F1F5F9]">
+          {/* Filter 1: State */}
           <select
             value={stateFilter}
             onChange={(e) => setStateFilter(e.target.value)}
-            className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer"
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer truncate"
           >
-            <option value="">All States ({states.length})</option>
+            <option value="">All States</option>
             {states.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
 
-          {/* Project Filter */}
+          {/* Filter 2: District */}
           <select
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-            className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer"
+            value={districtFilter}
+            onChange={(e) => setDistrictFilter(e.target.value)}
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer truncate"
           >
-            <option value="">All Projects ({projects.length})</option>
-            {projects.map(p => <option key={p} value={p}>{p}</option>)}
+            <option value="">All Districts</option>
+            {districts.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
 
-          {/* Status Filter */}
+          {/* Filter 3: Village */}
+          <select
+            value={villageFilter}
+            onChange={(e) => setVillageFilter(e.target.value)}
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer truncate"
+          >
+            <option value="">All Villages</option>
+            {villages.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+
+          {/* Filter 4: Status */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer"
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer truncate"
           >
             <option value="">All Statuses</option>
+            <option value="ACTIVE">Active Account</option>
+            <option value="INACTIVE">Inactive Account</option>
+          </select>
+
+          {/* Filter 5: Project */}
+          <select
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer truncate"
+          >
+            <option value="">All Projects</option>
+            {projects.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+
+          {/* Filter 6: Approval */}
+          <select
+            value={approvalFilter}
+            onChange={(e) => setApprovalFilter(e.target.value)}
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer truncate"
+          >
+            <option value="">All Approvals</option>
             <option value="APPROVED">KYC Approved</option>
             <option value="PENDING">KYC Pending</option>
             <option value="REJECTED">KYC Rejected</option>
-            <option value="ACTIVE">Account Active</option>
-            <option value="INACTIVE">Account Inactive</option>
+          </select>
+
+          {/* Filter 7: Insurance */}
+          <select
+            value={insuranceFilter}
+            onChange={(e) => setInsuranceFilter(e.target.value)}
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer truncate"
+          >
+            <option value="">All Insurance</option>
+            <option value="HAS_INSURANCE">Has Insurance Policy</option>
+            <option value="NO_INSURANCE">No Policy</option>
+          </select>
+
+          {/* Filter 8: Wallet */}
+          <select
+            value={walletFilter}
+            onChange={(e) => setWalletFilter(e.target.value)}
+            className="px-2.5 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[11.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A] cursor-pointer truncate"
+          >
+            <option value="">All Wallet</option>
+            <option value="HAS_BALANCE">Has Balance (&gt;₹0)</option>
+            <option value="ZERO_BALANCE">Zero Balance (₹0)</option>
           </select>
         </div>
       </div>
 
-      {/* ── FARMER LIST TABLE (All 10 Columns Mapped) ── */}
-      <div className="ent-card overflow-hidden">
+      {/* ── FARMER LIST TABLE (All 10 Specified Columns) ── */}
+      <div className="bg-white border border-[#E8EDF5] rounded-2xl overflow-hidden shadow-xs">
         <div className="p-4 border-b border-[#F1F5F9] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-[14px] font-bold text-[#0F172A]">Farmer Directory</h3>
+            <h3 className="text-[14px] font-bold text-[#0F172A]">Farmer Directory Table</h3>
             <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#DCFCE7]">
               {filtered.length} Farmers
             </span>
@@ -323,10 +367,10 @@ export const FarmerList = () => {
         </div>
 
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="ent-table min-w-[1100px]">
+          <table className="w-full text-left border-collapse min-w-[1200px]">
             <thead>
-              <tr>
-                <th className="w-10">
+              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                <th className="py-3 px-4 w-10">
                   <input
                     type="checkbox"
                     checked={selectedIds.length === filtered.length && filtered.length > 0}
@@ -334,21 +378,21 @@ export const FarmerList = () => {
                     className="rounded border-[#CBD5E1] accent-[#16A34A] cursor-pointer"
                   />
                 </th>
-                <th>Photo & Name</th>
-                <th>Mobile</th>
-                <th>Village & Location</th>
-                <th>Total Land</th>
-                <th>Assigned Project</th>
-                <th>Account Status</th>
-                <th>Wallet Balance</th>
-                <th>Insurance</th>
-                <th>KYC Approval</th>
-                <th className="text-right">Actions</th>
+                <th className="py-3 px-4">Photo</th>
+                <th className="py-3 px-4">Farmer ID</th>
+                <th className="py-3 px-4">Name</th>
+                <th className="py-3 px-4">Mobile</th>
+                <th className="py-3 px-4">Village & Location</th>
+                <th className="py-3 px-4">Land (Acres)</th>
+                <th className="py-3 px-4">Projects</th>
+                <th className="py-3 px-4">Wallet Balance</th>
+                <th className="py-3 px-4">Status & Approval</th>
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[#F1F5F9]">
               {isLoading ? (
-                <tr><td colSpan={11} className="p-0"><SkeletonTable rows={6} cols={10} /></td></tr>
+                <tr><td colSpan={11} className="p-0"><SkeletonTable rows={6} cols={11} /></td></tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={11}>
@@ -366,14 +410,11 @@ export const FarmerList = () => {
                 const projectName = (f as any).project_name || 'MP Afforestation Q1';
 
                 return (
-                  <motion.tr
+                  <tr
                     key={f.id}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.02 }}
-                    className={selectedIds.includes(f.id) ? 'selected' : ''}
+                    className={`hover:bg-[#F8FAFC] transition-colors ${selectedIds.includes(f.id) ? 'bg-[#F0FDF4]' : ''}`}
                   >
-                    <td>
+                    <td className="py-3 px-4">
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(f.id)}
@@ -382,102 +423,131 @@ export const FarmerList = () => {
                       />
                     </td>
 
-                    {/* Photo & Name */}
-                    <td>
-                      <div className="flex items-center gap-3">
-                        {photo ? (
-                          <img src={photo} alt="" className="w-9 h-9 rounded-xl object-cover border border-[#E2E8F0] shrink-0" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-xl bg-[#F0FDF4] text-[#16A34A] font-bold text-[12px] flex items-center justify-center border border-[#DCFCE7] shrink-0">
-                            {(f.first_name || 'F')[0].toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div
-                            onClick={() => navigate(`/farmers/${f.id}`)}
-                            className="text-[13px] font-bold text-[#0F172A] hover:text-[#16A34A] cursor-pointer leading-tight flex items-center gap-1"
-                          >
-                            <span>{f.first_name} {f.last_name}</span>
-                          </div>
-                          <span className="font-mono text-[10.5px] text-[#64748B] bg-[#F8FAFC] px-1.5 py-0.5 rounded border border-[#E2E8F0] mt-0.5 inline-block">
-                            {f.farmer_id || f.id?.slice(-8)}
-                          </span>
+                    {/* Column 1: Photo */}
+                    <td className="py-3 px-4">
+                      {photo ? (
+                        <img src={photo} alt="" className="w-9 h-9 rounded-xl object-cover border border-[#E2E8F0] shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-xl bg-[#F0FDF4] text-[#16A34A] font-bold text-[12px] flex items-center justify-center border border-[#DCFCE7] shrink-0">
+                          {(f.first_name || 'F')[0].toUpperCase()}
                         </div>
+                      )}
+                    </td>
+
+                    {/* Column 2: Farmer ID */}
+                    <td className="py-3 px-4 font-mono text-[11.5px] font-semibold text-[#64748B]">
+                      {f.farmer_id || f.id?.slice(-8)}
+                    </td>
+
+                    {/* Column 3: Name */}
+                    <td className="py-3 px-4">
+                      <div
+                        onClick={() => navigate(`/farmers/${f.id}`)}
+                        className="text-[13px] font-bold text-[#0F172A] hover:text-[#16A34A] cursor-pointer leading-tight"
+                      >
+                        {f.first_name} {f.last_name}
                       </div>
                     </td>
 
-                    {/* Mobile */}
-                    <td className="text-[12.5px] font-mono text-[#475569]">{f.mobile}</td>
+                    {/* Column 4: Mobile */}
+                    <td className="py-3 px-4 text-[12.5px] font-mono text-[#475569]">{f.mobile}</td>
 
-                    {/* Village */}
-                    <td>
+                    {/* Column 5: Village */}
+                    <td className="py-3 px-4">
                       <div className="text-[12.5px] font-semibold text-[#0F172A]">{f.village || 'Sehore'}</div>
                       <div className="text-[10.5px] text-[#94A3B8]">{f.district || 'Sehore'}, {f.state || 'MP'}</div>
                     </td>
 
-                    {/* Total Land */}
-                    <td className="text-[13px] font-bold text-[#0F172A]">
+                    {/* Column 6: Land */}
+                    <td className="py-3 px-4 text-[13px] font-bold text-[#0F172A]">
                       {f.total_land_area?.toFixed(1) ?? '12.0'} <span className="text-[11px] font-normal text-[#64748B]">Acres</span>
                     </td>
 
-                    {/* Projects */}
-                    <td>
+                    {/* Column 7: Projects */}
+                    <td className="py-3 px-4">
                       <span className="text-[11.5px] font-semibold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-lg border border-[#DBEAFE]">
                         {projectName}
                       </span>
                     </td>
 
-                    {/* Status */}
-                    <td>
-                      <StatusBadge
-                        label={f.is_active ? 'Active' : 'Inactive'}
-                        variant={f.is_active ? 'success' : 'gray'}
-                        size="sm"
-                      />
-                    </td>
-
-                    {/* Wallet */}
-                    <td className="text-[13px] font-bold text-[#16A34A]">
+                    {/* Column 8: Wallet */}
+                    <td className="py-3 px-4 text-[13px] font-bold text-[#16A34A]">
                       ₹{wallet.toLocaleString()}
                     </td>
 
-                    {/* Insurance */}
-                    <td>
-                      <span className="text-[11.5px] font-semibold text-[#8B5CF6] bg-[#F5F3FF] px-2 py-0.5 rounded-lg border border-[#DDD6FE] flex items-center gap-1 w-max">
-                        <ShieldCheck size={11} />
-                        {insuranceCount} Policy
-                      </span>
+                    {/* Column 9: Status (KYC Approval & Active) */}
+                    <td className="py-3 px-4">
+                      <div className="flex flex-col gap-1 items-start">
+                        <StatusBadge
+                          label={f.kyc_status}
+                          variant={f.kyc_status === 'APPROVED' ? 'success' : f.kyc_status === 'PENDING' ? 'warning' : 'danger'}
+                          size="sm"
+                        />
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${f.is_active ? 'bg-[#DCFCE7] text-[#16A34A]' : 'bg-[#F1F5F9] text-[#64748B]'}`}>
+                          {f.is_active ? 'Account Active' : 'Account Suspended'}
+                        </span>
+                      </div>
                     </td>
 
-                    {/* Approval */}
-                    <td>
-                      <StatusBadge
-                        label={f.kyc_status}
-                        variant={f.kyc_status === 'APPROVED' ? 'success' : f.kyc_status === 'PENDING' ? 'warning' : 'danger'}
-                        size="sm"
-                      />
-                    </td>
-
-                    {/* Actions */}
-                    <td>
-                      <div className="flex items-center justify-end gap-1">
+                    {/* Column 10: Action (5 Core Buttons: View, Approve, Reject, Suspend, Assign Project) */}
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* 1. View */}
                         <button
                           onClick={() => navigate(`/farmers/${f.id}`)}
                           className="px-2.5 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                          title="View Profile"
                         >
                           <Eye size={13} />
-                          <span>Profile</span>
+                          <span>View</span>
                         </button>
+
+                        {/* 2. Approve */}
+                        {f.kyc_status !== 'APPROVED' && (
+                          <button
+                            onClick={() => handleFarmerAction('Approve KYC', f.first_name)}
+                            className="px-2 py-1 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Approve KYC"
+                          >
+                            <CheckCircle size={12} />
+                            <span>Approve</span>
+                          </button>
+                        )}
+
+                        {/* 3. Reject */}
+                        {f.kyc_status === 'PENDING' && (
+                          <button
+                            onClick={() => handleFarmerAction('Reject KYC', f.first_name)}
+                            className="px-2 py-1 bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[#EF4444] text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Reject Application"
+                          >
+                            <XCircle size={12} />
+                            <span>Reject</span>
+                          </button>
+                        )}
+
+                        {/* 4. Suspend */}
                         <button
-                          onClick={() => setActionModal({ type: 'Quick Action', farmer: f })}
-                          className="p-1 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-lg transition-colors cursor-pointer"
-                          title="Actions menu"
+                          onClick={() => handleFarmerAction(f.is_active ? 'Suspend Account' : 'Activate Account', f.first_name)}
+                          className="px-2 py-1 bg-[#FFFBEB] hover:bg-[#FEF3C7] text-[#D97706] text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Suspend/Activate Account"
                         >
-                          <MoreVertical size={15} />
+                          <Ban size={12} />
+                          <span>{f.is_active ? 'Suspend' : 'Activate'}</span>
+                        </button>
+
+                        {/* 5. Assign Project */}
+                        <button
+                          onClick={() => handleFarmerAction('Assign Project', f.first_name)}
+                          className="px-2 py-1 bg-[#F5F3FF] hover:bg-[#DDD6FE] text-[#8B5CF6] text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Assign Project"
+                        >
+                          <FileText size={12} />
+                          <span>Assign Project</span>
                         </button>
                       </div>
                     </td>
-                  </motion.tr>
+                  </tr>
                 );
               })}
             </tbody>
@@ -485,7 +555,7 @@ export const FarmerList = () => {
         </div>
       </div>
 
-      {/* ── ACTION MODAL DIALOG (Approve, Reject, Suspend, Assign, etc.) ── */}
+      {/* ── ACTION MODAL DIALOG ── */}
       <AnimatePresence>
         {actionModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -511,7 +581,6 @@ export const FarmerList = () => {
                 Execute administrative actions directly on this farmer profile ({actionModal.farmer.farmer_id}).
               </p>
 
-              {/* 8 Core Administrative Action Buttons */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleFarmerAction('Approve KYC', actionModal.farmer.first_name)}
@@ -535,38 +604,10 @@ export const FarmerList = () => {
                 </button>
 
                 <button
-                  onClick={() => handleFarmerAction('Deactivate Account', actionModal.farmer.first_name)}
-                  className="px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] text-[#64748B] text-[12px] font-bold rounded-xl hover:bg-[#F1F5F9] flex items-center gap-2 cursor-pointer"
-                >
-                  <UserX size={14} /> Deactivate
-                </button>
-
-                <button
-                  onClick={() => handleFarmerAction('Reset Password & Login', actionModal.farmer.first_name)}
-                  className="px-3 py-2 bg-[#EFF6FF] border border-[#DBEAFE] text-[#2563EB] text-[12px] font-bold rounded-xl hover:bg-[#DBEAFE] flex items-center gap-2 cursor-pointer"
-                >
-                  <Lock size={14} /> Reset Login PIN
-                </button>
-
-                <button
                   onClick={() => handleFarmerAction('Assign Carbon Project', actionModal.farmer.first_name)}
                   className="px-3 py-2 bg-[#F5F3FF] border border-[#DDD6FE] text-[#8B5CF6] text-[12px] font-bold rounded-xl hover:bg-[#DDD6FE] flex items-center gap-2 cursor-pointer"
                 >
                   <FileText size={14} /> Assign Project
-                </button>
-
-                <button
-                  onClick={() => handleFarmerAction('Assign B2B Partner', actionModal.farmer.first_name)}
-                  className="px-3 py-2 bg-[#ECFDF5] border border-[#A7F3D0] text-[#059669] text-[12px] font-bold rounded-xl hover:bg-[#A7F3D0] flex items-center gap-2 cursor-pointer"
-                >
-                  <Building2 size={14} /> Assign Partner
-                </button>
-
-                <button
-                  onClick={() => handleFarmerAction('Send App Notification', actionModal.farmer.first_name)}
-                  className="px-3 py-2 bg-[#FFF7ED] border border-[#FFEDD5] text-[#EA580C] text-[12px] font-bold rounded-xl hover:bg-[#FFEDD5] flex items-center gap-2 cursor-pointer"
-                >
-                  <Send size={14} /> Send Alert
                 </button>
               </div>
             </motion.div>

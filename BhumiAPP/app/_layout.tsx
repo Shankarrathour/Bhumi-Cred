@@ -1,6 +1,6 @@
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
-import { Stack } from "expo-router";
+import { useEffect } from 'react';
+import { Stack, useSegments, router } from "expo-router";
 
 import { GlobalSchedulerOverlay } from '../src/components/GlobalSchedulerOverlay';
  
@@ -15,6 +15,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 export default function RootLayout() {
   const _hasHydrated = useAuthStore((state) => state._hasHydrated);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const segments = useSegments();
 
   useEffect(() => {
     // Hide the native splash screen so the app's custom animated splash screen/JS UI can render
@@ -25,6 +27,21 @@ export default function RootLayout() {
       });
     }
   }, [_hasHydrated]);
+
+  useEffect(() => {
+    if (!_hasHydrated) return;
+
+    // Check if the user is currently inside the authentication screen flows
+    const inAuthGroup = segments[0] === '(auth)' || segments[0] === '(vendor_auth)';
+
+    if (!isAuthenticated && !inAuthGroup) {
+      // Redirect to welcome screen if the user is unauthenticated and not already in an auth flow
+      router.replace('/(auth)/welcome');
+    } else if (isAuthenticated && inAuthGroup) {
+      // Redirect to main tabs if the user is authenticated and somehow got back onto auth screens
+      router.replace('/(tabs)');
+    }
+  }, [_hasHydrated, isAuthenticated, segments]);
 
   if (!_hasHydrated) {
     return null;

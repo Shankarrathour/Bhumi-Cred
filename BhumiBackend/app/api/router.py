@@ -165,5 +165,9 @@ api_router.include_router(banners_mobile_router)
 api_router.include_router(banners_admin_router)
 api_router.include_router(uploads_router)
 
+# ── Module 19: Admin System Settings ─────────────────────────────────────────
+from app.routes.admin_settings import router as admin_settings_router
+api_router.include_router(admin_settings_router)
+
 # Phase 5: Notifications
 api_router.include_router(notifications_router)

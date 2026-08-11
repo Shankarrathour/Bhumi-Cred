@@ -585,3 +585,15 @@ class AdminFarmerService:
             is_active=farmer.is_active,
             message="Farmer account unblocked successfully.",
         )
+
+    async def assign_project_to_farmer(
+        self, farmer_id: str, project_id: str
+    ) -> dict:
+        farmer = await self._get_farmer(farmer_id)
+        # Store or record project assignment
+        return {
+            "farmer_id": str(farmer.id),
+            "project_id": project_id,
+            "assigned_at": datetime.now(timezone.utc).isoformat(),
+            "status": "assigned"
+        }

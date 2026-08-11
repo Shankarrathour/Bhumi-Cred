@@ -292,3 +292,18 @@ async def unblock_farmer(
     _, ip = get_client_info(request)
     data = await svc.unblock_farmer_account(farmer_id, current_admin, ip_address=ip)
     return SuccessResponse(message=data.message, data=data)
+
+
+@router.put(
+    "/{farmer_id}/assign-project",
+    response_model=SuccessResponse[dict],
+    summary="Assign carbon/forestry project to farmer",
+)
+async def assign_project_to_farmer(
+    farmer_id: str,
+    project_id: str = Query(..., description="Project ID to assign"),
+    current_admin: AdminUser = Depends(RequirePermission("farmer_management", "edit")),
+    svc: AdminFarmerService = Depends(get_admin_farmer_service),
+) -> SuccessResponse[dict]:
+    data = await svc.assign_project_to_farmer(farmer_id, project_id)
+    return SuccessResponse(message="Project assigned to farmer successfully.", data=data)

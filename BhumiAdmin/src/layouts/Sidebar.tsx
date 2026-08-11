@@ -5,7 +5,8 @@ import {
   Globe2, LayoutDashboard, Sprout, Building2, Map,
   FileText, ShieldCheck, CreditCard, ShoppingBag, Wallet,
   KeyRound, ClipboardList, Settings, LogOut, X, Gift,
-  Users, CheckSquare, FileCheck, BarChart3, Bell, LifeBuoy, Monitor, Activity
+  Users, CheckSquare, FileCheck, BarChart3, Bell, LifeBuoy, Monitor, Activity,
+  Cpu, Layers, DollarSign, Plane
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
@@ -25,52 +26,61 @@ type NavItemType = {
 
 type NavGroupType = { label: string; items: NavItemType[] };
 
+// Super Admin Control Tower — All 20 Specified Menu Items
 const NAV_GROUPS: NavGroupType[] = [
   {
-    label: 'OVERVIEW',
+    label: 'CONTROL TOWER',
     items: [
-      { id: 'executive-dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-      { id: 'command-center', label: 'Command Center', icon: Globe2, path: '/command-center' },
-      { id: 'reports', label: 'Reports & Analytics', icon: BarChart3, path: '/reports' },
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+      { id: 'system-health', label: 'System Health', icon: Globe2, path: '/command-center' },
+      { id: 'reports', label: 'Reports', icon: BarChart3, path: '/reports' },
+      { id: 'audit', label: 'Audit Logs', icon: ClipboardList, path: '/audit' },
     ],
   },
   {
-    label: 'OPERATIONS',
+    label: 'USER & ACCESS GOVERNANCE',
     items: [
-      { id: 'farmers', label: 'Farmer Management', icon: Sprout, path: '/farmers', allowedRoles: ['Super Admin', 'Operations Admin'] },
-      { id: 'govt', label: 'Government Bodies', icon: Building2, path: '/govt', allowedRoles: ['Super Admin', 'Operations Admin'] },
-      { id: 'partners', label: 'Partner Management', icon: Users, path: '/partners', allowedRoles: ['Super Admin', 'Operations Admin'] },
-      { id: 'land', label: 'Land & GIS Management', icon: Map, path: '/land', allowedRoles: ['Super Admin', 'Operations Admin', 'GIS Admin'] },
-      { id: 'projects', label: 'Project Management', icon: FileText, path: '/projects', allowedRoles: ['Super Admin', 'Operations Admin', 'Project Admin'] },
-      { id: 'mrv', label: 'MRV & Verification', icon: Activity, path: '/mrv', allowedRoles: ['Super Admin', 'Project Admin', 'GIS Admin'] },
-      { id: 'insurance', label: 'Tree Insurance', icon: ShieldCheck, path: '/insurance', allowedRoles: ['Super Admin', 'Insurance Admin'] },
-      { id: 'kyc', label: 'KYC Verification', icon: CheckSquare, path: '/kyc', allowedRoles: ['Super Admin', 'KYC Admin'] },
-      { id: 'documents', label: 'Document Verification', icon: FileCheck, path: '/documents', allowedRoles: ['Super Admin', 'KYC Admin', 'Operations Admin'] },
+      { id: 'users', label: 'Users', icon: Users, path: '/users?tab=users' },
+      { id: 'roles', label: 'Roles', icon: KeyRound, path: '/users?tab=roles' },
+      { id: 'permissions', label: 'Permissions', icon: ShieldCheck, path: '/users?tab=permissions' },
     ],
   },
   {
-    label: 'BUSINESS & COMMERCE',
+    label: 'CORE OPERATIONS',
     items: [
-      { id: 'carbon', label: 'Carbon Credit Mgmt', icon: CreditCard, path: '/carbon', allowedRoles: ['Super Admin', 'Project Admin', 'Finance Admin'] },
-      { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag, path: '/marketplace', allowedRoles: ['Super Admin', 'Marketplace Admin'] },
-      { id: 'wallet', label: 'Wallet & Payments', icon: Wallet, path: '/wallet', allowedRoles: ['Super Admin', 'Finance Admin'] },
-      { id: 'referrals', label: 'Referral Program', icon: Gift, allowedRoles: ['Super Admin', 'Operations Admin'], path: '/referrals' },
+      { id: 'farmers', label: 'Farmers', icon: Sprout, path: '/farmers' },
+      { id: 'govt', label: 'Govt Bodies', icon: Building2, path: '/govt' },
+      { id: 'partners', label: 'Partners', icon: Users, path: '/partners' },
+      { id: 'projects', label: 'Projects', icon: FileText, path: '/projects' },
+      { id: 'mrv', label: 'MRV Center', icon: Activity, path: '/mrv' },
+      { id: 'drone', label: 'Drone Survey', icon: Plane, path: '/drone' },
+      { id: 'gis', label: 'GIS & Land', icon: Map, path: '/land' },
+      { id: 'carbon', label: 'Carbon', icon: CreditCard, path: '/carbon' },
+      { id: 'insurance', label: 'Insurance', icon: ShieldCheck, path: '/insurance' },
+      { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag, path: '/marketplace' },
     ],
   },
   {
-    label: 'ENGAGEMENT & CONTENT',
+    label: 'FINANCIAL CONTROL',
     items: [
-      { id: 'notifications', label: 'Notifications', icon: Bell, path: '/notifications', allowedRoles: ['Super Admin', 'Content Admin', 'Operations Admin'] },
-      { id: 'support', label: 'Support Center', icon: LifeBuoy, path: '/support', allowedRoles: ['Super Admin', 'Support Admin'] },
-      { id: 'cms', label: 'CMS (Content)', icon: Monitor, path: '/cms', allowedRoles: ['Super Admin', 'Content Admin'] },
+      { id: 'wallet', label: 'Wallet', icon: Wallet, path: '/wallet?tab=wallet' },
+      { id: 'finance', label: 'Finance', icon: DollarSign, path: '/wallet?tab=finance' },
     ],
   },
   {
-    label: 'SYSTEM & GOVERNANCE',
+    label: 'COMMUNICATION & CONTENT',
     items: [
-      { id: 'users', label: 'User & Role Mgmt', icon: KeyRound, path: '/users', allowedRoles: ['Super Admin'] },
-      { id: 'audit', label: 'Audit Logs', icon: ClipboardList, path: '/audit', allowedRoles: ['Super Admin', 'Auditor'] },
-      { id: 'settings', label: 'System Settings', icon: Settings, path: '/settings', allowedRoles: ['Super Admin'] },
+      { id: 'support', label: 'Support', icon: LifeBuoy, path: '/support' },
+      { id: 'cms', label: 'CMS', icon: Monitor, path: '/cms' },
+      { id: 'notifications', label: 'Notifications', icon: Bell, path: '/notifications' },
+    ],
+  },
+  {
+    label: 'PLATFORM ENGINE',
+    items: [
+      { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
+      { id: 'api-management', label: 'API Management', icon: Cpu, path: '/settings?tab=gateways' },
+      { id: 'integrations', label: 'Integrations', icon: Layers, path: '/settings?tab=integrations' },
     ],
   },
 ];
@@ -93,7 +103,7 @@ export const Sidebar: React.FC = () => {
 
   const isCollapsed = isMobile ? false : collapsed;
 
-  const sidebarContent = (
+  return (
     <div className="flex flex-col h-full bg-white relative overflow-hidden select-none">
       {/* ── Brand Header (60px) ── */}
       <div className="h-[60px] flex items-center px-4 border-b border-[#F1F5F9] shrink-0 justify-between">
@@ -121,9 +131,12 @@ export const Sidebar: React.FC = () => {
             )}
 
             {group.items.map(item => {
+              const [itemBase, itemQuery] = item.path.split('?');
               const isActive = item.path === '/'
                 ? location.pathname === '/'
-                : location.pathname.startsWith(item.path);
+                : itemQuery
+                ? location.pathname === itemBase && location.search === `?${itemQuery}`
+                : location.pathname === itemBase && !location.search;
 
               const Icon = item.icon;
 
@@ -136,24 +149,24 @@ export const Sidebar: React.FC = () => {
                 >
                   <div
                     className={`
-                      flex items-center h-[42px] rounded-xl transition-all duration-200 cursor-pointer relative
-                      ${isCollapsed ? 'justify-center px-0' : 'px-3.5 gap-3'}
+                      flex items-center h-[40px] rounded-xl transition-all duration-200 cursor-pointer relative
+                      ${isCollapsed ? 'justify-center px-0' : 'px-3 gap-2.5'}
                       ${
                         isActive
-                          ? 'bg-[#F0FDF4] text-[#16A34A] font-semibold border-l-[3.5px] border-[#22C55E] shadow-sm'
+                          ? 'bg-[#F0FDF4] text-[#16A34A] font-semibold border-l-[3.5px] border-[#22C55E] shadow-xs'
                           : 'text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#0F172A] font-medium'
                       }
                     `}
                   >
                     <Icon
-                      size={18}
+                      size={17}
                       className={`shrink-0 transition-colors ${
                         isActive ? 'text-[#16A34A]' : 'text-[#94A3B8] group-hover:text-[#64748B]'
                       }`}
                     />
 
                     {!isCollapsed && (
-                      <span className="truncate text-[13.5px] leading-none">
+                      <span className="truncate text-[13px] leading-none">
                         {item.label}
                       </span>
                     )}
@@ -237,63 +250,14 @@ export const Sidebar: React.FC = () => {
           {!isCollapsed && (
             <button
               onClick={() => dispatch(logout())}
-              className="p-1.5 text-[#94A3B8] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition-colors shrink-0"
+              className="p-1.5 text-[#94A3B8] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition-colors shrink-0 cursor-pointer"
               title="Sign Out"
             >
               <LogOut size={15} />
             </button>
           )}
-
-          {/* Tooltip on User Profile when Collapsed */}
-          {isCollapsed && (
-            <div className="absolute left-full ml-3 px-3 py-1.5 bg-[#0F172A] text-white text-[12px] font-semibold rounded-lg shadow-xl whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-              {user?.name || 'Super Admin'}
-              <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-[#0F172A] rotate-45 rounded-xs" />
-            </div>
-          )}
         </div>
       </div>
     </div>
-  );
-
-  return (
-    <>
-      {/* ── Mobile Overlay Drawer (<1024px) ── */}
-      <AnimatePresence>
-        {isMobile && mobileOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={closeMobile}
-              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden"
-            />
-
-            {/* Mobile Drawer Slide-in */}
-            <motion.aside
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 280 }}
-              className="fixed inset-y-0 left-0 w-[280px] bg-white z-50 shadow-2xl border-r border-[#F1F5F9] lg:hidden"
-            >
-              {sidebarContent}
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* ── Desktop Fixed/Inline Sidebar (≥1024px) ── */}
-      <motion.aside
-        animate={{ width: collapsed ? 88 : 280 }}
-        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-        className="hidden lg:block shrink-0 h-screen bg-white border-r border-[#F1F5F9] relative z-20"
-      >
-        {sidebarContent}
-      </motion.aside>
-    </>
   );
 };
