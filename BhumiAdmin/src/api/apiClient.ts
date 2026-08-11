@@ -1,8 +1,11 @@
 import axios from 'axios';
+import { store } from '../store/store';
+import { logout } from '../store/slices/authSlice';
 
 // ── Base URL — reads from env in production, falls back to localhost ─────────
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/v1';
+  import.meta.env.VITE_API_BASE_URL || 'https://zenvora-bhumi.onrender.com/v1';
+  // import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/v1';
 
 let _accessToken: string | null = localStorage.getItem('admin_access_token');
 let _refreshToken: string | null = localStorage.getItem('admin_refresh_token');
@@ -50,12 +53,20 @@ adminApi.interceptors.request.use((config) => {
 });
 
 let _isRefreshing = false;
-let _refreshQueue: Array<(token: string) => void> = [];
+let _refreshQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (err: any) => void;
+}> = [];
 
 adminApi.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const is401WithRefreshToken =
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !!_refreshToken;
 
     if (error.response) {
       // Filter out Hindi messages
@@ -71,16 +82,34 @@ adminApi.interceptors.response.use(
       }
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry && _refreshToken) {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('admin_access_token');
+      localStorage.removeItem('admin_refresh_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      
+      // Dispatch Redux logout action to update state in memory and trigger redirect to login
+      store.dispatch(logout());
+      
+      _onUnauthorized?.();
+    }
+
+    if (is401WithRefreshToken) {
       if (_isRefreshing) {
-        return new Promise((resolve) => {
-          _refreshQueue.push((newToken) => {
-            originalRequest.headers = {
-              ...originalRequest.headers,
-              Authorization: `Bearer ${newToken}`
-            };
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            resolve(adminApi(originalRequest));
+        return new Promise((resolve, reject) => {
+          _refreshQueue.push({
+            resolve: (newToken) => {
+              originalRequest.headers = {
+                ...originalRequest.headers,
+                Authorization: `Bearer ${newToken}`,
+              };
+              originalRequest.headers.Authorization = `Bearer ${newToken}`;
+              resolve(adminApi(originalRequest));
+            },
+            reject: (err) => {
+              reject(err);
+            },
           });
         });
       }
@@ -89,23 +118,32 @@ adminApi.interceptors.response.use(
       _isRefreshing = true;
 
       try {
+        console.log(`[AdminAPI] 401 for ${originalRequest?.url} - token expired. Requesting new tokens via /admin/auth/refresh...`);
         const { data } = await axios.post(`${API_BASE_URL}/admin/auth/refresh`, {
           refresh_token: _refreshToken,
         });
         const { access_token, refresh_token } = data;
         setAdminTokens(access_token, refresh_token);
         _onRefresh?.(access_token, refresh_token);
-        _refreshQueue.forEach((cb) => cb(access_token));
+        console.log(`[AdminAPI] Token refresh succeeded. Retrying queued requests.`);
+        _refreshQueue.forEach((cb) => cb.resolve(access_token));
         _refreshQueue = [];
         originalRequest.headers = {
           ...originalRequest.headers,
-          Authorization: `Bearer ${access_token}`
+          Authorization: `Bearer ${access_token}`,
         };
         originalRequest.headers.Authorization = `Bearer ${access_token}`;
         return adminApi(originalRequest);
-      } catch {
+      } catch (err) {
+        console.warn(`[AdminAPI] Token refresh failed. User will be logged out.`, err);
         setAdminTokens(null, null);
+        
+        // Dispatch Redux logout action
+        store.dispatch(logout());
+        
         _onUnauthorized?.();
+        _refreshQueue.forEach((cb) => cb.reject(err));
+        _refreshQueue = [];
         return Promise.reject(error);
       } finally {
         _isRefreshing = false;

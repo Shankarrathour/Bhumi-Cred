@@ -1,4 +1,6 @@
 import axios from 'axios';
+import { store } from '../store/store';
+import { logout } from '../store/slices/authSlice';
 
 // ── Base URL — reads from env in production, falls back to localhost ─────────
 export const API_BASE_URL =
@@ -41,6 +43,10 @@ apiClient.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      
+      // Dispatch Redux logout action to update state in memory and trigger redirect to login
+      store.dispatch(logout());
+      
       window.dispatchEvent(new Event('auth:unauthorized'));
     }
     return Promise.reject(error);
