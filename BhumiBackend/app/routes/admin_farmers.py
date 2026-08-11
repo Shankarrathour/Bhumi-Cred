@@ -49,6 +49,7 @@ async def list_farmers(
     is_active: Optional[bool] = Query(None, description="Filter by active / inactive state"),
     state: Optional[str] = Query(None, description="Filter by state"),
     district: Optional[str] = Query(None, description="Filter by district"),
+    village: Optional[str] = Query(None, description="Filter by village"),
     search: Optional[str] = Query(None, min_length=1, max_length=100, description="Search by name or mobile"),
 ) -> PaginatedResponse[AdminFarmerListItem]:
     return await svc.list_farmers(
@@ -58,6 +59,7 @@ async def list_farmers(
         is_active=is_active,
         state=state,
         district=district,
+        village=village,
         search=search,
     )
 
@@ -307,3 +309,24 @@ async def assign_project_to_farmer(
 ) -> SuccessResponse[dict]:
     data = await svc.assign_project_to_farmer(farmer_id, project_id)
     return SuccessResponse(message="Project assigned to farmer successfully.", data=data)
+
+
+@router.delete(
+    "/{farmer_id}",
+    response_model=SuccessResponse[dict],
+    summary="Permanently delete a farmer",
+    description=(
+        "Hard-deletes the farmer and all associated records (land parcels, family members, "
+        "activity logs, OTP sessions, registrations). After deletion the mobile number is freed — "
+        "the farmer can re-register fresh from the app with any new details."
+    ),
+)
+async def delete_farmer(
+    farmer_id: str,
+    request: Request,
+    current_admin: AdminUser = Depends(RequirePermission("farmer_management", "delete")),
+    svc: AdminFarmerService = Depends(get_admin_farmer_service),
+) -> SuccessResponse[dict]:
+    ip, _ = get_client_info(request)
+    data = await svc.delete_farmer(farmer_id, current_admin, ip_address=ip)
+    return SuccessResponse(message=data["message"], data=data)

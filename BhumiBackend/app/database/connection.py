@@ -14,10 +14,14 @@ def configure_dns_resolver() -> None:
         if hasattr(dns.resolver, "reset_default_resolver"):
             dns.resolver.reset_default_resolver()
         resolver = dns.resolver.get_default_resolver()
-        resolver.timeout = 2.0
-        resolver.lifetime = 4.0
-        # Use top 2 primary public DNS servers to avoid opening dozens of UDP sockets on Windows
-        resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
+        resolver.timeout = 3.0
+        resolver.lifetime = 6.0
+        # Streamline nameservers: Keep local ones first, append public DNS as fallbacks
+        orig = list(resolver.nameservers)
+        for ns in ["8.8.8.8", "1.1.1.1"]:
+            if ns not in orig:
+                orig.append(ns)
+        resolver.nameservers = orig[:4]  # Limit to 4 to avoid socket bloat
     except Exception as exc:
         logger.warning("Could not configure fallback DNS resolvers: %s", exc)
 

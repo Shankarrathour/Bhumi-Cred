@@ -6,6 +6,12 @@ export interface GeoCoords {
   lng: number;
 }
 
+export interface LandHistoryEvent {
+  title: string;
+  desc: string;
+  date: string;
+}
+
 export interface AdminLandVerificationItem {
   id: string;
   farmer_id: string;
@@ -21,6 +27,9 @@ export interface AdminLandVerificationItem {
   coordinates?: GeoCoords;
   boundary_polygon?: GeoCoords[];
   verification_status: string;
+  history?: LandHistoryEvent[];
+  land_photo_urls?: string[];
+  created_at?: string;
 }
 
 export interface SuccessResponse<T> {

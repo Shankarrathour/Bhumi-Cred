@@ -6,7 +6,7 @@ import {
   FileText, ShieldCheck, CreditCard, ShoppingBag, Wallet,
   KeyRound, ClipboardList, Settings, LogOut, X, Gift,
   Users, CheckSquare, FileCheck, BarChart3, Bell, LifeBuoy, Monitor, Activity,
-  Cpu, Layers, DollarSign, Plane
+  Cpu, Layers, DollarSign, Plane, ArrowLeftRight, BookOpen, FolderKanban, LineChart
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
@@ -32,7 +32,7 @@ const NAV_GROUPS: NavGroupType[] = [
     label: 'CONTROL TOWER',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
-      { id: 'system-health', label: 'System Health', icon: Globe2, path: '/command-center' },
+      { id: 'system-health', label: 'Command Center', icon: Globe2, path: '/command-center' },
       { id: 'reports', label: 'Reports', icon: BarChart3, path: '/reports' },
       { id: 'audit', label: 'Audit Logs', icon: ClipboardList, path: '/audit' },
     ],
@@ -50,12 +50,15 @@ const NAV_GROUPS: NavGroupType[] = [
     items: [
       { id: 'farmers', label: 'Farmers', icon: Sprout, path: '/farmers' },
       { id: 'govt', label: 'Govt Bodies', icon: Building2, path: '/govt' },
+      { id: 'govt-schemes', label: 'Tenders & Schemes', icon: BookOpen, path: '/govt-schemes' },
+      { id: 'csr-management', label: 'CSR Management', icon: FolderKanban, path: '/csr-management' },
       { id: 'partners', label: 'Partners', icon: Users, path: '/partners' },
       { id: 'projects', label: 'Projects', icon: FileText, path: '/projects' },
       { id: 'mrv', label: 'MRV Center', icon: Activity, path: '/mrv' },
       { id: 'drone', label: 'Drone Survey', icon: Plane, path: '/drone' },
       { id: 'gis', label: 'GIS & Land', icon: Map, path: '/land' },
       { id: 'carbon', label: 'Carbon', icon: CreditCard, path: '/carbon' },
+      { id: 'carbon-exchange', label: 'Carbon Exchange', icon: ArrowLeftRight, path: '/carbon-exchange' },
       { id: 'insurance', label: 'Insurance', icon: ShieldCheck, path: '/insurance' },
       { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag, path: '/marketplace' },
     ],
@@ -65,6 +68,7 @@ const NAV_GROUPS: NavGroupType[] = [
     items: [
       { id: 'wallet', label: 'Wallet', icon: Wallet, path: '/wallet?tab=wallet' },
       { id: 'finance', label: 'Finance', icon: DollarSign, path: '/wallet?tab=finance' },
+      { id: 'investor-dashboard', label: 'Investor & ESG', icon: LineChart, path: '/investor-dashboard' },
     ],
   },
   {

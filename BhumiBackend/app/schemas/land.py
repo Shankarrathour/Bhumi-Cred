@@ -7,6 +7,12 @@ from app.models.land_parcel import LandVerificationStatus, OwnershipType
 
 from app.models.land_parcel import OwnershipType, GeoCoords
 
+class LandHistoryEvent(BaseModel):
+    title: str
+    desc: str
+    date: datetime
+
+
 class CreateLandParcelRequest(BaseModel):
     survey_number: Optional[str] = None
     area_acres: float = Field(..., gt=0, description="Area in acres, must be positive.")
@@ -37,6 +43,7 @@ class CreateLandParcelRequest(BaseModel):
     agroforestry_species: Optional[str] = None
     
     land_document_url: Optional[str] = None
+    land_photo_urls: Optional[list[str]] = None
 
 
 class UpdateLandParcelRequest(BaseModel):
@@ -95,6 +102,7 @@ class LandParcelResponse(BaseModel):
     agroforestry_species: Optional[str] = None
     
     land_document_url: Optional[str] = None
+    land_photo_urls: list[str] = []
     verification_status: LandVerificationStatus = LandVerificationStatus.PENDING
     verification_remarks: Optional[str] = None
     verified_at: Optional[datetime] = None
@@ -159,11 +167,13 @@ class AdminLandVerificationItem(BaseModel):
     agroforestry_species: Optional[str] = None
     
     land_document_url: Optional[str] = None
+    land_photo_urls: list[str] = []
     verification_status: LandVerificationStatus
     verification_remarks: Optional[str] = None
     verified_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    history: list[LandHistoryEvent] = []
 
     from pydantic import field_validator
     @field_validator("verification_status", mode="before")

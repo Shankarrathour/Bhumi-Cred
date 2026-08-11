@@ -15,7 +15,7 @@ import { useAgriStore } from '../../src/store/agriStore';
 import { changeLanguage } from '../../src/locales/i18n';
 import { AmbientEcoBackground } from '../../src/components/AmbientEcoBackground';
 import TrackingModal from '../../src/components/TrackingModal';
-import api from '../../src/api/apiClient';
+import api, { API_BASE_URL } from '../../src/api/apiClient';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -69,17 +69,36 @@ export default function ProfileScreen() {
       const filename = uri.split('/').pop() || 'photo.jpg';
       const formData = new FormData();
       formData.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
-      const res = await api.post('/farmer/profile/photo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+
+      const accessToken = useAuthStore.getState().accessToken;
+      const uploadUrl = `${API_BASE_URL}/farmer/profile/photo`;
+
+      console.log(`[profile] Native uploading via fetch to ${uploadUrl}...`);
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
       });
-      const url: string | undefined = res.data?.data?.url;
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.log('[profile] Upload response error:', errText);
+        throw new Error(`Upload failed with status ${response.status}`);
+      }
+
+      const resData = await response.json();
+      console.log('[profile] Upload response:', resData);
+
+      const url: string | undefined = resData?.data?.url;
       if (url) {
         updateOnboardingData({ farmerPhoto: url });
       } else {
         Alert.alert('Upload Error', 'Upload succeeded but no photo URL was returned.');
       }
     } catch (error: any) {
-      const msg: string = error?.response?.data?.message || 'Upload failed. Please try again.';
+      const msg: string = error?.message || 'Upload failed. Please try again.';
       Alert.alert('Upload Error', msg);
     }
   };
@@ -396,6 +415,18 @@ export default function ProfileScreen() {
               <Text style={styles.schemeDesc}>{sch.short_description}</Text>
             </View>
           ))}
+        </View>
+
+        {/* Personal Details */}
+        <Text style={styles.sectionLabel}>Account Settings</Text>
+        <View style={styles.settingsGroup}>
+          {renderSettingItem(
+            'account-edit-outline', 
+            'Personal & Residential Profile', 
+            'Manage your personal details, DOB, and address',
+            undefined,
+            () => router.push('/profile/edit' as any)
+          )}
         </View>
 
         {/* Refer & Earn Rewards */}

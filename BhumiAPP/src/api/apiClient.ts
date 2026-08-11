@@ -33,15 +33,31 @@ export function setAuthCallbacks(
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
 });
 
-// ── Request logging ───────────────────────────────────────────────────────────
+// ── Request logging & header adjustments ──────────────────────────────────────
 api.interceptors.request.use((config: any) => {
   if (_accessToken) {
     config.headers.Authorization = `Bearer ${_accessToken}`;
   }
+
+  // Remove explicit Content-Type header when sending FormData or multipart requests.
+  // In React Native, setting 'Content-Type': 'multipart/form-data' explicitly strips
+  // the required boundary string, causing immediate network errors.
+  const isFormData = config.data && typeof FormData !== 'undefined' && config.data instanceof FormData;
+  const isMultipart = config.headers && (
+    (typeof config.headers['Content-Type'] === 'string' && config.headers['Content-Type'].includes('multipart/form-data')) ||
+    (typeof config.headers['content-type'] === 'string' && config.headers['content-type'].includes('multipart/form-data'))
+  );
+
+  if (isFormData || isMultipart) {
+    if (config.headers) {
+      delete config.headers['Content-Type'];
+      delete config.headers['content-type'];
+    }
+  }
+
   console.log(
     `[API] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`,
     config.data ?? '',

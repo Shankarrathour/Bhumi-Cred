@@ -277,14 +277,13 @@ class BhumiCredRegistrationService:
     async def get_or_generate_invoice(self, reg_id: str) -> InvoiceResponse:
         reg = await self.get_registration(reg_id)
 
-        if reg.current_step < 6:
-            raise BadRequestException("Please complete Step 6 first.", "STEP_VALIDATION_FAILED")
+        if reg.current_step < 5 and reg.status != "submitted":
+            raise BadRequestException("Please complete all registration steps first.", "STEP_VALIDATION_FAILED")
 
-        # Check if invoice already exists
+        # Check if invoice already exists — return cached invoice
         existing_invoice = await self._invoices.get_by_registration_id(reg_id)
         if existing_invoice:
             return self._build_invoice_response(existing_invoice)
-            await existing_invoice.delete()
 
         # Dynamic invoice calculation logic
         # Billing Items:

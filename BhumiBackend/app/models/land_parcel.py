@@ -75,6 +75,7 @@ class LandParcel(Document):
     
     # Documents & Verification
     land_document_url: Optional[str] = None
+    land_photo_urls: List[str] = Field(default_factory=list)
     verification_status: LandVerificationStatus = LandVerificationStatus.PENDING
     verification_remarks: Optional[str] = None
     verified_by_id: Optional[PydanticObjectId] = None

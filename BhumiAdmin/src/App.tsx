@@ -8,6 +8,9 @@ import { FarmerList } from './features/farmers/pages/FarmerList';
 import { FarmerProfile } from './features/farmers/pages/FarmerProfile';
 import { GovtList } from './features/govt/pages/GovtList';
 import { GovtDetails } from './features/govt/pages/GovtDetails';
+import { GovtSchemesPage } from './pages/GovtSchemes';
+import { CSRManagementPage } from './pages/CSRManagement';
+import { InvestorDashboardPage } from './pages/InvestorDashboard';
 import { PartnerList } from './features/partners/pages/PartnerList';
 import { PartnerDetails } from './features/partners/pages/PartnerDetails';
 import { DocumentCenter } from './features/documents/pages/DocumentCenter';
@@ -21,6 +24,7 @@ import { ProjectManagement } from './features/projects/pages/ProjectManagement';
 import { ProjectDetails } from './features/projects/pages/ProjectDetails';
 import { CarbonRegistry } from './features/carbon/pages/CarbonRegistry';
 import { CarbonCreditDetails } from './features/carbon/pages/CarbonCreditDetails';
+import { CarbonExchangePage } from './pages/CarbonExchange';
 import { TreeInsurance } from './features/insurance/pages/TreeInsurance';
 import { InsuranceDetails } from './features/insurance/pages/InsuranceDetails';
 
@@ -97,6 +101,9 @@ function App() {
                       <Route index element={<GovtList />} />
                       <Route path=":id" element={<GovtDetails />} />
                     </Route>
+                    <Route path="govt-schemes" element={<GovtSchemesPage />} />
+                    <Route path="csr-management" element={<CSRManagementPage />} />
+                    <Route path="investor-dashboard" element={<InvestorDashboardPage />} />
                     <Route path="partners">
                       <Route index element={<PartnerList />} />
                       <Route path=":id" element={<PartnerDetails />} />
@@ -114,6 +121,7 @@ function App() {
                       <Route index element={<CarbonRegistry />} />
                       <Route path=":id" element={<CarbonCreditDetails />} />
                     </Route>
+                    <Route path="carbon-exchange" element={<CarbonExchangePage />} />
                     <Route path="insurance">
                       <Route index element={<TreeInsurance />} />
                       <Route path=":id" element={<InsuranceDetails />} />

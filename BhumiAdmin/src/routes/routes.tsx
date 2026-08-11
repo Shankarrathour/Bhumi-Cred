@@ -14,6 +14,7 @@ import { CMSPage } from '../pages/CMS';
 import { AgriApplicationsPage } from '../pages/AgriApplications';
 import { AgriApplicationDetailsPage } from '../pages/AgriApplicationDetails';
 import { CreditSalesPage } from '../pages/CreditSales';
+import { CarbonExchangePage } from '../pages/CarbonExchange';
 import { TreeInsurancePage } from '../pages/TreeInsurance';
 import { GovtSchemesPage } from '../pages/GovtSchemes';
 import { GreenFamilyPage } from '../pages/GreenFamily';
@@ -24,6 +25,8 @@ import { SettingsPage } from '../pages/Settings';
 import { LoansPage } from '../pages/Loans';
 import { PaymentsPage } from '../pages/Payments';
 import { ReportApprovalPage } from '../pages/ReportApproval';
+import { CSRManagementPage } from '../pages/CSRManagement';
+import { InvestorDashboardPage } from '../pages/InvestorDashboard';
 import { AdminNotifications } from '../pages/AdminNotifications';
 
 
@@ -98,6 +101,14 @@ export const router = createBrowserRouter([
         element: <ReportApprovalPage />,
       },
       {
+        path: 'csr-management',
+        element: <CSRManagementPage />,
+      },
+      {
+        path: 'investor-dashboard',
+        element: <InvestorDashboardPage />,
+      },
+      {
         path: 'employees',
         element: <EmployeesPage />,
       },
@@ -116,6 +127,10 @@ export const router = createBrowserRouter([
       {
         path: 'credit-sales',
         element: <CreditSalesPage />,
+      },
+      {
+        path: 'carbon-exchange',
+        element: <CarbonExchangePage />,
       },
       {
         path: 'support',

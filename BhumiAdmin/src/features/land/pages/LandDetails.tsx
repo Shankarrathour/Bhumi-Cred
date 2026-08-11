@@ -375,22 +375,44 @@ export const LandDetails = () => {
               <Camera size={18} className="text-[#16A34A]" /> Ground Inspection & Drone Inspection Photos
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {[
-                { title: 'Drone Canopy Survey #1', tag: 'Geo-tagged Drone', date: '02 Aug 2026' },
-                { title: 'Ground Inspection Plot Marker', tag: 'GPS Verification', date: '01 Aug 2026' },
-                { title: 'Soil Quality Sample Location', tag: 'Lab Sample Site', date: '28 Jul 2026' },
-              ].map((ph, idx) => (
-                <div key={idx} className="border border-[#E8EDF5] rounded-2xl overflow-hidden bg-white p-3 space-y-2">
-                  <div className="w-full h-40 bg-slate-100 rounded-xl flex items-center justify-center text-[#94A3B8] font-bold text-[12px] border border-dashed border-[#CBD5E1]">
-                    📷 Photo Inspection Sample #{idx + 1}
+              {liveLand?.land_photo_urls && liveLand.land_photo_urls.length > 0 ? (
+                liveLand.land_photo_urls.map((url, idx) => {
+                  const titles = ['Corner View (Photo 1)', 'Center View (Photo 2)', 'Site View (Photo 3)', 'Site View (Photo 4)'];
+                  const tags = ['Corner photo taken by farmer', 'Center photo taken by farmer', 'Additional angle', 'Additional angle'];
+                  const formattedDate = liveLand.created_at
+                    ? new Date(liveLand.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '02 Aug 2026';
+                  return (
+                    <div key={idx} className="border border-[#E8EDF5] rounded-2xl overflow-hidden bg-white p-3 space-y-2">
+                      <div className="w-full h-40 rounded-xl overflow-hidden border border-[#CBD5E1]">
+                        <img src={url} alt={titles[idx] || `Land Photo ${idx + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                      <div className="text-[13px] font-bold text-[#0F172A]">{titles[idx] || `Land Photo ${idx + 1}`}</div>
+                      <div className="flex items-center justify-between text-[11px] text-[#64748B]">
+                        <span>{tags[idx] || 'Site Photo'}</span>
+                        <span>{formattedDate}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                [
+                  { title: 'Drone Canopy Survey #1', tag: 'Geo-tagged Drone', date: '02 Aug 2026' },
+                  { title: 'Ground Inspection Plot Marker', tag: 'GPS Verification', date: '01 Aug 2026' },
+                  { title: 'Soil Quality Sample Location', tag: 'Lab Sample Site', date: '28 Jul 2026' },
+                ].map((ph, idx) => (
+                  <div key={idx} className="border border-[#E8EDF5] rounded-2xl overflow-hidden bg-white p-3 space-y-2">
+                    <div className="w-full h-40 bg-slate-100 rounded-xl flex items-center justify-center text-[#94A3B8] font-bold text-[12px] border border-dashed border-[#CBD5E1]">
+                      📷 Photo Inspection Sample #{idx + 1}
+                    </div>
+                    <div className="text-[13px] font-bold text-[#0F172A]">{ph.title}</div>
+                    <div className="flex items-center justify-between text-[11px] text-[#64748B]">
+                      <span>{ph.tag}</span>
+                      <span>{ph.date}</span>
+                    </div>
                   </div>
-                  <div className="text-[13px] font-bold text-[#0F172A]">{ph.title}</div>
-                  <div className="flex items-center justify-between text-[11px] text-[#64748B]">
-                    <span>{ph.tag}</span>
-                    <span>{ph.date}</span>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
@@ -443,20 +465,25 @@ export const LandDetails = () => {
             </h3>
             
             <div className="relative pl-6 border-l-2 border-[#E2E8F0] space-y-6">
-              {[
-                { title: 'Created', desc: 'Land parcel submitted by farmer via Mobile App', date: '14 Jan 2025' },
-                { title: 'Edited', desc: 'GIS coordinates and Khasra document updated', date: '15 Jan 2025' },
-                { title: 'Approved', desc: 'Admin approved land GIS boundary and title deed', date: '16 Jan 2025' },
-                { title: 'Project Assigned', desc: 'Assigned to MP Green Afforestation Q1', date: '18 Jan 2025' },
-                { title: 'Carbon Registered', desc: '145.0 tCO2e Carbon sequestration potential registered', date: '20 Jan 2025' },
-              ].map((h, idx) => (
-                <div key={idx} className="relative">
-                  <span className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-[#16A34A] border-2 border-white" />
-                  <p className="text-[11px] font-bold text-[#94A3B8]">{h.date}</p>
-                  <p className="text-[13.5px] font-bold text-[#0F172A]">{h.title}</p>
-                  <p className="text-[11.5px] text-[#64748B]">{h.desc}</p>
-                </div>
-              ))}
+              {(liveLand?.history && liveLand.history.length > 0 ? liveLand.history : [
+                {
+                  title: 'Created',
+                  desc: 'Land parcel submitted by farmer via Mobile App',
+                  date: liveLand?.created_at || new Date().toISOString()
+                }
+              ]).map((h: any, idx: number) => {
+                const formattedDate = h.date
+                  ? new Date(h.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : '';
+                return (
+                  <div key={idx} className="relative">
+                    <span className="absolute -left-[31px] top-0 w-4 h-4 rounded-full bg-[#16A34A] border-2 border-white" />
+                    <p className="text-[11px] font-bold text-[#94A3B8]">{formattedDate}</p>
+                    <p className="text-[13.5px] font-bold text-[#0F172A]">{h.title}</p>
+                    <p className="text-[11.5px] text-[#64748B]">{h.desc}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

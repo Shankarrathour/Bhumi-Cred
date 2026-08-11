@@ -17,6 +17,7 @@ export default function SplashScreen() {
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
   const vendor = useAuthStore((state) => state.vendor);
+  const _hasHydrated = useAuthStore((state) => state._hasHydrated);
 
   // Logo animations
   const scaleAnim = useRef(new Animated.Value(0.3)).current;
@@ -119,8 +120,11 @@ export default function SplashScreen() {
       runParticle();
     });
 
-    // 5. Navigate to appropriate screen after 3 seconds
+    // 5. Navigate to appropriate screen — wait for store hydration first
     const timer = setTimeout(() => {
+      // Don't navigate until AsyncStorage hydration is complete
+      if (!_hasHydrated) return;
+
       if (role === 'vendor' && vendor) {
         if (!vendor.name) {
           router.replace('/(vendor_auth)/register-wizard'); // Resume incomplete wizard
@@ -143,7 +147,7 @@ export default function SplashScreen() {
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, [isAuthenticated, user, role, vendor]);
+  }, [isAuthenticated, user, role, vendor, _hasHydrated]);
 
   return (
     <View style={styles.container}>
