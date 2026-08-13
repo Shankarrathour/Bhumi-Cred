@@ -75,7 +75,13 @@ export default function LoginScreen() {
 
         {/* Credentials Entry Form */}
         <View style={styles.authCard}>
-          <Text style={styles.cardHeader}>{role === 'vendor' ? 'Vendor Login' : 'Farmer Login'}</Text>
+          <Text style={styles.cardHeader}>
+            {role === 'govt_body' 
+              ? 'Govt Body Login' 
+              : role === 'partner' 
+                ? 'Partner Login' 
+                : 'Farmer Login'}
+          </Text>
 
           <RoleSelectField value={role} onChange={setRole} actionLabel="Login" />
 

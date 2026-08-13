@@ -24,6 +24,8 @@ import { CardSkeleton, ListSkeleton, TimelineSkeleton, SkeletonBase } from '../.
 import { AmbientEcoBackground, SeasonType } from '../../src/components/AmbientEcoBackground';
 import { SuccessOverlay } from '../../src/components/SuccessOverlay';
 import { NotificationDropdown } from '../../src/components/NotificationDropdown';
+import { PartnerHubModal, PartnerHubTab } from '../../src/components/PartnerHubModal';
+import { GovtBodyDashboardView } from '../../src/components/GovtBodyDashboardView';
 
 const { width } = Dimensions.get('window');
 
@@ -95,7 +97,7 @@ export default function HomeScreen() {
         setApiBanners(response.data);
       }
     } catch (error) {
-      console.error('[HomeScreen] Error fetching banners data:', error);
+      console.warn('[HomeScreen] Error fetching banners data:', error);
     }
   };
 
@@ -108,7 +110,7 @@ export default function HomeScreen() {
         setDashboardData(response.data.data);
       }
     } catch (error) {
-      console.error('[HomeScreen] Error fetching dashboard data:', error);
+      console.warn('[HomeScreen] Error fetching dashboard data:', error);
     }
   };
 
@@ -119,7 +121,7 @@ export default function HomeScreen() {
         setCmsDashboardData(response.data);
       }
     } catch (error) {
-      console.error('[HomeScreen] Error fetching CMS dashboard data:', error);
+      console.warn('[HomeScreen] Error fetching CMS dashboard data:', error);
     }
   };
 
@@ -143,6 +145,15 @@ export default function HomeScreen() {
     fetchNotifications();
     setRefreshing(false);
   }, []);
+
+  // Partner Hub Modal State
+  const [partnerHubVisible, setPartnerHubVisible] = useState(false);
+  const [partnerHubTab, setPartnerHubTab] = useState<PartnerHubTab>('land');
+
+  const openPartnerHub = (tab: PartnerHubTab) => {
+    setPartnerHubTab(tab);
+    setPartnerHubVisible(true);
+  };
 
   // Success Overlay milestone state
   const [successVisible, setSuccessVisible] = useState(false);
@@ -391,6 +402,7 @@ export default function HomeScreen() {
 
   // Zustand states
   const user = useAuthStore((state) => state.user);
+  const role = useAuthStore((state) => state.role);
   const plots = useLandStore((state) => state.plots);
   const totalCredits = user?.carbonCreditsGenerated ?? 0;
   const activeProjectsCount = useCarbonStore((state) => state.projects.filter(p => p.joined).length);
@@ -585,13 +597,13 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
       {/* Premium Sticky TopAppBar */}
-      <View style={styles.stickyHeader}>
+      <View style={[styles.stickyHeader, { paddingTop: insets.top > 0 ? insets.top + 10 : (Platform.OS === 'ios' ? 50 : 16) }]}>
         <TouchableOpacity style={styles.hamburgerBtn} onPress={openDrawer}>
           <MaterialCommunityIcons name="menu" size={24} color={COLORS.textLight} />
         </TouchableOpacity>
         {/* Modernized crop-tech top brand text logo */}
         <View style={styles.brandContainer}>
-          <MaterialCommunityIcons name="leaf" size={20} color={COLORS.accent} style={{ marginRight: 6 }} />
+          <MaterialCommunityIcons name="leaf" size={18} color={COLORS.accent} style={{ marginRight: 4 }} />
           <Text style={styles.brandTitle}>BhumiCred</Text>
         </View>
 
@@ -618,7 +630,7 @@ export default function HomeScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.iconBtn, { marginRight: 10, marginLeft: 10 }]} onPress={() => setBotVisible(true)}>
+          <TouchableOpacity style={[styles.iconBtn, { marginRight: 6, marginLeft: 6 }]} onPress={() => setBotVisible(true)}>
             <MaterialCommunityIcons name="robot-outline" size={22} color={COLORS.textLight} />
           </TouchableOpacity>
 
@@ -656,7 +668,11 @@ export default function HomeScreen() {
           <View style={styles.bannerRow}>
             <View style={styles.greetingBox}>
               <Text style={styles.greetingText}>
-                {t('dashboard.greeting', { name: user?.fullName || '' })}
+                {role === 'govt_body' 
+                  ? 'Welcome, Govt Representative' 
+                  : role === 'partner' 
+                    ? 'Welcome, Ecosystem Partner' 
+                    : t('dashboard.greeting', { name: user?.fullName || '' })}
               </Text>
               <TouchableOpacity
                 style={styles.locationRow}
@@ -670,31 +686,141 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Season atmosphere switcher */}
-          <View style={styles.seasonPickerContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.seasonScroll}>
-              {[
-                { code: 'Plantation', label: 'Plantation 🌱' },
-              ].map((item) => (
+        {role === 'govt_body' && (
+          <GovtBodyDashboardView />
+        )}
+
+        {(role === 'partner' || role === 'vendor') && (
+          <View style={{ paddingHorizontal: 4, marginTop: 16 }}>
+            {/* Top Metrics Grid */}
+            <View style={styles.partnerMetricsBlock}>
+              <Text style={styles.partnerSectionTitle}>Partner Dashboard Metrics</Text>
+
+              <View style={styles.partnerGridRow}>
+                <View style={styles.partnerMetricCard}>
+                  <MaterialCommunityIcons name="chart-areaspline" size={24} color={COLORS.primary} />
+                  <Text style={styles.partnerMetricValue}>12</Text>
+                  <Text style={styles.partnerMetricLabel}>Total Projects</Text>
+                </View>
+
+                <View style={styles.partnerMetricCard}>
+                  <MaterialCommunityIcons name="account-group" size={24} color="#0284C7" />
+                  <Text style={styles.partnerMetricValue}>4</Text>
+                  <Text style={styles.partnerMetricLabel}>Assigned Farmers</Text>
+                </View>
+              </View>
+
+              <View style={styles.partnerGridRow}>
+                <View style={styles.partnerMetricCard}>
+                  <MaterialCommunityIcons name="map-marker-path" size={24} color="#16A34A" />
+                  <Text style={styles.partnerMetricValue}>124.5</Text>
+                  <Text style={styles.partnerMetricLabel}>Total Acres</Text>
+                </View>
+
+                <View style={styles.partnerMetricCard}>
+                  <MaterialCommunityIcons name="leaf" size={24} color="#0F766E" />
+                  <Text style={styles.partnerMetricValue}>1,850</Text>
+                  <Text style={styles.partnerMetricLabel}>Carbon Credits</Text>
+                </View>
+              </View>
+
+              <View style={styles.partnerGridRow}>
+                <View style={styles.partnerMetricCard}>
+                  <MaterialCommunityIcons name="wallet-outline" size={24} color="#D97706" />
+                  <Text style={styles.partnerMetricValue}>₹1,45,000</Text>
+                  <Text style={styles.partnerMetricLabel}>Earnings</Text>
+                </View>
+
+                <View style={styles.partnerMetricCard}>
+                  <MaterialCommunityIcons name="clipboard-alert-outline" size={24} color="#DC2626" />
+                  <Text style={styles.partnerMetricValue}>3</Text>
+                  <Text style={styles.partnerMetricLabel}>Pending Tasks</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Quick Access Services & Tools */}
+            <View style={styles.partnerServicesBlock}>
+              <Text style={styles.partnerSectionTitle}>More Services & Tools</Text>
+
+              <View style={styles.servicesGrid}>
                 <TouchableOpacity
-                  key={item.code}
-                  style={[
-                    styles.seasonPill,
-                    season === item.code && styles.seasonPillActive
-                  ]}
-                  onPress={() => setSeason(item.code as any)}
-                  activeOpacity={0.8}
+                  style={styles.serviceItem}
+                  activeOpacity={0.85}
+                  onPress={() => openPartnerHub('land')}
                 >
-                  <Text style={[
-                    styles.seasonPillText,
-                    season === item.code && styles.seasonPillTextActive
-                  ]}>
-                    {item.label}
-                  </Text>
+                  <View style={[styles.serviceIconCircle, { backgroundColor: '#DCFCE7' }]}>
+                    <MaterialCommunityIcons name="map-marker-path" size={22} color="#16A34A" />
+                  </View>
+                  <Text style={styles.serviceItemTitle}>Land & GIS</Text>
+                  <Text style={styles.serviceItemSub}>Map & Polygons</Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+
+                <TouchableOpacity
+                  style={styles.serviceItem}
+                  activeOpacity={0.85}
+                  onPress={() => openPartnerHub('mrv')}
+                >
+                  <View style={[styles.serviceIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                    <MaterialCommunityIcons name="eye-check-outline" size={22} color="#D97706" />
+                  </View>
+                  <Text style={styles.serviceItemTitle}>MRV Status</Text>
+                  <Text style={styles.serviceItemSub}>Field Audits</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.serviceItem}
+                  activeOpacity={0.85}
+                  onPress={() => openPartnerHub('carbon')}
+                >
+                  <View style={[styles.serviceIconCircle, { backgroundColor: '#ECFDF5' }]}>
+                    <MaterialCommunityIcons name="leaf" size={22} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.serviceItemTitle}>Carbon Credits</Text>
+                  <Text style={styles.serviceItemSub}>Ledger & Sales</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.serviceItem}
+                  activeOpacity={0.85}
+                  onPress={() => openPartnerHub('documents')}
+                >
+                  <View style={[styles.serviceIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                    <MaterialCommunityIcons name="file-multiple-outline" size={22} color="#0284C7" />
+                  </View>
+                  <Text style={styles.serviceItemTitle}>Documents</Text>
+                  <Text style={styles.serviceItemSub}>Company Vault</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.serviceItem}
+                  activeOpacity={0.85}
+                  onPress={() => openPartnerHub('notifications')}
+                >
+                  <View style={[styles.serviceIconCircle, { backgroundColor: '#F1F5F9' }]}>
+                    <MaterialCommunityIcons name="bell-ring-outline" size={22} color="#475569" />
+                  </View>
+                  <Text style={styles.serviceItemTitle}>Notifications</Text>
+                  <Text style={styles.serviceItemSub}>Updates & Alerts</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.serviceItem}
+                  activeOpacity={0.85}
+                  onPress={() => openPartnerHub('support')}
+                >
+                  <View style={[styles.serviceIconCircle, { backgroundColor: '#FAE8FF' }]}>
+                    <MaterialCommunityIcons name="headphones" size={22} color="#A21CAF" />
+                  </View>
+                  <Text style={styles.serviceItemTitle}>Support</Text>
+                  <Text style={styles.serviceItemSub}>Helpdesk & Chat</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
+        )}
+
+
           {/* Top Live Sustainability Meter Dashboard Overlay */}
           <View style={[styles.metersDashboard, { gap: 5 }]}>
             {/* Left Circular Meter Index */}
@@ -1263,8 +1389,20 @@ export default function HomeScreen() {
                   )}
                 </View>
                 <View style={styles.drawerUserInfo}>
-                  <Text style={styles.drawerUserName}>{user?.fullName || ''}</Text>
-                  <Text style={styles.drawerUserSub}>Verified Farmer ID</Text>
+                  <Text style={styles.drawerUserName}>
+                    {role === 'govt_body' 
+                      ? 'Govt Representative' 
+                      : role === 'partner' 
+                        ? 'Ecosystem Partner' 
+                        : user?.fullName || ''}
+                  </Text>
+                  <Text style={styles.drawerUserSub}>
+                    {role === 'govt_body'
+                      ? 'Govt Representative ID'
+                      : role === 'partner'
+                        ? 'Ecosystem Partner ID'
+                        : 'Verified Farmer ID'}
+                  </Text>
                 </View>
               </View>
               <TouchableOpacity style={styles.drawerCloseBtn} onPress={() => closeDrawer()}>
@@ -1316,19 +1454,97 @@ export default function HomeScreen() {
         onSelect={(loc) => setSelectedLocation(loc)}
         currentLocation={selectedLocation}
       />
-      <SuccessOverlay
-        visible={successVisible}
-        onClose={() => setSuccessVisible(false)}
-        title={successData.title}
-        message={successData.message}
-        rewardText={successData.reward}
-        iconName={successData.icon}
+      <PartnerHubModal
+        visible={partnerHubVisible}
+        initialTab={partnerHubTab}
+        onClose={() => setPartnerHubVisible(false)}
       />
     </AmbientEcoBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  partnerMetricsBlock: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.soft,
+  },
+  partnerSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 14,
+  },
+  partnerGridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  partnerMetricCard: {
+    flex: 0.48,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  partnerMetricValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 6,
+  },
+  partnerMetricLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  partnerServicesBlock: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.soft,
+  },
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  serviceItem: {
+    width: '48%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  serviceIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  serviceItemTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  serviceItemSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -1337,7 +1553,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingTop: Platform.OS === 'ios' ? 50 : 45,
     paddingBottom: 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1407,7 +1623,7 @@ const styles = StyleSheet.create({
   headerBanner: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: 68,
     overflow: 'visible',
   },
   bannerRow: {
@@ -1540,7 +1756,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   heroCarouselSection: {
-    marginTop: 84,
+    marginTop: 112,
     paddingBottom: 24,
   },
   heroSlideWrapper: {
@@ -1817,6 +2033,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 24,
     alignSelf: 'center',
+    marginLeft: 6,
   },
   connectivityOnline: {
     backgroundColor: '#ECFDF5',

@@ -56,7 +56,7 @@ export const useCarbonStore = create<CarbonState>()(
           }));
           set({ projects, isLoading: false });
         } catch (error) {
-          console.error('[carbonStore] fetchProjects failed:', error);
+          console.warn('[carbonStore] fetchProjects failed:', error);
           set({ isLoading: false });
         }
       },
@@ -67,7 +67,7 @@ export const useCarbonStore = create<CarbonState>()(
           await api.post(`/projects/${id}/join`, payload);
           await get().fetchProjects();
         } catch (error) {
-          console.error('[carbonStore] joinProject failed:', error);
+          console.warn('[carbonStore] joinProject failed:', error);
           set({ isLoading: false });
           throw error;
         }

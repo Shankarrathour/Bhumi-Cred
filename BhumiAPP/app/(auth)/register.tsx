@@ -103,9 +103,11 @@ export default function RegisterScreen() {
         <View style={styles.introBlock}>
           <Text style={styles.mainTitle}>Create Account</Text>
           <Text style={styles.introSubtitle}>
-            {role === 'vendor'
-              ? 'Set up your BhumiCred seller profile to start serving farmers.'
-              : 'Complete your BhumiCred climate-tech farmer profile in 30 seconds.'}
+            {role === 'govt_body'
+              ? 'Access the BhumiCred district and regional sustainability dashboard.'
+              : role === 'partner'
+                ? 'Onboard your organisation to start sponsoring carbon offsets.'
+                : 'Complete your BhumiCred climate-tech farmer profile in 30 seconds.'}
           </Text>
         </View>
 

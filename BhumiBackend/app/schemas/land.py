@@ -129,11 +129,12 @@ class LandSummaryResponse(BaseModel):
     total_area_acres: float
     irrigated_area_acres: float
     non_irrigated_area_acres: float
+    total_parcels: int
 
 
 class AdminLandVerificationItem(BaseModel):
     id: str
-    farmer_id: Optional[str] = None
+    farmer_id: str
     farmer_public_id: Optional[str] = None
     farmer_name: Optional[str] = None
     farmer_mobile: str

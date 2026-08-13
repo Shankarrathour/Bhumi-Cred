@@ -5,7 +5,7 @@ import { LoginPage } from '../pages/Login';
 import { DashboardPage } from '../pages/Dashboard';
 import { UsersPage } from '../pages/Users';
 import { KYCPage } from '../pages/KYC';
-import { VendorsManager } from '../pages/VendorsManager';
+
 import { ProductsModeration } from '../pages/ProductsModeration';
 import { OrdersLogistics } from '../pages/OrdersLogistics';
 import { EmployeesPage } from '../pages/Employees';
@@ -19,7 +19,7 @@ import { TreeInsurancePage } from '../pages/TreeInsurance';
 import { GovtSchemesPage } from '../pages/GovtSchemes';
 import { GreenFamilyPage } from '../pages/GreenFamily';
 import { CarbonProjectsPage } from '../pages/CarbonProjects';
-import { SupportPage } from '../pages/Support';
+
 import { LogsPage } from '../pages/Logs';
 import { SettingsPage } from '../pages/Settings';
 import { LoansPage } from '../pages/Loans';
@@ -60,10 +60,7 @@ export const router = createBrowserRouter([
         path: 'land-verification',
         element: <KYCPage />,
       },
-      {
-        path: 'vendors',
-        element: <VendorsManager />,
-      },
+
       {
         path: 'marketplace',
         element: <ProductsModeration />,
@@ -132,10 +129,7 @@ export const router = createBrowserRouter([
         path: 'carbon-exchange',
         element: <CarbonExchangePage />,
       },
-      {
-        path: 'support',
-        element: <SupportPage />,
-      },
+
       {
         path: 'activity-logs',
         element: <LogsPage />,

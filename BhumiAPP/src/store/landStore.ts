@@ -35,6 +35,7 @@ export interface LandPlot {
   vikashKhand?: string;
   village?: string;
   fullAddress?: string;
+  landmark?: string;
   landDocumentUrl?: string;
   landPhotoUrls?: string[];
 }

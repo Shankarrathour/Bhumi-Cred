@@ -32,7 +32,7 @@ export const DashboardLayout: React.FC = () => {
   
   const { user, logout } = useAuthStore();
   const { activeRole } = useAdminStore();
-  const { fetchLocationTree, fetchVendors, fetchLands } = useEcosystemStore();
+  const { fetchLocationTree, fetchLands } = useEcosystemStore();
   const { unreadCount, fetchUnreadCount } = useAdminNotificationStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -49,7 +49,6 @@ export const DashboardLayout: React.FC = () => {
 
   useEffect(() => {
     fetchLocationTree();
-    fetchVendors();
     fetchLands();
   }, []);
 

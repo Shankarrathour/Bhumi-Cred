@@ -2,7 +2,6 @@ from fastapi import APIRouter
 from typing import List
 from pydantic import BaseModel
 from app.models.product import Product
-from app.models.vendor import Vendor
 
 router = APIRouter(prefix="/marketplace", tags=["Marketplace"])
 
@@ -25,15 +24,7 @@ async def get_marketplace_products():
     
     response = []
     for p in products:
-        # Fetch the vendor to get the store name
-        vendor_name = "Unknown Vendor"
-        if p.vendor_id:
-            try:
-                vendor = await Vendor.get(p.vendor_id)
-                if vendor and (vendor.business_name or vendor.store_name):
-                    vendor_name = vendor.business_name or vendor.store_name
-            except Exception:
-                pass
+        vendor_name = getattr(p, "brand", None) or "Bhumi Store"
         
         # Category resolution
         category_name = getattr(p, "category", "General")

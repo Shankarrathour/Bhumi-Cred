@@ -405,6 +405,7 @@ class FarmerProfileService:
             total_area_acres=total,
             irrigated_area_acres=irrigated,
             non_irrigated_area_acres=total - irrigated,
+            total_parcels=len(parcels),
         )
 
     async def add_land_parcel(

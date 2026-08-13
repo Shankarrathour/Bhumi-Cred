@@ -16,15 +16,22 @@ class FarmerRepository(BaseRepository[Farmer]):
     async def get_by_email(self, email: str) -> Optional[Farmer]:
         return await Farmer.find_one(Farmer.email == email)
 
-    async def find_or_create(self, mobile: str) -> tuple[Farmer, bool]:
+    async def find_or_create(self, mobile: str, role: str = "farmer") -> tuple[Farmer, bool]:
         """
         Return (farmer, is_new). Creates farmer with minimal data if not found.
         """
         farmer = await self.get_by_mobile(mobile)
         if farmer:
             return farmer, False
-        farmer_id = await generate_public_id("FAR", "farmer_id")
-        farmer = Farmer(mobile=mobile, farmer_id=farmer_id)
+        
+        prefix = "FAR"
+        if role == "govt_body":
+            prefix = "GOV"
+        elif role == "partner":
+            prefix = "PTR"
+
+        farmer_id = await generate_public_id(prefix, "farmer_id")
+        farmer = Farmer(mobile=mobile, farmer_id=farmer_id, role=role)
         await farmer.insert()
         return farmer, True
 
@@ -67,12 +74,15 @@ class FarmerRepository(BaseRepository[Farmer]):
         village: Optional[str] = None,
     ) -> tuple[list[Farmer], int]:
         query: dict = {}
+        role_filter = {"$or": [{"role": "farmer"}, {"role": {"$exists": False}}]}
+        
         if kyc_status:
             query["kyc_status"] = kyc_status
         else:
             # Exclude farmers who started registration but never completed onboarding.
             # kyc_status stays UNVERIFIED until the farmer submits identity documents.
             query["kyc_status"] = {"$ne": "unverified"}
+        
         if is_active is not None:
             query["is_active"] = is_active
         if state:
@@ -81,8 +91,9 @@ class FarmerRepository(BaseRepository[Farmer]):
             query["district"] = district
         if village:
             query["village"] = {"$regex": village, "$options": "i"}
+            
         if search:
-            query["$or"] = [
+            search_filter = [
                 {"full_name": {"$regex": search, "$options": "i"}},
                 {"mobile": {"$regex": search, "$options": "i"}},
                 {"farmer_id": {"$regex": search, "$options": "i"}},
@@ -90,6 +101,17 @@ class FarmerRepository(BaseRepository[Farmer]):
                 {"district": {"$regex": search, "$options": "i"}},
                 {"state": {"$regex": search, "$options": "i"}},
             ]
+            query["$and"] = [
+                role_filter,
+                {"$or": search_filter}
+            ]
+        else:
+            # Merge role_filter keys into query dictionary
+            if "$or" in query:
+                # In case any other field dynamically used $or, use $and to be safe
+                query["$and"] = [role_filter]
+            else:
+                query.update(role_filter)
 
         results = await Farmer.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
         total = await Farmer.find(query).count()

@@ -8,7 +8,8 @@ from app.core.exceptions import InvalidTokenException
 # Token type constants
 TOKEN_TYPE_FARMER = "farmer"
 TOKEN_TYPE_ADMIN = "admin"
-TOKEN_TYPE_VENDOR = "vendor"
+TOKEN_TYPE_GOVT = "govt_body"
+TOKEN_TYPE_PARTNER = "partner"
 
 
 def _now() -> datetime:

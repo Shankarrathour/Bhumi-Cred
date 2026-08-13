@@ -143,7 +143,7 @@ interface MarketplaceState {
   fetchWishlist: () => Promise<void>;
   fetchCart: () => Promise<void>;
   fetchOrders: () => Promise<void>;
-  fetchOrderDetails: (orderId: string) => Promise<void>;
+  fetchOrderDetails: (orderId: string, force?: boolean) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
   addToCart: (product: Product, quantity?: number) => Promise<void>;
   removeFromCart: (productId: string) => Promise<void>;
@@ -671,12 +671,12 @@ export const useMarketplaceStore = create<MarketplaceState>()(
         }
       },
 
-      fetchOrderDetails: async (orderId) => {
+      fetchOrderDetails: async (orderId, force = false) => {
         const { isAuthenticated } = useAuthStore.getState();
         if (!isAuthenticated) return;
         
         // Cache check
-        if (get().activeOrderDetails[orderId]) return;
+        if (!force && get().activeOrderDetails[orderId]) return;
 
         try {
           const { data } = await api.get(`/orders/${orderId}`);

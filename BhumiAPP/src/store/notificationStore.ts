@@ -58,7 +58,7 @@ export const useNotificationStore = create<NotificationState>()(
 
           set({ notifications: formatted });
         } catch (error) {
-          console.error("Failed to fetch notifications", error);
+          console.warn("Failed to fetch notifications", error);
         }
       },
 
@@ -75,7 +75,7 @@ export const useNotificationStore = create<NotificationState>()(
             ),
           });
         } catch (error) {
-          console.error("Failed to mark notification as read", error);
+          console.warn("Failed to mark notification as read", error);
         }
       },
 

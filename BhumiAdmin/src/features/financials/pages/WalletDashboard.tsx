@@ -13,7 +13,7 @@ import { PageHeader } from '../../../components/ui/PageHeader';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { EmptyState, SkeletonTable } from '../../../components/ui/EmptyState';
-import { useWithdrawals } from '../api/useWallet';
+import { useWithdrawals, useApproveWithdrawal, useRejectWithdrawal } from '../api/useWallet';
 import { downloadPDFDocument, downloadCSVDocument } from '../../../utils/pdfExporter';
 import toast from 'react-hot-toast';
 
@@ -138,6 +138,8 @@ export const WalletDashboard = () => {
   const [newUtrNumber, setNewUtrNumber] = useState('');
 
   const { data: apiData, isLoading, refetch, isFetching } = useWithdrawals(1, 30);
+  const approveMutation = useApproveWithdrawal();
+  const rejectMutation = useRejectWithdrawal();
 
   const transactions = useMemo(() => {
     if (apiData && Array.isArray(apiData.items) && apiData.items.length > 0) {
@@ -177,23 +179,58 @@ export const WalletDashboard = () => {
   const totalWithdrawn = transactions.filter(t => t.status === 'Approved').reduce((acc, t) => acc + t.amount, 0);
 
   const handleApprove = (id: string) => {
-    setTransactionsList(prev => prev.map(t => {
-      if (t.id === id) {
-        toast.success(`Transaction ${t.txn_id} approved! Payout of ₹${t.amount.toLocaleString()} disbursed.`);
-        return { ...t, status: 'Approved' };
-      }
-      return t;
-    }));
+    const isRealWithdrawal = id.length === 24;
+    
+    if (isRealWithdrawal) {
+      approveMutation.mutate(id, {
+        onSuccess: () => {
+          toast.success("Withdrawal approved successfully!");
+          refetch();
+        },
+        onError: (err: any) => {
+          toast.error(err?.response?.data?.message || "Failed to approve withdrawal on server.");
+        }
+      });
+    } else {
+      setTransactionsList(prev => prev.map(t => {
+        if (t.id === id) {
+          toast.success(`Transaction ${t.txn_id} approved! Payout of ₹${t.amount.toLocaleString()} disbursed.`);
+          return { ...t, status: 'Approved' };
+        }
+        return t;
+      }));
+    }
   };
 
   const handleReject = (id: string) => {
-    setTransactionsList(prev => prev.map(t => {
-      if (t.id === id) {
-        toast.error(`Transaction ${t.txn_id} rejected.`);
-        return { ...t, status: 'Rejected' };
+    const isRealWithdrawal = id.length === 24;
+    
+    if (isRealWithdrawal) {
+      const reason = prompt("Enter rejection reason (minimum 3 characters):");
+      if (!reason) return;
+      if (reason.trim().length < 3) {
+        toast.error("Rejection reason must be at least 3 characters.");
+        return;
       }
-      return t;
-    }));
+      
+      rejectMutation.mutate({ withdrawalId: id, reason }, {
+        onSuccess: () => {
+          toast.success("Withdrawal request rejected.");
+          refetch();
+        },
+        onError: (err: any) => {
+          toast.error(err?.response?.data?.message || "Failed to reject withdrawal.");
+        }
+      });
+    } else {
+      setTransactionsList(prev => prev.map(t => {
+        if (t.id === id) {
+          toast.error(`Transaction ${t.txn_id} rejected.`);
+          return { ...t, status: 'Rejected' };
+        }
+        return t;
+      }));
+    }
   };
 
   const handleSaveUTR = (e: React.FormEvent) => {

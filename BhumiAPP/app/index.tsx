@@ -127,15 +127,15 @@ export default function SplashScreen() {
 
       if (role === 'vendor' && vendor) {
         if (!vendor.name) {
-          router.replace('/(vendor_auth)/register-wizard'); // Resume incomplete wizard
+          router.replace('/(vendor_auth)/register-wizard' as any); // Resume incomplete wizard
         } else if (vendor.status === 'Active') {
-          router.replace('/(vendor_tabs)');
+          router.replace('/(vendor_tabs)' as any);
         } else if (vendor.status === 'Rejected') {
-          router.replace('/(vendor_auth)/rejected');
+          router.replace('/(vendor_auth)/rejected' as any);
         } else if (vendor.status === 'Suspended') {
-          router.replace('/(vendor_auth)/suspended');
+          router.replace('/(vendor_auth)/suspended' as any);
         } else {
-          router.replace('/(vendor_auth)/pending');
+          router.replace('/(vendor_auth)/pending' as any);
         }
       } else if (isAuthenticated) {
         router.replace('/(tabs)');

@@ -119,7 +119,7 @@ export const useInsuranceStore = create<InsuranceState>()(
 
           set({ policies: mergedPolicies, isLoading: false });
         } catch (error) {
-          console.error('[insuranceStore] fetchPolicies failed:', error);
+          console.warn('[insuranceStore] fetchPolicies failed:', error);
           set({ isLoading: false });
         }
       },

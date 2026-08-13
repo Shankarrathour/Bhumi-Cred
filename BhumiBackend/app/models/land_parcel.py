@@ -37,7 +37,7 @@ class GeoJSONPolygon(BaseModel):
 
 
 class LandParcel(Document):
-    farmer_id: Optional[Union[PydanticObjectId, str]] = None
+    farmer_id: str
     khasra_number: Optional[str] = Field(None, description="Khasra / Survey Number e.g. 142/2")
     survey_number: Optional[str] = None
     area_acres: float = Field(..., gt=0)

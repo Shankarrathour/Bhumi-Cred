@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingCart, Plus, RefreshCw, Eye, Check, X, Store, Package,
@@ -10,7 +10,7 @@ import { PageHeader } from '../../../components/ui/PageHeader';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { EmptyState, SkeletonTable } from '../../../components/ui/EmptyState';
-import { useMarketplaceProducts } from '../api/useMarketplace';
+import { useMarketplaceProducts, useAdminOrders, useUpdateAdminOrderStatus } from '../api/useMarketplace';
 import { downloadPDFDocument, downloadCSVDocument } from '../../../utils/pdfExporter';
 import toast from 'react-hot-toast';
 
@@ -346,7 +346,17 @@ export const Marketplace = () => {
   const [selectedVendor, setSelectedVendor] = useState<VendorProfileItem | null>(null);
   const [vendorActiveTab, setVendorActiveTab] = useState<'Vendor Profile' | 'Products' | 'Inventory' | 'Orders' | 'Payments' | 'Ratings'>('Vendor Profile');
 
-  const { data: apiData, isLoading, refetch } = useMarketplaceProducts();
+  const { refetch } = useMarketplaceProducts();
+  const { data: adminOrdersData } = useAdminOrders();
+  const { mutate: updateOrderStatus } = useUpdateAdminOrderStatus();
+
+  useEffect(() => {
+    if (adminOrdersData?.data) {
+      const realOrders = adminOrdersData.data;
+      const mockOrders = SEEDED_ORDERS.filter(so => !realOrders.some((ro: any) => ro.order_id === so.order_id));
+      setOrdersList([...realOrders, ...mockOrders]);
+    }
+  }, [adminOrdersData]);
 
   const filteredProducts = useMemo(() => {
     return productsList.filter(p => {
@@ -367,9 +377,24 @@ export const Marketplace = () => {
   }, [ordersList, search, orderStatusFilter]);
 
   const handleUpdateOrderStatus = (orderId: string, newStatus: (typeof ORDER_STATUSES)[number]) => {
+    const orderObj = ordersList.find(o => o.id === orderId);
+    const isRealOrder = orderId.length === 24;
+
+    if (isRealOrder) {
+      updateOrderStatus({ orderId, status: newStatus }, {
+        onSuccess: () => {
+          toast.success(`Order status updated to "${newStatus}" successfully!`);
+        },
+        onError: () => {
+          toast.error("Failed to update order status on server.");
+        }
+      });
+    } else {
+      toast.success(`Order ${orderObj?.order_id || orderId} status updated to "${newStatus}"!`);
+    }
+
     setOrdersList(prev => prev.map(o => {
       if (o.id === orderId) {
-        toast.success(`Order ${o.order_id} status updated to "${newStatus}"!`);
         return { ...o, order_status: newStatus };
       }
       return o;
@@ -425,18 +450,17 @@ export const Marketplace = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard title="TOTAL SKUS IN CATALOG" value={productsList.length} icon={Package} iconBg="#F0FDF4" iconColor="#16A34A" />
         <KpiCard title="TOTAL ORDERS PROCESSED" value={ordersList.length} icon={ShoppingCart} iconBg="#EFF6FF" iconColor="#2563EB" />
-        <KpiCard title="ACTIVE VENDORS" value={vendorsList.length} icon={Store} iconBg="#F5F3FF" iconColor="#8B5CF6" />
+        <KpiCard title="ACTIVE PARTNERS" value={892} icon={Store} iconBg="#F5F3FF" iconColor="#8B5CF6" />
         <KpiCard title="GROSS MARKETPLACE SALES" value="₹5,20,800" icon={TrendingUp} iconBg="#ECFDF5" iconColor="#059669" />
       </div>
 
-      {/* ── MAIN TABS (Products, Categories, Orders, Vendors) ── */}
+      {/* ── MAIN TABS (Products, Categories, Orders) ── */}
       <div className="flex items-center justify-between border-b border-[#E8EDF5] pb-2 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           {[
             { id: 'products', label: `Products (${productsList.length})`, icon: Package },
             { id: 'categories', label: `8 Categories`, icon: Layers },
             { id: 'orders', label: `Orders (${ordersList.length})`, icon: ShoppingCart },
-            { id: 'vendors', label: `Vendor Profiles (${vendorsList.length})`, icon: Store },
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = activeMainTab === tab.id;
@@ -628,41 +652,6 @@ export const Marketplace = () => {
         </div>
       )}
 
-      {/* ── 4. VENDORS TAB ── */}
-      {activeMainTab === 'vendors' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {vendorsList.map((v) => (
-            <div key={v.id} className="p-5 bg-white border border-[#E8EDF5] rounded-2xl shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-[15px] font-bold text-[#0F172A]">{v.company}</h4>
-                  <p className="text-[11px] font-mono text-[#64748B]">{v.vendor_id} • GSTIN: {v.gstin}</p>
-                </div>
-                <span className="text-[12px] font-extrabold text-[#D97706] bg-[#FFFBEB] px-2.5 py-0.5 rounded-lg border border-[#FEF3C7]">
-                  ★ {v.rating}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-[12px]">
-                <div className="p-2 bg-[#FAFCFF] rounded-lg">
-                  <span className="text-[10px] font-bold uppercase text-[#94A3B8]">Products</span>
-                  <p className="font-bold text-[#0F172A]">{v.total_products}</p>
-                </div>
-                <div className="p-2 bg-[#FAFCFF] rounded-lg">
-                  <span className="text-[10px] font-bold uppercase text-[#94A3B8]">Orders</span>
-                  <p className="font-bold text-[#2563EB]">{v.total_orders}</p>
-                </div>
-                <div className="p-2 bg-[#FAFCFF] rounded-lg">
-                  <span className="text-[10px] font-bold uppercase text-[#94A3B8]">Payouts</span>
-                  <p className="font-bold text-[#16A34A]">{v.total_payouts}</p>
-                </div>
-              </div>
-              <button onClick={() => { setSelectedVendor(v); setVendorActiveTab('Vendor Profile'); }} className="btn btn-secondary btn-sm w-full gap-1 cursor-pointer">
-                <Store size={14} /> Open Vendor Dashboard
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* ── ORDER DETAILS MODAL (All 6 Specified Attributes: Buyer, Vendor, Invoice, Tracking, Refund, Payment) ── */}
       <AnimatePresence>
@@ -768,92 +757,7 @@ export const Marketplace = () => {
         )}
       </AnimatePresence>
 
-      {/* ── VENDOR DASHBOARD MODAL (All 6 Specified Tabs: Vendor Profile, Products, Inventory, Orders, Payments, Ratings) ── */}
-      <AnimatePresence>
-        {selectedVendor && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
-                <div>
-                  <h3 className="text-[16px] font-bold text-[#0F172A]">{selectedVendor.company}</h3>
-                  <p className="text-[11px] font-mono text-[#64748B]">{selectedVendor.vendor_id} • GSTIN: {selectedVendor.gstin}</p>
-                </div>
-                <button onClick={() => setSelectedVendor(null)} className="text-[#94A3B8] hover:text-[#0F172A] text-lg font-bold cursor-pointer">×</button>
-              </div>
 
-              {/* 6 Specified Vendor Profile Tabs */}
-              <div className="flex items-center gap-1 border-b border-[#E8EDF5] overflow-x-auto pb-1 custom-scrollbar">
-                {[
-                  'Vendor Profile',
-                  'Products',
-                  'Inventory',
-                  'Orders',
-                  'Payments',
-                  'Ratings'
-                ].map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setVendorActiveTab(t as any)}
-                    className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all cursor-pointer whitespace-nowrap ${vendorActiveTab === t ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#DCFCE7]' : 'text-[#64748B]'}`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-
-              {/* Tab 1: Vendor Profile */}
-              {vendorActiveTab === 'Vendor Profile' && (
-                <div className="space-y-3 text-[12.5px]">
-                  <p><strong>Contact Person:</strong> {selectedVendor.contact_person}</p>
-                  <p><strong>Phone:</strong> {selectedVendor.phone}</p>
-                  <p><strong>Email:</strong> {selectedVendor.email}</p>
-                  <p><strong>PAN Number:</strong> {selectedVendor.pan}</p>
-                </div>
-              )}
-
-              {/* Tab 2: Products */}
-              {vendorActiveTab === 'Products' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#0F172A]">{selectedVendor.total_products} Listed Products in Marketplace Catalog</p>
-                </div>
-              )}
-
-              {/* Tab 3: Inventory */}
-              {vendorActiveTab === 'Inventory' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#16A34A]">Inventory Stock Level: 100% In Stock</p>
-                </div>
-              )}
-
-              {/* Tab 4: Orders */}
-              {vendorActiveTab === 'Orders' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#2563EB]">{selectedVendor.total_orders} Orders Assigned to Vendor</p>
-                </div>
-              )}
-
-              {/* Tab 5: Payments */}
-              {vendorActiveTab === 'Payments' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#16A34A]">Total Payouts Settled: {selectedVendor.total_payouts}</p>
-                </div>
-              )}
-
-              {/* Tab 6: Ratings */}
-              {vendorActiveTab === 'Ratings' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#D97706]">Vendor Rating Score: ★ {selectedVendor.rating} / 5.0</p>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
     </div>
   );

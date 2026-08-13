@@ -1,9 +1,19 @@
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { Stack, useSegments, router } from "expo-router";
+import { LogBox } from 'react-native';
 
 import { GlobalSchedulerOverlay } from '../src/components/GlobalSchedulerOverlay';
 import { useAuthStore } from '../src/store/authStore';
+
+// Suppress network/server/Axios warnings and console error red-boxes in development
+LogBox.ignoreLogs([
+  'AxiosError',
+  'Request failed',
+  'Error fetching',
+  'Failed to fetch',
+  'NETWORK ERROR',
+]);
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -29,7 +39,7 @@ export default function RootLayout() {
     if (!_hasHydrated) return;
 
     // Check if the user is currently inside the authentication screen flows
-    const inAuthGroup = segments[0] === '(auth)' || segments[0] === '(vendor_auth)';
+    const inAuthGroup = (segments[0] as string) === '(auth)' || (segments[0] as string) === '(vendor_auth)';
     // Onboarding is a special post-registration screen — not an auth screen, but
     // also not a "fully authenticated" screen.  We must NOT redirect away from it.
     const inOnboarding = segments[0] === 'onboarding';

@@ -4,7 +4,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../../src/theme/theme';
 import AppSafeArea from '../../src/components/AppSafeArea';
 
+import { useAuthStore } from '../../src/store/authStore';
+
 export default function TabsLayout() {
+  const role = useAuthStore((state) => state.role);
+  const isPartnerOrVendor = role === 'partner' || role === 'vendor';
+
   return (
     <AppSafeArea edges={['bottom']}>
     <Tabs screenOptions={{
@@ -56,9 +61,24 @@ export default function TabsLayout() {
         }} 
       />
       <Tabs.Screen 
+        name="farmers" 
+        options={{
+          title: 'Farmers',
+          href: isPartnerOrVendor ? undefined : null,
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons 
+              name={focused ? "account-group" : "account-group-outline"} 
+              size={size + 2} 
+              color={color} 
+            />
+          ),
+        }} 
+      />
+      <Tabs.Screen 
         name="marketplace" 
         options={{
           title: 'Marketplace',
+          href: isPartnerOrVendor ? null : undefined,
           tabBarIcon: ({ color, size, focused }) => (
             <MaterialCommunityIcons 
               name={focused ? "storefront" : "storefront-outline"} 

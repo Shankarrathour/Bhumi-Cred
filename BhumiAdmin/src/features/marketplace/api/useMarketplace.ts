@@ -56,3 +56,26 @@ export const useRejectProduct = () => {
     },
   });
 };
+
+export const useAdminOrders = () => {
+  return useQuery({
+    queryKey: ['adminOrders'],
+    queryFn: async (): Promise<any> => {
+      const response = await api.get(`/admin/marketplace-orders`);
+      return response.data;
+    },
+  });
+};
+
+export const useUpdateAdminOrderStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
+      const response = await api.patch(`/admin/marketplace-orders/${orderId}/status`, { status });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminOrders'] });
+    },
+  });
+};

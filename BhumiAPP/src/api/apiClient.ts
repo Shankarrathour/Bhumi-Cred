@@ -8,9 +8,13 @@ console.log("[apiClient] Module Start");
 // export const API_BASE_URL = 'https://zenvora-bhumi.onrender.com/v1';
 // export const API_BASE_URL = 'http://10.251.9.58:8000/v1';
 
+const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ||
-  'https://zenvora-bhumi.onrender.com/v1';
+  envUrl && !envUrl.includes('loca.lt')
+    ? envUrl
+    : 'https://zenvora-bhumi.onrender.com/v1';
+
+console.log('[apiClient] API_BASE_URL:', API_BASE_URL);
 
 // Module-level token state — avoids circular imports with authStore.
 let _accessToken: string | null = null;
@@ -34,6 +38,9 @@ export function setAuthCallbacks(
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
+  headers: {
+    'x-tunnel-skip-browser-warning': 'true',
+  },
 });
 
 // ── Request logging & header adjustments ──────────────────────────────────────
@@ -79,8 +86,14 @@ api.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
+    const isInvalidTokenError =
+      error.response?.data?.error_code === 'INVALID_TOKEN' ||
+      (typeof error.response?.data?.message === 'string' &&
+        error.response?.data?.message.includes('Token is not a farmer token'));
+
     const is401WithRefreshToken =
       error.response?.status === 401 &&
+      !isInvalidTokenError &&
       originalRequest &&
       !originalRequest._retry &&
       !!_refreshToken;
@@ -120,7 +133,7 @@ api.interceptors.response.use(
       }
     } else if (error.request) {
       // Request was made but no response received — network unreachable
-      console.error(
+      console.warn(
         `[API] NETWORK ERROR — no response received.\n` +
         `  URL   : ${API_BASE_URL}${originalRequest?.url}\n` +
         `  Reason: ${error.message}\n` +
@@ -128,7 +141,7 @@ api.interceptors.response.use(
         `  Backend must bind 0.0.0.0:8000 (not 127.0.0.1) to be reachable from a device.`,
       );
     } else {
-      console.error(`[API] REQUEST SETUP ERROR: ${error.message}`);
+      console.warn(`[API] REQUEST SETUP ERROR: ${error.message}`);
     }
 
     if (is401WithRefreshToken) {

@@ -16,7 +16,7 @@ from app.api.router import api_router
 from app.config.settings import settings
 from app.core.exceptions import AppException
 from app.core.logging import setup_logging
-from app.database.connection import connect_db, disconnect_db
+from app.database.connection import connect_db, disconnect_db, ping_db, reconnect_db
 from app.middleware.request_logging import RequestLoggingMiddleware
 
 # ── Logging setup (must be first) ────────────────────────────────────────────
@@ -25,6 +25,30 @@ logger = logging.getLogger(__name__)
 
 
 # ── Lifespan: startup / shutdown ─────────────────────────────────────────────
+
+# ── Background keepalive task ──────────────────────────────────────
+
+_KEEPALIVE_INTERVAL = 4 * 60  # 4 minutes — well under Atlas's 10-min idle timeout
+
+
+async def _db_keepalive() -> None:
+    """Ping MongoDB every 4 minutes.
+    If the ping fails, immediately reconnect so the very next request
+    succeeds instead of hanging and triggering a 502 from the tunnel.
+    """
+    while True:
+        await asyncio.sleep(_KEEPALIVE_INTERVAL)
+        alive = await ping_db()
+        if alive:
+            logger.debug("[keepalive] MongoDB ping OK")
+        else:
+            logger.warning("[keepalive] MongoDB ping failed — reconnecting...")
+            try:
+                await reconnect_db()
+                logger.info("[keepalive] MongoDB reconnect succeeded.")
+            except Exception as exc:
+                logger.error("[keepalive] MongoDB reconnect failed: %s", exc)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,12 +81,21 @@ async def lifespan(app: FastAPI):
     category_svc = CategoryService(category_repo)
     await category_svc.seed_default_categories()
 
+    # Start the MongoDB keepalive background task
+    keepalive_task = asyncio.create_task(_db_keepalive())
+    logger.info("[keepalive] MongoDB keepalive task started (interval: %ds)", _KEEPALIVE_INTERVAL)
+
     try:
         yield
     except (asyncio.CancelledError, KeyboardInterrupt):
         pass
     finally:
         logger.info("Shutting down %s...", settings.APP_NAME)
+        keepalive_task.cancel()
+        try:
+            await keepalive_task
+        except asyncio.CancelledError:
+            pass
         await disconnect_db()
 
 
@@ -195,22 +228,6 @@ def create_app() -> FastAPI:
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Not Found")
         return FileResponse(file_full_path)
-
-    @app.options("/{full_path:path}", include_in_schema=False)
-    async def options_handler(request: Request, full_path: str):
-        origin = request.headers.get("origin") or "http://localhost:5173"
-        req_headers = request.headers.get("access-control-request-headers", "*")
-        from fastapi import Response
-        return Response(
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
-                "Access-Control-Allow-Headers": req_headers,
-                "Access-Control-Max-Age": "86400",
-            },
-        )
 
     # ── Routes ────────────────────────────────────────────────────────────────
     from app.routes.chat import router as chat_router

@@ -292,7 +292,7 @@ export const useWalletStore = create<WalletState>()(
           set({ isLoading: false });
           return false;
         } catch (error) {
-          console.error('[walletStore] sellCarbonCredits error', error);
+          console.warn('[walletStore] sellCarbonCredits error', error);
           set({ isLoading: false });
           return false;
         }

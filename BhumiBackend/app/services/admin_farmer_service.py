@@ -169,7 +169,7 @@ class AdminFarmerService:
         )
 
     async def _to_land_verification_item(self, p: LandParcel) -> AdminLandVerificationItem:
-        farmer = await self._farmers.get_by_id(p.farmer_id) if p.farmer_id else None
+        farmer = await self._farmers.get_by_id(p.farmer_id)
         
         # Build dynamic history timeline
         history_events = []
@@ -204,10 +204,8 @@ class AdminFarmerService:
             )
             
             # Fetch farmer's enrollments to check real status of project assignment and tree registration
-            enrollments = []
-            if p.farmer_id:
-                from app.models.project_enrollment import ProjectEnrollment
-                enrollments = await ProjectEnrollment.find({"farmer_id": str(p.farmer_id)}).to_list()
+            from app.models.project_enrollment import ProjectEnrollment
+            enrollments = await ProjectEnrollment.find({"farmer_id": str(p.farmer_id)}).to_list()
             
             # 4. Project Assigned Event
             assigned_enrollment = next((e for e in enrollments if e.stage_project_assigned), None)
@@ -241,7 +239,7 @@ class AdminFarmerService:
             
         return AdminLandVerificationItem(
             id=str(p.id),
-            farmer_id=str(p.farmer_id) if p.farmer_id else None,
+            farmer_id=str(p.farmer_id),
             farmer_public_id=farmer.farmer_id if farmer else None,
             farmer_name=farmer.full_name if farmer else None,
             farmer_mobile=farmer.mobile if farmer else "",
@@ -365,6 +363,7 @@ class AdminFarmerService:
             total_area_acres=total,
             irrigated_area_acres=irrigated,
             non_irrigated_area_acres=total - irrigated,
+            total_parcels=len(parcels),
         )
 
     async def list_land_verification_queue(self) -> list[AdminLandVerificationItem]:
@@ -388,14 +387,14 @@ class AdminFarmerService:
         parcel.updated_at = datetime.now(timezone.utc)
         await parcel.save()
 
-        if data.status == LandVerificationStatus.VERIFIED and parcel.farmer_id:
+        if data.status == LandVerificationStatus.VERIFIED:
           farmer = await self._farmers.get_by_id(parcel.farmer_id)
           if farmer:
               farmer.total_acreage = await self._land.get_total_acreage(str(farmer.id))
               farmer.updated_at = datetime.now(timezone.utc)
               await farmer.save()
 
-        if data.status == LandVerificationStatus.VERIFIED and parcel.farmer_id:
+        if data.status == LandVerificationStatus.VERIFIED:
             try:
                 await self._notifications.create_notification(
                     str(parcel.farmer_id),
@@ -405,7 +404,7 @@ class AdminFarmerService:
                 )
             except Exception:
                 logger.exception(f"Failed to create land-verified notification for farmer {parcel.farmer_id}")
-        elif data.status == LandVerificationStatus.REJECTED and parcel.farmer_id:
+        elif data.status == LandVerificationStatus.REJECTED:
             message = "Your land verification request has been rejected."
             if data.remarks:
                 message += f" Reason: {data.remarks}"

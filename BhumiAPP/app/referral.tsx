@@ -56,7 +56,7 @@ export default function ReferralScreen() {
           style={styles.backButton}
           activeOpacity={0.7}
         >
-          <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.neutral[800]} />
+          <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.textDark} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Refer & Earn Rewards</Text>
         <View style={{ width: 40 }} />
@@ -90,9 +90,9 @@ export default function ReferralScreen() {
               <MaterialCommunityIcons
                 name={copied ? 'check' : 'content-copy'}
                 size={18}
-                color={copied ? COLORS.emerald[600] : COLORS.neutral[700]}
+                color={copied ? COLORS.success : COLORS.textSecondary}
               />
-              <Text style={[styles.copyBtnText, copied && { color: COLORS.emerald[600] }]}>
+              <Text style={[styles.copyBtnText, copied && { color: COLORS.success }]}>
                 {copied ? 'Copied!' : 'Copy Code'}
               </Text>
             </TouchableOpacity>
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
-    justify: 'center',
+    justifyContent: 'center',
     backgroundColor: '#F8FAFC',
   },
   headerTitle: {
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   bannerCard: {
     borderRadius: 24,
     padding: 20,
-    ...SHADOWS.md,
+    ...SHADOWS.medium,
   },
   bannerBadge: {
     flexDirection: 'row',
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderWidth: 1,
     borderColor: '#E8EDF5',
-    ...SHADOWS.sm,
+    ...SHADOWS.small,
   },
   sectionLabel: {
     fontSize: 11,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E8EDF5',
-    ...SHADOWS.xs,
+    ...SHADOWS.small,
   },
   statNumber: {
     fontSize: 18,
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   },
   stepItem: {
     flexDirection: 'row',
-    alignItems: 'start',
+    alignItems: 'flex-start',
     gap: 12,
     marginBottom: 16,
   },

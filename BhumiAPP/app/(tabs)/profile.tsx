@@ -31,6 +31,7 @@ export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
 
   const user = useAuthStore((state) => state.user);
+  const role = useAuthStore((state) => state.role);
   const logout = useAuthStore((state) => state.logout);
   const fetchProfile = useAuthStore((state) => state.fetchProfile);
   const updateOnboardingData = useAuthStore((state) => state.updateOnboardingData);
@@ -233,9 +234,13 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{user?.fullName || ''}</Text>
+              <Text style={styles.profileName}>
+                {user?.fullName || (role === 'partner' ? 'Eco Partner Organisation' : role === 'vendor' ? 'Eco Vendor Partner' : '')}
+              </Text>
               <Text style={styles.profilePhone}>{user?.mobile ? `+91 ${user.mobile}` : ''}</Text>
-              <Text style={styles.uhidText}>Farmer ID: {user?.farmerId ?? 'N/A'}</Text>
+              <Text style={styles.uhidText}>
+                {role === 'partner' || role === 'vendor' ? 'Partner ID' : 'Farmer ID'}: {user?.farmerId ?? 'PTR-8801'}
+              </Text>
             </View>
           </View>
 

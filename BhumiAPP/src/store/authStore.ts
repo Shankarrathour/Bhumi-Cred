@@ -7,69 +7,7 @@ import { resolveMediaUrl } from '../utils/resolveMediaUrl';
 // import { useWalletStore } from './walletStore';
 // import { useMarketplaceStore } from './marketplaceStore';
 
-export type AuthRole = 'farmer' | 'vendor';
-
-export interface VendorProfile {
-  id: string;
-  vendorId: string | null;
-  name: string | null;
-  fatherName: string | null;
-  email: string | null;
-  phone: string;
-  dob: string | null;
-  gender: string | null;
-  profilePhotoUrl: string | null;
-  businessName: string | null;
-  gstNumber: string | null;
-  yearsOfExperience: number | null;
-  businessDescription: string | null;
-  address: string | null;
-  state: string | null;
-  district: string | null;
-  tehsil: string | null;
-  gramPanchayat: string | null;
-  villageCity: string | null;
-  pincode: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  kycIdentityType: string | null;
-  kycIdentityNumber: string | null;
-  kycDocumentFrontUrl: string | null;
-  kycDocumentBackUrl: string | null;
-  bankAccountNumber: string | null;
-  bankIfsc: string | null;
-  bankHolderName: string | null;
-  status: string; // "Pending" | "Active" | "Rejected" | "Suspended"
-  rejectionReason: string | null;
-  isVerified: boolean;
-  walletBalance: number;
-}
-
-export interface VendorWizardData {
-  name?: string;
-  fatherName?: string;
-  email?: string;
-  dob?: string;
-  gender?: string;
-  businessName?: string;
-  gstNumber?: string;
-  yearsOfExperience?: number;
-  businessDescription?: string;
-  address?: string;
-  state?: string;
-  district?: string;
-  tehsil?: string;
-  gramPanchayat?: string;
-  villageCity?: string;
-  pincode?: string;
-  latitude?: number;
-  longitude?: number;
-  kycIdentityType?: string;
-  kycIdentityNumber?: string;
-  bankAccountNumber?: string;
-  bankIfsc?: string;
-  bankHolderName?: string;
-}
+export type AuthRole = 'farmer' | 'govt_body' | 'partner' | 'vendor';
 
 export interface UserProfile {
   farmerId?: string;
@@ -106,7 +44,7 @@ interface AuthState {
   isAuthenticated: boolean;
   role: AuthRole;
   user: UserProfile | null;
-  vendor: VendorProfile | null;
+  vendor?: any;
   accessToken: string | null;
   refreshToken: string | null;
   onboardingStep: number;
@@ -118,8 +56,6 @@ interface AuthState {
   login: (mobile: string, role?: AuthRole) => Promise<void>;
   verifyOtp: (otp: string) => Promise<boolean>;
   fetchProfile: () => Promise<void>;
-  fetchVendorProfile: () => Promise<void>;
-  updateVendorProfile: (payload: VendorWizardData) => Promise<boolean>;
   logout: () => void;
   updateOnboardingData: (data: Partial<UserProfile>) => void;
   setVerificationStatus: (status: UserProfile['verificationStatus']) => void;
@@ -154,43 +90,7 @@ const defaultUser: UserProfile = {
   occupation: '',
 };
 
-function mapVendorResponse(v: any): VendorProfile {
-  return {
-    id: v.id,
-    vendorId: v.vendor_id ?? null,
-    name: v.name,
-    fatherName: v.father_name,
-    email: v.email,
-    phone: v.phone,
-    dob: v.dob,
-    gender: v.gender,
-    profilePhotoUrl: resolveMediaUrl(v.profile_photo_url) ?? null,
-    businessName: v.business_name,
-    gstNumber: v.gst_number,
-    yearsOfExperience: v.years_of_experience,
-    businessDescription: v.business_description,
-    address: v.address,
-    state: v.state,
-    district: v.district,
-    tehsil: v.tehsil,
-    gramPanchayat: v.gram_panchayat,
-    villageCity: v.village_city,
-    pincode: v.pincode,
-    latitude: v.latitude,
-    longitude: v.longitude,
-    kycIdentityType: v.kyc_identity_type,
-    kycIdentityNumber: v.kyc_identity_number,
-    kycDocumentFrontUrl: resolveMediaUrl(v.kyc_document_front_url) ?? null,
-    kycDocumentBackUrl: resolveMediaUrl(v.kyc_document_back_url) ?? null,
-    bankAccountNumber: v.bank_account_number,
-    bankIfsc: v.bank_ifsc,
-    bankHolderName: v.bank_holder_name,
-    status: v.status,
-    rejectionReason: v.rejection_reason,
-    isVerified: v.is_verified,
-    walletBalance: v.wallet_balance,
-  };
-}
+
 
 function kycStatusToVerification(
   kycStatus: string,
@@ -223,7 +123,8 @@ export const useAuthStore = create<AuthState>()(
       login: async (mobile: string, role: AuthRole = 'farmer') => {
         set({ isLoading: true, error: null, role });
         try {
-          const { data } = await api.post('/auth/login/send-otp', { mobile, role });
+          const apiRole = (role === 'partner' || role === 'govt_body') ? 'vendor' : role;
+          const { data } = await api.post('/auth/login/send-otp', { mobile, role: apiRole });
           set({
             user: { ...defaultUser, mobile },
             isLoading: false,
@@ -252,7 +153,8 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ isLoading: true, error: null });
         try {
-          const { data } = await api.post('/auth/verify-otp', { mobile, otp, role });
+          const apiRole = (role === 'partner' || role === 'govt_body') ? 'vendor' : role;
+          const { data } = await api.post('/auth/verify-otp', { mobile, otp, role: apiRole });
           const { tokens } = data;
 
           setAuthTokens(tokens.access_token, tokens.refresh_token);
@@ -267,29 +169,19 @@ export const useAuthStore = create<AuthState>()(
             },
           );
 
-          if (data.role === 'vendor') {
-            set({
-              accessToken: tokens.access_token,
-              refreshToken: tokens.refresh_token,
-              vendor: mapVendorResponse(data.vendor),
-              isAuthenticated: data.vendor.status === 'Active',
-              isLoading: false,
-            });
-            return true;
-          }
-
-          // ── Farmer path — unchanged behavior ──────────────────────────────
-          const farmer = data.farmer;
-          const verificationStatus = kycStatusToVerification(
-            farmer.kyc_status,
-            farmer.onboarding_completed,
-          );
+          const userRecord = data.farmer || data.vendor || {};
+          const verificationStatus = userRecord.kyc_status
+            ? kycStatusToVerification(
+                userRecord.kyc_status,
+                userRecord.onboarding_completed,
+              )
+            : 'approved';
 
           const updatedUser: UserProfile = {
             ...defaultUser,
-            farmerId: farmer.farmer_id,
-            mobile: farmer.mobile,
-            fullName: farmer.full_name || '',
+            farmerId: userRecord.farmer_id || userRecord.vendor_id || 'ID-001',
+            mobile: userRecord.mobile || userRecord.phone || mobile,
+            fullName: userRecord.full_name || userRecord.name || '',
             verificationStatus,
           };
 
@@ -297,14 +189,13 @@ export const useAuthStore = create<AuthState>()(
             accessToken: tokens.access_token,
             refreshToken: tokens.refresh_token,
             user: updatedUser,
-            isAuthenticated: verificationStatus === 'approved',
+            isAuthenticated: true,
             isLoading: false,
           });
 
-          // Fetch the full farmer profile from the backend (fire-and-forget).
-          // This populates all profile fields (address, photo, email, etc.) beyond
-          // the minimal data returned by the auth token response.
-          get().fetchProfile().catch(() => {});
+          if (data.farmer) {
+            get().fetchProfile().catch(() => {});
+          }
 
           return true;
         } catch (err: any) {
@@ -404,7 +295,6 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             role: 'farmer',
             user: null,
-            vendor: null,
             accessToken: null,
             refreshToken: null,
             onboardingStep: 1,
@@ -508,7 +398,8 @@ export const useAuthStore = create<AuthState>()(
       registerMobile: async (mobile: string, role: AuthRole = 'farmer') => {
         set({ isLoading: true, error: null, role });
         try {
-          const { data } = await api.post('/auth/register/send-otp', { mobile, role });
+          const apiRole = (role === 'partner' || role === 'govt_body') ? 'vendor' : role;
+          const { data } = await api.post('/auth/register/send-otp', { mobile, role: apiRole });
           set({
             user: { ...defaultUser, mobile },
             isLoading: false,
@@ -526,55 +417,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      fetchVendorProfile: async () => {
-        if (get().role !== 'vendor') return;
-        try {
-          const { data } = await api.get('/vendor/auth/me');
-          set({
-            vendor: mapVendorResponse(data),
-            isAuthenticated: data.status === 'Active',
-          });
-        } catch (err) {
-          console.warn('[authStore] fetchVendorProfile failed:', err);
-        }
-      },
 
-      updateVendorProfile: async (payload: VendorWizardData) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { data } = await api.put('/vendor/auth/me', {
-            name: payload.name,
-            father_name: payload.fatherName,
-            email: payload.email,
-            dob: payload.dob,
-            gender: payload.gender,
-            business_name: payload.businessName,
-            gst_number: payload.gstNumber,
-            years_of_experience: payload.yearsOfExperience,
-            business_description: payload.businessDescription,
-            address: payload.address,
-            state: payload.state,
-            district: payload.district,
-            tehsil: payload.tehsil,
-            gram_panchayat: payload.gramPanchayat,
-            village_city: payload.villageCity,
-            pincode: payload.pincode,
-            latitude: payload.latitude,
-            longitude: payload.longitude,
-            kyc_identity_type: payload.kycIdentityType,
-            kyc_identity_number: payload.kycIdentityNumber,
-            bank_account_number: payload.bankAccountNumber,
-            bank_ifsc: payload.bankIfsc,
-            bank_holder_name: payload.bankHolderName,
-          });
-          set({ vendor: mapVendorResponse(data), isLoading: false });
-          return true;
-        } catch (err: any) {
-          const msg = err?.response?.data?.message || 'Unable to submit your details. Please try again.';
-          set({ isLoading: false, error: msg });
-          return false;
-        }
-      },
     }),
     {
       name: 'bhumicred_auth_store',

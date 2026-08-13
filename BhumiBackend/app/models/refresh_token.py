@@ -11,7 +11,8 @@ from app.config.settings import settings
 class TokenOwnerType(str, Enum):
     FARMER = "farmer"
     ADMIN = "admin"
-    VENDOR = "vendor"
+    GOVT = "govt_body"
+    PARTNER = "partner"
 
 
 class RefreshTokenSession(Document):

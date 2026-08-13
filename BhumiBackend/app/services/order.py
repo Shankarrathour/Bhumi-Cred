@@ -182,6 +182,7 @@ class OrderService:
             id=str(order.id),
             order_number=order.order_number,
             status=order.status,
+            status_history=[h.model_dump() for h in order.status_history] if order.status_history else [],
             items=[
                 OrderItemResponse(
                     product_id=str(i.product_id),

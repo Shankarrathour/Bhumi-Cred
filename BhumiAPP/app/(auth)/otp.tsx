@@ -72,23 +72,10 @@ export default function OTPScreen() {
       if (success) {
         const currentRole = useAuthStore.getState().role;
 
-        if (currentRole === 'vendor') {
-          if (flow !== 'login') {
-            // Register flow: a brand-new or wizard-incomplete vendor — continue the wizard.
-            router.replace('/(vendor_auth)/register-wizard');
-          } else {
-            // Login flow: route by admin approval status.
-            const vendorStatus = useAuthStore.getState().vendor?.status;
-            if (vendorStatus === 'Active') {
-              router.replace('/(vendor_tabs)');
-            } else if (vendorStatus === 'Rejected') {
-              router.replace('/(vendor_auth)/rejected');
-            } else if (vendorStatus === 'Suspended') {
-              router.replace('/(vendor_auth)/suspended');
-            } else {
-              router.replace('/(vendor_auth)/pending');
-            }
-          }
+        if (currentRole === 'govt_body' || currentRole === 'partner') {
+          // Govt body and Partner route straight to main tabs
+          useAuthStore.setState({ isAuthenticated: true });
+          router.replace('/(tabs)');
           return;
         }
 
