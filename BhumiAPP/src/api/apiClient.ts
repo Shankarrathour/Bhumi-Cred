@@ -2,17 +2,14 @@ import axios from 'axios';
 
 console.log("[apiClient] Module Start");
 
-// Change to your machine's local IP when running on a physical device or Android emulator.
-// iOS simulator and web can use localhost directly.
-// export const API_BASE_URL = 'http://localhost:8000/v1';
-// export const API_BASE_URL = 'https://zenvora-bhumi.onrender.com/v1';
-// export const API_BASE_URL = 'http://10.251.9.58:8000/v1';
+// ── API Base URL ────────────────────────────────────────────────────────────
+// Physical device on same Wi-Fi → needs LAN IP (not localhost)
+// Current machine IP: 10.193.52.135
+const _FALLBACK_URL = 'http://10.193.52.135:8000/v1';
 
 const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-export const API_BASE_URL =
-  envUrl && !envUrl.includes('loca.lt')
-    ? envUrl
-    : 'https://zenvora-bhumi.onrender.com/v1';
+const isTunnel = envUrl && (envUrl.includes('loca.lt') || envUrl.includes('localtunnel'));
+export const API_BASE_URL = (envUrl && !isTunnel) ? envUrl : _FALLBACK_URL;
 
 console.log('[apiClient] API_BASE_URL:', API_BASE_URL);
 
@@ -38,9 +35,6 @@ export function setAuthCallbacks(
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
-  headers: {
-    'x-tunnel-skip-browser-warning': 'true',
-  },
 });
 
 // ── Request logging & header adjustments ──────────────────────────────────────
@@ -87,7 +81,6 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const isInvalidTokenError =
-      error.response?.data?.error_code === 'INVALID_TOKEN' ||
       (typeof error.response?.data?.message === 'string' &&
         error.response?.data?.message.includes('Token is not a farmer token'));
 
@@ -111,6 +104,26 @@ api.interceptors.response.use(
         }
       }
 
+      // Handle deleted or blocked farmer account (404, 403, 401)
+      const errCode = error.response.data?.error_code;
+      const errMsg = typeof error.response.data?.message === 'string' ? error.response.data.message.toLowerCase() : '';
+      const isFarmerDeletedOrBlocked =
+        errCode === 'FARMER_NOT_FOUND' ||
+        errCode === 'FARMER_BLOCKED' ||
+        (error.response.status === 404 && errMsg.includes('farmer')) ||
+        (error.response.status === 403 && (errMsg.includes('blocked') || errMsg.includes('suspended'))) ||
+        (error.response.status === 401 && errMsg.includes('token is not a farmer token'));
+
+      if (isFarmerDeletedOrBlocked) {
+        try {
+          console.warn('[apiClient] Account deleted/deactivated by admin or token invalidated. Triggering auto-logout...');
+          const authStore = require('../store/authStore').useAuthStore.getState();
+          authStore.logout();
+        } catch (e) {
+          console.log('[apiClient] Failed to auto-logout deleted farmer', e);
+        }
+      }
+
       // Format 422 Validation Errors
       if (error.response.status === 422 && error.response.data?.errors) {
         const validationMsg = error.response.data.errors
@@ -122,14 +135,22 @@ api.interceptors.response.use(
       }
       
       // Server returned an HTTP error (4xx / 5xx)
-      // Suppress console.warn for expected 401 errors that we are about to refresh
-      if (!is401WithRefreshToken) {
+      // Suppress console.warn for expected/handled business flows and token expirations
+      const isExpectedError =
+        error.response.status === 401 ||
+        isInvalidTokenError ||
+        (error.response.status === 404 && error.response.data?.error_code === 'REGISTRATION_NOT_FOUND') ||
+        (error.response.status === 404 && error.response.data?.error_code === 'MOBILE_NOT_REGISTERED');
+
+      if (!isExpectedError) {
         console.warn(
           `[API] ERROR ${error.response.status} ${originalRequest?.url}`,
           JSON.stringify(error.response.data),
         );
       } else {
-        console.log(`[API] 401 for ${originalRequest?.url} - access token expired. Attempting refresh...`);
+        console.log(
+          `[API] Expected error handled for ${originalRequest?.url} (${error.response.status} - ${error.response.data?.error_code || 'N/A'})`
+        );
       }
     } else if (error.request) {
       // Request was made but no response received — network unreachable

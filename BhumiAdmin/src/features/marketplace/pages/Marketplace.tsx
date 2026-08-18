@@ -1,18 +1,68 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ShoppingCart, Plus, RefreshCw, Eye, Check, X, Store, Package,
-  TrendingUp, Tag, Truck, RotateCcw, Star, FileText, User, CreditCard,
-  CheckCircle, Clock, ShieldCheck, Download, AlertTriangle, Cpu, Layers
+  ShoppingCart, RefreshCw, Eye, Store, Package, TrendingUp, RotateCcw, Download, Layers
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
-import { EmptyState, SkeletonTable } from '../../../components/ui/EmptyState';
 import { useMarketplaceProducts, useAdminOrders, useUpdateAdminOrderStatus } from '../api/useMarketplace';
 import { downloadPDFDocument, downloadCSVDocument } from '../../../utils/pdfExporter';
 import toast from 'react-hot-toast';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ModalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
+
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error in Modal:", error, errorInfo);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-2xl max-w-lg w-full shadow-2xl space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-red-500 font-bold text-lg">⚠️</span>
+            <h3 className="text-sm font-bold text-red-800">
+              Modal Render Crash Catch
+            </h3>
+          </div>
+          <div className="text-xs text-red-700 space-y-1">
+            <p className="font-bold">{this.state.error?.toString()}</p>
+            <p className="font-mono text-[10px] bg-red-100/60 p-2 rounded overflow-auto max-h-40 leading-relaxed">
+              {this.state.error?.stack}
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 
 // 8 Specified Marketplace Categories
 export const MARKETPLACE_CATEGORIES = [
@@ -295,7 +345,7 @@ const SEEDED_ORDERS: MarketplaceOrderItem[] = [
   },
 ];
 
-const SEEDED_VENDORS: VendorProfileItem[] = [
+export const SEEDED_VENDORS: VendorProfileItem[] = [
   {
     id: 'VND-101',
     vendor_id: 'VND-101',
@@ -337,14 +387,8 @@ export const Marketplace = () => {
 
   const [productsList] = useState<MarketplaceProductItem[]>(SEEDED_PRODUCTS);
   const [ordersList, setOrdersList] = useState<MarketplaceOrderItem[]>(SEEDED_ORDERS);
-  const [vendorsList] = useState<VendorProfileItem[]>(SEEDED_VENDORS);
-
   // Selected Order for Order Details Modal
   const [selectedOrder, setSelectedOrder] = useState<MarketplaceOrderItem | null>(null);
-
-  // Selected Vendor for Vendor Profile Modal
-  const [selectedVendor, setSelectedVendor] = useState<VendorProfileItem | null>(null);
-  const [vendorActiveTab, setVendorActiveTab] = useState<'Vendor Profile' | 'Products' | 'Inventory' | 'Orders' | 'Payments' | 'Ratings'>('Vendor Profile');
 
   const { refetch } = useMarketplaceProducts();
   const { data: adminOrdersData } = useAdminOrders();
@@ -407,7 +451,7 @@ export const Marketplace = () => {
   const handleProcessRefund = (orderId: string) => {
     setOrdersList(prev => prev.map(o => {
       if (o.id === orderId) {
-        toast.success(`Refund of ₹${o.total_amount.toLocaleString()} processed for Order ${o.order_id}!`);
+        toast.success(`Refund of ₹${(o.total_amount ?? 0).toLocaleString()} processed for Order ${o.order_id}!`);
         return { ...o, payment_status: 'REFUNDED', order_status: 'Returned' };
       }
       return o;
@@ -434,7 +478,7 @@ export const Marketplace = () => {
                 downloadCSVDocument(
                   'Marketplace_Orders_Report.csv',
                   ['Order ID', 'Buyer Name', 'Vendor', 'Product', 'Amount', 'Payment', 'Order Status', 'Tracking ID'],
-                  ordersList.map(o => [o.order_id, o.buyer_name, o.vendor_name, o.product_name, o.total_amount, o.payment_status, o.order_status, o.tracking_id])
+                  ordersList.map(o => [o.order_id, o.buyer_name, o.vendor_name, o.product_name, o.total_amount ?? 0, o.payment_status, o.order_status, o.tracking_id])
                 );
                 toast.success('Exported Marketplace Orders CSV!');
               }}
@@ -626,7 +670,7 @@ export const Marketplace = () => {
                     </td>
                     <td className="py-3 px-4 text-[12.5px] font-semibold text-[#0F172A]">{o.product_name}</td>
                     <td className="py-3 px-4 text-[12px] text-[#475569]">{o.vendor_name}</td>
-                    <td className="py-3 px-4 text-[13px] font-extrabold text-[#16A34A]">₹{o.total_amount.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-[13px] font-extrabold text-[#16A34A]">₹{(o.total_amount ?? 0).toLocaleString()}</td>
                     <td className="py-3 px-4">
                       <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${o.payment_status === 'PAID' ? 'bg-[#F0FDF4] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#EF4444]'}`}>
                         {o.payment_status}
@@ -653,15 +697,11 @@ export const Marketplace = () => {
       )}
 
 
-      {/* ── ORDER DETAILS MODAL (All 6 Specified Attributes: Buyer, Vendor, Invoice, Tracking, Refund, Payment) ── */}
-      <AnimatePresence>
-        {selectedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-5"
+      {selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <ModalErrorBoundary>
+            <div
+              className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-5 my-auto max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
               <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
                 <div className="flex items-center gap-2">
@@ -697,7 +737,7 @@ export const Marketplace = () => {
                 {/* 4. Payment */}
                 <div className="p-3.5 bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl space-y-1">
                   <span className="text-[10.5px] font-bold uppercase text-[#16A34A]">4. Payment & Amount</span>
-                  <p className="text-[16px] font-extrabold text-[#16A34A]">₹{selectedOrder.total_amount.toLocaleString()}</p>
+                  <p className="text-[16px] font-extrabold text-[#16A34A]">₹{(selectedOrder.total_amount ?? 0).toLocaleString()}</p>
                   <p className="text-[11px] text-[#475569]">Mode: {selectedOrder.payment_mode} ({selectedOrder.payment_status})</p>
                 </div>
               </div>
@@ -741,7 +781,7 @@ export const Marketplace = () => {
                         'Buyer': selectedOrder.buyer_name,
                         'Vendor': selectedOrder.vendor_name,
                         'Product': selectedOrder.product_name,
-                        'Total Amount': `₹${selectedOrder.total_amount.toLocaleString()}`,
+                        'Total Amount': `₹${(selectedOrder.total_amount ?? 0).toLocaleString()}`,
                         'Payment Mode': selectedOrder.payment_mode,
                       },
                     });
@@ -752,10 +792,10 @@ export const Marketplace = () => {
                   <Download size={14} /> 6. Download Invoice PDF
                 </button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+            </div>
+          </ModalErrorBoundary>
+        </div>
+      )}
 
 
 

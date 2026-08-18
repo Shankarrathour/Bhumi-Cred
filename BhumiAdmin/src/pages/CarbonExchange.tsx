@@ -5,7 +5,6 @@ import {
   TrendingUp, 
   Users, 
   DollarSign, 
-  Percent, 
   Clock, 
   Plus, 
   Search, 
@@ -83,7 +82,7 @@ export const CarbonExchangePage: React.FC = () => {
   const [creditsSold, setCreditsSold] = useState(154200);
   const [liveBuyersCount, setLiveBuyersCount] = useState(12);
   const [todayRate, setTodayRate] = useState(1285);
-  const [averageRate, setAverageRate] = useState(1245);
+  const [averageRate] = useState(1245);
   const [priceHistory, setPriceHistory] = useState<number[]>([1240, 1245, 1250, 1262, 1270, 1285]);
   const [priceChange, setPriceChange] = useState(2.4);
 

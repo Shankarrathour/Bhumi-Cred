@@ -32,122 +32,13 @@ export interface AdminProjectItem {
   status: 'Draft' | 'Ongoing' | 'MRV' | 'Verification' | 'Issued' | 'Completed';
 }
 
-const SEEDED_PROJECTS: AdminProjectItem[] = [
-  {
-    id: 'PRJ-1042',
-    project_code: 'PRJ-1042',
-    name: 'MP Agroforestry Carbon Sink Drive',
-    state: 'Madhya Pradesh',
-    district: 'Sehore',
-    project_type: 'Agroforestry & Reforestation',
-    total_area_acres: 42000,
-    total_farmers: 2850,
-    govt_partner: 'MP Forest Dept',
-    corporate_partner: 'AgriCorp Solutions Pvt Ltd',
-    insurance_cover_lakhs: 85.0,
-    estimated_carbon_credits: 420000,
-    credits_issued: 310000,
-    revenue_generated_lakhs: 465.0,
-    progress_percentage: 74,
-    status: 'Ongoing',
-  },
-  {
-    id: 'PRJ-2089',
-    project_code: 'PRJ-2089',
-    name: 'Gujarat Coastal Mangrove Reforestation',
-    state: 'Gujarat',
-    district: 'Kutch',
-    project_type: 'Blue Carbon & Mangroves',
-    total_area_acres: 18500,
-    total_farmers: 1240,
-    govt_partner: 'Gujarat Biofuel Authority',
-    corporate_partner: 'EcoShield Climate Corp',
-    insurance_cover_lakhs: 42.5,
-    estimated_carbon_credits: 210000,
-    credits_issued: 180000,
-    revenue_generated_lakhs: 270.0,
-    progress_percentage: 86,
-    status: 'MRV',
-  },
-  {
-    id: 'PRJ-3041',
-    project_code: 'PRJ-3041',
-    name: 'Maharashtra Farmer Biochar Sequestration',
-    state: 'Maharashtra',
-    district: 'Nashik',
-    project_type: 'Soil Organic Biochar',
-    total_area_acres: 25000,
-    total_farmers: 1920,
-    govt_partner: 'MH Agriculture Dept',
-    corporate_partner: 'CarbonX Global Labs',
-    insurance_cover_lakhs: 60.0,
-    estimated_carbon_credits: 280000,
-    credits_issued: 95000,
-    revenue_generated_lakhs: 142.5,
-    progress_percentage: 34,
-    status: 'Verification',
-  },
-  {
-    id: 'PRJ-4012',
-    project_code: 'PRJ-4012',
-    name: 'Rajasthan Arid Agro-Forestry Belt',
-    state: 'Rajasthan',
-    district: 'Barmer',
-    project_type: 'Arid Plantation',
-    total_area_acres: 12000,
-    total_farmers: 890,
-    govt_partner: 'Rajasthan Desert Board',
-    corporate_partner: 'GreenFields NGO',
-    insurance_cover_lakhs: 24.0,
-    estimated_carbon_credits: 110000,
-    credits_issued: 110000,
-    revenue_generated_lakhs: 165.0,
-    progress_percentage: 100,
-    status: 'Issued',
-  },
-  {
-    id: 'PRJ-5090',
-    project_code: 'PRJ-5090',
-    name: 'Chhattisgarh Tribal Bamboo Carbon Drive',
-    state: 'Chhattisgarh',
-    district: 'Dhamtari',
-    project_type: 'Bamboo Afforestation',
-    total_area_acres: 15000,
-    total_farmers: 980,
-    govt_partner: 'CG Tribal Dept',
-    corporate_partner: 'BambooTech India',
-    insurance_cover_lakhs: 30.0,
-    estimated_carbon_credits: 150000,
-    credits_issued: 150000,
-    revenue_generated_lakhs: 210.0,
-    progress_percentage: 100,
-    status: 'Completed',
-  },
-  {
-    id: 'PRJ-6011',
-    project_code: 'PRJ-6011',
-    name: 'UP Agro-Solar Carbon Project Baseline',
-    state: 'Uttar Pradesh',
-    district: 'Lucknow',
-    project_type: 'Agri-Solar',
-    total_area_acres: 8000,
-    total_farmers: 540,
-    govt_partner: 'UP Renewable Energy',
-    corporate_partner: 'SolarGrid Ltd',
-    insurance_cover_lakhs: 18.0,
-    estimated_carbon_credits: 80000,
-    credits_issued: 0,
-    revenue_generated_lakhs: 0,
-    progress_percentage: 10,
-    status: 'Draft',
-  },
-];
+const SEEDED_PROJECTS: AdminProjectItem[] = [];
 
 export const ProjectManagement = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [projectsList, setProjectsList] = useState<AdminProjectItem[]>(SEEDED_PROJECTS);
+  const [userCreatedProjects, setUserCreatedProjects] = useState<AdminProjectItem[]>([]);
 
   // Modal State for Creating New Project
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -166,28 +57,38 @@ export const ProjectManagement = () => {
   const { data: apiProjects, isLoading, refetch, isFetching } = useProjects();
 
   const projects = useMemo(() => {
-    if (apiProjects && Array.isArray(apiProjects) && apiProjects.length > 0) {
-      return apiProjects.map((item: any) => ({
-        id: item.id || `PRJ-${Math.floor(1000 + Math.random() * 9000)}`,
-        project_code: `PRJ-${String(item.id || '1042').slice(-4).toUpperCase()}`,
-        name: item.name || 'Afforestation Project',
+    const fetched: AdminProjectItem[] = (apiProjects || []).map((item: any) => {
+      let mappedStatus: AdminProjectItem['status'] = 'Ongoing';
+      const st = (item.status || item.status_label || '').toLowerCase();
+      if (st.includes('draft') || st.includes('planning')) mappedStatus = 'Draft';
+      else if (st.includes('mrv') || st.includes('monitoring')) mappedStatus = 'MRV';
+      else if (st.includes('verification')) mappedStatus = 'Verification';
+      else if (st.includes('issued')) mappedStatus = 'Issued';
+      else if (st.includes('completed')) mappedStatus = 'Completed';
+      else mappedStatus = 'Ongoing';
+
+      return {
+        id: item.project_id || item.id || `PRJ-${Math.floor(1000 + Math.random() * 9000)}`,
+        project_code: (item.project_id || item.id || 'PRJ-1042').toUpperCase(),
+        name: item.title || item.name || 'Afforestation Project',
         state: item.state || 'Madhya Pradesh',
         district: item.district || 'Sehore',
-        project_type: item.project_type || 'Agroforestry',
-        total_area_acres: item.total_area_acres || 15000,
-        total_farmers: item.total_farmers || 1200,
-        govt_partner: item.govt_partner || 'State Forest Department',
-        corporate_partner: item.corporate_partner || 'Carbon Partner',
+        project_type: item.category || item.project_type || 'Agroforestry & Reforestation',
+        total_area_acres: item.target_area_acres || item.total_area_acres || 15000,
+        total_farmers: item.farmers_enrolled || item.total_farmers || 0,
+        govt_partner: item.ngo_partner || item.govt_partner || 'State Forest Department',
+        corporate_partner: item.corporate_partner || 'Green Shield Carbon',
         insurance_cover_lakhs: item.insurance_cover_lakhs || 45.0,
-        estimated_carbon_credits: item.estimated_carbon_credits || 150000,
-        credits_issued: item.credits_issued || 90000,
-        revenue_generated_lakhs: item.revenue_generated_lakhs || 135.0,
-        progress_percentage: item.progress_percentage || 60,
-        status: (item.status as any) || 'Ongoing',
-      }));
-    }
-    return projectsList;
-  }, [apiProjects, projectsList]);
+        estimated_carbon_credits: item.estimated_carbon_impact || item.estimated_carbon_credits || 150000,
+        credits_issued: item.credits_issued || 0,
+        revenue_generated_lakhs: item.revenue_generated_lakhs || 0,
+        progress_percentage: item.progress_percent || item.progress_percentage || 50,
+        status: mappedStatus,
+      };
+    });
+
+    return [...fetched, ...userCreatedProjects];
+  }, [apiProjects, userCreatedProjects]);
 
   const filtered = useMemo(() => {
     return projects.filter((p) => {
@@ -235,7 +136,7 @@ export const ProjectManagement = () => {
       status: newProject.status as any,
     };
 
-    setProjectsList(prev => [createdItem, ...prev]);
+    setUserCreatedProjects(prev => [createdItem, ...prev]);
     toast.success(`Project "${createdItem.name}" (${createdItem.project_code}) created successfully!`);
     setIsCreateModalOpen(false);
     setNewProject({

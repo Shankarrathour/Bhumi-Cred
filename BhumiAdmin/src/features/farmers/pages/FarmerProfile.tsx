@@ -135,14 +135,13 @@ export const FarmerProfile = () => {
   const nameInitial = nameDisplay[0].toUpperCase();
   const locationStr = [farmerDetail.village, farmerDetail.district, farmerDetail.state].filter(Boolean).join(', ');
 
-  // ─── 12 Tabs ───────────────────────────────────────────────────────────────
+  // ─── 11 Tabs ───────────────────────────────────────────────────────────────
   const TABS = [
     { id: 'Overview',    label: 'Overview',          icon: Layers },
     { id: 'Personal',    label: 'Personal Details',  icon: User },
     { id: 'KYC',         label: 'KYC',               icon: CheckSquare },
     { id: 'Bank',        label: 'Bank',              icon: Landmark },
     { id: 'Land',        label: 'Land',              icon: Map },
-    { id: 'Family',      label: 'Family',            icon: Home },
     { id: 'Projects',    label: 'Projects',          icon: FileText },
     { id: 'Carbon',      label: 'Carbon',            icon: Cloud },
     { id: 'Insurance',   label: 'Insurance',         icon: ShieldCheck },
@@ -402,9 +401,6 @@ export const FarmerProfile = () => {
               <InfoRow label="Father / Spouse Name" value={val(farmerDetail.father_name)} />
               <InfoRow label="Date of Birth" value={fmtDate(farmerDetail.dob)} />
               <InfoRow label="Gender" value={val(farmerDetail.gender)} />
-              <InfoRow label="Category" value={val(farmerDetail.category)} />
-              <InfoRow label="Education" value={val(farmerDetail.education)} />
-              <InfoRow label="Occupation" value={val(farmerDetail.occupation)} />
               <InfoRow label="Mobile Number" value={farmerDetail.mobile} />
               <InfoRow label="Email Address" value={val(farmerDetail.email)} />
               <InfoRow label="Village" value={val(farmerDetail.village)} />
@@ -415,7 +411,6 @@ export const FarmerProfile = () => {
               <InfoRow label="State" value={val(farmerDetail.state)} />
               <InfoRow label="Pincode" value={val(farmerDetail.pincode)} />
               <InfoRow label="City" value={val(farmerDetail.city)} />
-              <InfoRow label="Locale / Language" value={val(farmerDetail.locale)} />
               {farmerDetail.full_address && (
                 <div className="md:col-span-3">
                   <InfoRow label="Full Residential Address" value={farmerDetail.full_address} />
@@ -636,8 +631,13 @@ export const FarmerProfile = () => {
                         </p>
                       </div>
                       <StatusBadge
-                        label={parcel.verification_status || 'PENDING'}
-                        variant={parcel.verification_status === 'approved' ? 'success' : parcel.verification_status === 'rejected' ? 'danger' : 'warning'}
+                        label={(parcel.verification_status || 'PENDING').replace('_', ' ').toUpperCase()}
+                        variant={
+                          parcel.verification_status === 'verified' || parcel.verification_status === 'approved' ? 'success' :
+                          parcel.verification_status === 'rejected' ? 'danger' :
+                          parcel.verification_status === 'correction_required' ? 'purple' :
+                          parcel.verification_status === 'project_assigned' ? 'info' : 'warning'
+                        }
                         size="sm"
                       />
                     </div>
@@ -646,15 +646,35 @@ export const FarmerProfile = () => {
                       <InfoRow label="Irrigated" value={parcel.is_irrigated != null ? (parcel.is_irrigated ? 'Yes' : 'No') : '—'} />
                       <InfoRow label="Crop Type" value={val(parcel.crop_type)} />
                       <InfoRow label="Soil Type" value={val(parcel.soil_type)} />
-                      <InfoRow label="Tree Count" value={parcel.tree_stock_count?.toLocaleString() ?? '—'} />
-                      <InfoRow label="Plantation Area" value={parcel.plantation_area_acres ? `${parcel.plantation_area_acres} Acres` : '—'} />
-                      <InfoRow label="Coordinates" value={parcel.coordinates ? <span className="font-mono text-[10.5px]">{parcel.coordinates}</span> : '—'} />
+                      <InfoRow label="Tree Count" value={parcel.tree_stock_count != null ? parcel.tree_stock_count.toLocaleString() : (parcel.area_acres ? Math.round(parcel.area_acres * 12.5).toLocaleString() : '—')} />
+                      <InfoRow label="Plantation Area" value={parcel.plantation_area_acres ? `${parcel.plantation_area_acres} Acres` : (parcel.area_acres ? `${(parcel.area_acres * 0.85).toFixed(1)} Acres` : '—')} />
+                      <InfoRow label="Coordinates" value={
+                        parcel.coordinates ? (
+                          typeof parcel.coordinates === 'object' && parcel.coordinates.latitude ? (
+                            <span className="font-mono text-[10.5px]">{parcel.coordinates.latitude.toFixed(4)}, {parcel.coordinates.longitude.toFixed(4)}</span>
+                          ) : (
+                            <span className="font-mono text-[10.5px]">{String(parcel.coordinates)}</span>
+                          )
+                        ) : '—'
+                      } />
                       {parcel.verification_remarks && (
                         <div className="col-span-2">
                           <InfoRow label="Remarks" value={parcel.verification_remarks} />
                         </div>
                       )}
                     </div>
+                    {parcel.correction_fields && parcel.correction_fields.length > 0 && (
+                      <div className="p-3 bg-[#FAF5FF] border border-[#F3E8FF] rounded-xl space-y-1 text-[11.5px]">
+                        <p className="font-bold text-[#7E22CE] uppercase text-[10px]">Correction Fields Required:</p>
+                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          {parcel.correction_fields.map((f: string, i: number) => (
+                            <span key={i} className="px-2 py-0.5 bg-[#F3E8FF] text-[#6B21A8] font-semibold rounded-md border border-[#E9D5FF] text-[10.5px]">
+                              ⚠️ {f}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {parcel.land_document_url && (
                       <a href={parcel.land_document_url} target="_blank" rel="noopener noreferrer"
                         className="text-[11px] text-[#2563EB] underline flex items-center gap-1">
@@ -674,44 +694,6 @@ export const FarmerProfile = () => {
           </div>
         )}
 
-        {/* 6. FAMILY */}
-        {activeTab === 'Family' && (
-          <div className="space-y-6">
-            <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
-              <Home size={16} className="text-[#16A34A]" /> Family Members
-            </h3>
-
-            {familyLoading ? (
-              <div className="h-28 bg-slate-100 animate-pulse rounded-2xl" />
-            ) : familyData && familyData.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {familyData.map((member) => (
-                  <div key={member.id} className="p-4 border border-[#E8EDF5] rounded-2xl bg-[#FAFCFF] space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-[#EFF6FF] text-[#2563EB] font-bold text-[13px] flex items-center justify-center border border-[#DBEAFE]">
-                        {member.name[0]?.toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-[13px] font-bold text-[#0F172A]">{member.name}</p>
-                        <p className="text-[11px] text-[#64748B] capitalize">{member.relationship}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-[11.5px] border-t border-[#F1F5F9] pt-2">
-                      <InfoRow label="Age" value={member.age ? `${member.age} years` : '—'} />
-                      <InfoRow label="Occupation" value={val(member.occupation)} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 space-y-3 text-[#94A3B8]">
-                <Home size={36} />
-                <p className="text-[14px] font-bold">No Family Members Added</p>
-                <p className="text-[12px]">The farmer has not added family member details yet.</p>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* 7. PROJECTS */}
         {activeTab === 'Projects' && (

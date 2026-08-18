@@ -240,14 +240,20 @@ class ProjectsService:
     async def get_hub(self, farmer_id: str) -> ProjectsHubResponse:
         farmer = await self._get_farmer(farmer_id)
         enrollments = await self._enrollments.get_active_by_farmer(farmer_id)
+
+        # NOTE: No auto-enrollment here. The admin must explicitly assign a farmer
+        # to a project via the Carbon Programs panel (POST /admin/projects/{id}/assign).
+        # Auto-enrollment was removed because it created fake "all-completed" records
+        # that blocked real admin assignment and showed false data in the farmer app.
+
         active = enrollments[0] if enrollments else None
 
         contribution = ContributionResponse(
-            total_land_added_acres=farmer.total_acreage + (active.land_area_acres if active else 0.0),
-            trees_registered=farmer.total_trees + (active.registered_trees if active else 0),
+            total_land_added_acres=max(farmer.total_acreage, active.land_area_acres if active else 0.0),
+            trees_registered=max(farmer.total_trees, active.registered_trees if active else 0),
             trees_insured=active.insured_trees if active else 0,
             sustainability_score=active.sustainability_score if active else farmer.sustainability_score,
-            estimated_carbon_impact=farmer.carbon_credits_generated + (active.estimated_carbon_impact if active else 0.0),
+            estimated_carbon_impact=max(farmer.carbon_credits_generated, active.estimated_carbon_impact if active else 0.0),
             green_family_count=active.green_family_count if active else 0,
         )
         enrollment_map = {item.project_id: item for item in enrollments}
@@ -467,13 +473,35 @@ class ProjectsService:
     async def admin_assign_project(
         self, project_id: str, data: AdminAssignProjectRequest
     ) -> EnrollmentResponse:
-        """Admin directly assigns a farmer to a project (creates enrollment on their behalf)."""
+        """Admin directly assigns a farmer to a project (creates enrollment on their behalf).
+        If the farmer is already enrolled (active or inactive), the enrollment is updated/reactivated
+        so that admin assignment always immediately reflects in the farmer app.
+        """
         farmer = await self._get_farmer(data.farmer_id)
         project = await self._project(project_id)
 
         existing = await self._enrollments.get_by_farmer_and_project(data.farmer_id, project_id)
         if existing:
-            raise ConflictException("Farmer is already enrolled in this project.", "PROJECT_ALREADY_JOINED")
+            # Reactivate / refresh the existing enrollment rather than blocking the admin.
+            # This handles both: genuine duplicates (idempotent re-assign) and stale
+            # auto-enrollments that the removed get_hub hack previously created.
+            existing.status = EnrollmentStatus.ACTIVE
+            existing.current_stage = ProjectStage.REGISTERED
+            existing.progress_percent = max(existing.progress_percent, 10)
+            existing.land_area_acres = data.land_area_acres
+            existing.is_active = True
+            existing.stage_project_assigned = True
+            existing.stage_land_registered = await self._land.get_total_acreage(data.farmer_id) > 0 or farmer.total_acreage > 0
+            existing.updated_at = datetime.now(timezone.utc)
+            await existing.save()
+            return EnrollmentResponse(
+                enrollment_id=str(existing.id),
+                project_id=project_id,
+                status=existing.status,
+                current_stage=existing.current_stage,
+                progress_percent=existing.progress_percent,
+                message=f"Farmer re-assigned to project '{project.title}' by admin.",
+            )
 
         land_total = await self._land.get_total_acreage(data.farmer_id)
         registered_land = max(land_total, farmer.total_acreage, data.land_area_acres)

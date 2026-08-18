@@ -7,7 +7,7 @@ import { resolveMediaUrl } from '../utils/resolveMediaUrl';
 // import { useWalletStore } from './walletStore';
 // import { useMarketplaceStore } from './marketplaceStore';
 
-export type AuthRole = 'farmer' | 'govt_body' | 'partner' | 'vendor';
+export type AuthRole = 'farmer' | 'govt_body' | 'partner';
 
 export interface UserProfile {
   farmerId?: string;
@@ -44,7 +44,6 @@ interface AuthState {
   isAuthenticated: boolean;
   role: AuthRole;
   user: UserProfile | null;
-  vendor?: any;
   accessToken: string | null;
   refreshToken: string | null;
   onboardingStep: number;
@@ -57,8 +56,10 @@ interface AuthState {
   verifyOtp: (otp: string) => Promise<boolean>;
   fetchProfile: () => Promise<void>;
   logout: () => void;
+  deleteAccount: () => Promise<void>;
   updateOnboardingData: (data: Partial<UserProfile>) => void;
   setVerificationStatus: (status: UserProfile['verificationStatus']) => void;
+  setIsActive: (isActive: boolean) => void;
   setOnboardingStep: (step: number) => void;
   completeOnboarding: () => Promise<void>;
   registerMobile: (mobile: string, role?: AuthRole) => Promise<void>;
@@ -96,9 +97,10 @@ function kycStatusToVerification(
   kycStatus: string,
   onboardingCompleted: boolean,
 ): UserProfile['verificationStatus'] {
-  if (kycStatus === 'approved') return 'approved';
-  if (kycStatus === 'rejected') return 'rejected';
-  if (kycStatus === 'pending' || onboardingCompleted) return 'pending';
+  const s = (kycStatus || '').toLowerCase();
+  if (s === 'approved' || s === 'verified') return 'approved';
+  if (s === 'rejected') return 'rejected';
+  if (s === 'pending' || onboardingCompleted) return 'pending';
   return 'unverified';
 }
 
@@ -108,7 +110,6 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       role: 'farmer',
       user: null,
-      vendor: null,
       accessToken: null,
       refreshToken: null,
       onboardingStep: 1,
@@ -123,7 +124,7 @@ export const useAuthStore = create<AuthState>()(
       login: async (mobile: string, role: AuthRole = 'farmer') => {
         set({ isLoading: true, error: null, role });
         try {
-          const apiRole = (role === 'partner' || role === 'govt_body') ? 'vendor' : role;
+          const apiRole = role;
           const { data } = await api.post('/auth/login/send-otp', { mobile, role: apiRole });
           set({
             user: { ...defaultUser, mobile },
@@ -144,8 +145,6 @@ export const useAuthStore = create<AuthState>()(
 
       verifyOtp: async (otp: string) => {
         const role = get().role;
-        // login()/registerMobile() always stash the pending mobile on `user.mobile`
-        // (a temporary holding place pre-verification) regardless of role.
         const mobile = get().user?.mobile;
         if (!mobile) {
           set({ error: 'Mobile number not set.' });
@@ -153,7 +152,7 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ isLoading: true, error: null });
         try {
-          const apiRole = (role === 'partner' || role === 'govt_body') ? 'vendor' : role;
+          const apiRole = role;
           const { data } = await api.post('/auth/verify-otp', { mobile, otp, role: apiRole });
           const { tokens } = data;
 
@@ -199,7 +198,7 @@ export const useAuthStore = create<AuthState>()(
 
           return true;
         } catch (err: any) {
-          const msg = err?.response?.data?.message || 'Invalid OTP.';
+          const msg = err?.response?.data?.message || 'OTP verification failed. Please try again.';
           set({ isLoading: false, error: msg });
           return false;
         }
@@ -215,6 +214,10 @@ export const useAuthStore = create<AuthState>()(
             api.get('/farmer/address'),
           ]);
 
+          if (profileRes.status === 'rejected') {
+            throw profileRes.reason;
+          }
+
           const p = profileRes.status === 'fulfilled' ? profileRes.value.data?.data : null;
           const a = addressRes.status === 'fulfilled' ? addressRes.value.data?.data : null;
           const addr = a?.current_address;
@@ -226,7 +229,7 @@ export const useAuthStore = create<AuthState>()(
           });
 
           const computedVerificationStatus = p ? kycStatusToVerification(p.kyc_status, p.onboarding_completed) : currentUser.verificationStatus;
-          const computedIsActive = p != null ? (p.is_active ?? true) : true;
+          const computedIsActive = p != null ? (p.is_active ?? true) : (currentUser.isActive ?? true);
 
           console.log('[authStore] fetchProfile computed:', {
             verificationStatus: computedVerificationStatus,
@@ -236,6 +239,7 @@ export const useAuthStore = create<AuthState>()(
           const updatedUser: UserProfile = {
             ...currentUser,
             verificationStatus: computedVerificationStatus,
+            isActive: computedIsActive,
             farmerId: p?.farmer_id || currentUser.farmerId,
             fullName: p?.full_name || currentUser.fullName,
             fatherName: p?.father_name || currentUser.fatherName,
@@ -260,15 +264,31 @@ export const useAuthStore = create<AuthState>()(
             tehsil: addr?.tehsil || currentUser.tehsil,
           };
 
+          if (computedIsActive === false && currentUser.isActive !== false) {
+            try {
+              require('./notificationStore').useNotificationStore.getState().addNotification({
+                title: 'Account Suspended by Admin ⚠️',
+                message: 'Your farmer profile account has been suspended by the Admin. Features and transactions are temporarily locked.',
+                type: 'system'
+              });
+            } catch (e) {
+              console.log('Error adding suspension notification', e);
+            }
+          }
+
           const walletBal: number = p?.wallet_balance ?? get().walletBalance;
           const ecoScore: number = p?.sustainability_score ?? get().sustainabilityScore;
+
+          if (computedIsActive === false) {
+            console.warn('[authStore] Farmer account is inactive/deleted. Auto logging out...');
+            get().logout();
+            return;
+          }
 
           set({
             user: updatedUser,
             walletBalance: walletBal,
             sustainabilityScore: ecoScore,
-            // Promote isAuthenticated when admin has approved the farmer.
-            // This unblocks routing from /onboarding step 4 to /(tabs) on next app open.
             ...(computedVerificationStatus === 'approved' && computedIsActive !== false
               ? { isAuthenticated: true }
               : {}),
@@ -276,19 +296,47 @@ export const useAuthStore = create<AuthState>()(
 
           // Sync wallet balance into walletStore so the Wallet screen reflects real data.
           require('./walletStore').useWalletStore.getState().syncBalance(walletBal);
-        } catch (err) {
+        } catch (err: any) {
           console.warn('[authStore] fetchProfile failed:', err);
+          const status = err?.response?.status;
+          const errCode = err?.response?.data?.error_code;
+          if (status === 404 || status === 401 || status === 403 || errCode === 'FARMER_NOT_FOUND' || errCode === 'FARMER_BLOCKED') {
+            get().logout();
+          }
         }
       },
 
       logout: async () => {
         const { refreshToken } = get();
+        // 1. Immediately clear local auth tokens and Zustand state
+        setAuthTokens(null, null);
+        set({
+          isAuthenticated: false,
+          role: 'farmer',
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          onboardingStep: 1,
+          otpDebug: null,
+        });
+
+        // 2. Clear feature stores
+        try { require('./marketplaceStore').useMarketplaceStore.getState().clearCart(); } catch {}
+        try { require('./walletStore').useWalletStore.getState().resetWallet(); } catch {}
+        try { require('./landStore').useLandStore.getState().resetLandStore(); } catch {}
+        try { require('./notificationStore').useNotificationStore.getState().clearNotifications(); } catch {}
+
+        // 3. Fire-and-forget backend notification
+        if (refreshToken) {
+          api.post('/auth/logout', { refresh_token: refreshToken }).catch(() => {});
+        }
+      },
+
+      deleteAccount: async () => {
         try {
-          if (refreshToken) {
-            await api.post('/auth/logout', { refresh_token: refreshToken });
-          }
-        } catch {
-          // Proceed regardless — clear local state.
+          await api.delete('/farmer/account');
+        } catch (err) {
+          console.warn('[authStore] deleteAccount API error:', err);
         } finally {
           setAuthTokens(null, null);
           set({
@@ -300,10 +348,10 @@ export const useAuthStore = create<AuthState>()(
             onboardingStep: 1,
             otpDebug: null,
           });
-          require('./marketplaceStore').useMarketplaceStore.getState().clearCart();
-          require('./walletStore').useWalletStore.getState().resetWallet();
-          require('./landStore').useLandStore.getState().resetLandStore();
-          require('./notificationStore').useNotificationStore.getState().clearNotifications();
+          try { require('./marketplaceStore').useMarketplaceStore.getState().clearCart(); } catch {}
+          try { require('./walletStore').useWalletStore.getState().resetWallet(); } catch {}
+          try { require('./landStore').useLandStore.getState().resetLandStore(); } catch {}
+          try { require('./notificationStore').useNotificationStore.getState().clearNotifications(); } catch {}
         }
       },
 
@@ -325,6 +373,27 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      setIsActive: (isActive: boolean) => {
+        const currentUser = get().user;
+        const prevIsActive = currentUser?.isActive;
+        const newUser = currentUser
+          ? { ...currentUser, isActive }
+          : { ...defaultUser, isActive };
+        set({ user: newUser });
+
+        if (isActive === false && prevIsActive !== false) {
+          try {
+            require('./notificationStore').useNotificationStore.getState().addNotification({
+              title: 'Account Suspended by Admin ⚠️',
+              message: 'Your farmer profile account has been suspended by the Admin. Features and transactions are temporarily locked.',
+              type: 'system'
+            });
+          } catch (e) {
+            console.log('Error adding suspension notification', e);
+          }
+        }
+      },
+
       setOnboardingStep: (step: number) => {
         set({ onboardingStep: step });
       },
@@ -333,18 +402,21 @@ export const useAuthStore = create<AuthState>()(
         const user = get().user;
         if (!user) return;
 
-        // Optimistic: advance to success screen immediately (original behavior).
         set({
           user: { ...user, verificationStatus: 'pending' },
           onboardingStep: 4,
         });
 
-        // Background: persist to backend. Errors are logged but do not block UX.
+        // Background: persist to backend database.
         try {
           const profilePayload: Record<string, any> = {
             full_name: user.fullName || undefined,
             father_name: user.fatherName || undefined,
             email: user.email || undefined,
+            gender: user.gender ? user.gender.toLowerCase() : undefined,
+            category: user.category ? user.category.toLowerCase() : undefined,
+            education: user.education ? user.education.toLowerCase() : undefined,
+            occupation: user.occupation || undefined,
           };
           if (user.dob) {
             try {
@@ -393,12 +465,18 @@ export const useAuthStore = create<AuthState>()(
           }
         }
 
+        // Refresh profile from database so local state reflects true MongoDB state
+        try {
+          await get().fetchProfile();
+        } catch (err) {
+          console.warn('[authStore] fetchProfile after onboarding failed:', err);
+        }
       },
 
       registerMobile: async (mobile: string, role: AuthRole = 'farmer') => {
         set({ isLoading: true, error: null, role });
         try {
-          const apiRole = (role === 'partner' || role === 'govt_body') ? 'vendor' : role;
+          const apiRole = role;
           const { data } = await api.post('/auth/register/send-otp', { mobile, role: apiRole });
           set({
             user: { ...defaultUser, mobile },
@@ -446,7 +524,7 @@ export const useAuthStore = create<AuthState>()(
             console.log("[DEBUG-AUTH] 3. No access token in hydrated state.");
           }
           
-          useAuthStore.setState({ _hasHydrated: true });
+          useAuthStore.setState({ _hasHydrated: true, isLoading: false, error: null });
           console.log("[DEBUG-AUTH] 4. _hasHydrated set to true.");
         };
       },

@@ -188,19 +188,29 @@ class AdminWalletService:
             farmer.updated_at = now
             await farmer.save()
 
-        # Create debit ledger entry
-        tx = WalletTransaction(
-            farmer_id=withdrawal.farmer_id,
-            wallet_id=str(wallet.id),
-            amount=withdrawal.amount,
-            type=TransactionType.DEBIT,
-            status=TransactionStatus.COMPLETED,
-            description=f"Withdrawal approved by admin",
-            reference_id=str(withdrawal.id),
-            created_at=now,
-            updated_at=now,
-        )
-        await self._txs.create(tx)
+        # Look up existing pending transaction from withdrawal request and update it
+        tx = None
+        if withdrawal.transaction_id:
+            tx = await self._txs.get_by_id(withdrawal.transaction_id)
+
+        if tx:
+            tx.status = TransactionStatus.COMPLETED
+            tx.description = f"Withdrawal approved by admin"
+            tx.updated_at = now
+            await tx.save()
+        else:
+            tx = WalletTransaction(
+                farmer_id=withdrawal.farmer_id,
+                wallet_id=str(wallet.id),
+                amount=withdrawal.amount,
+                type=TransactionType.DEBIT,
+                status=TransactionStatus.COMPLETED,
+                description=f"Withdrawal approved by admin",
+                reference_id=str(withdrawal.id),
+                created_at=now,
+                updated_at=now,
+            )
+            await self._txs.create(tx)
 
         # Update withdrawal record
         withdrawal.status = WithdrawalStatus.APPROVED
@@ -238,22 +248,31 @@ class AdminWalletService:
 
         now = datetime.now(timezone.utc)
 
-        # Create rejected ledger entry — balance is NOT changed
-        wallet = await self._wallets.get_by_farmer(withdrawal.farmer_id)
-        if wallet:
-            tx = WalletTransaction(
-                farmer_id=withdrawal.farmer_id,
-                wallet_id=str(wallet.id),
-                amount=withdrawal.amount,
-                type=TransactionType.DEBIT,
-                status=TransactionStatus.REJECTED,
-                description="Withdrawal rejected by admin",
-                reference_id=str(withdrawal.id),
-                created_at=now,
-                updated_at=now,
-            )
-            await self._txs.create(tx)
-            withdrawal.transaction_id = str(tx.id)
+        # Look up existing pending transaction from withdrawal request and update it
+        tx = None
+        if withdrawal.transaction_id:
+            tx = await self._txs.get_by_id(withdrawal.transaction_id)
+
+        if tx:
+            tx.status = TransactionStatus.REJECTED
+            tx.description = "Withdrawal rejected by admin"
+            tx.updated_at = now
+            await tx.save()
+        else:
+            if wallet:
+                tx = WalletTransaction(
+                    farmer_id=withdrawal.farmer_id,
+                    wallet_id=str(wallet.id),
+                    amount=withdrawal.amount,
+                    type=TransactionType.DEBIT,
+                    status=TransactionStatus.REJECTED,
+                    description="Withdrawal rejected by admin",
+                    reference_id=str(withdrawal.id),
+                    created_at=now,
+                    updated_at=now,
+                )
+                await self._txs.create(tx)
+                withdrawal.transaction_id = str(tx.id)
 
         withdrawal.status = WithdrawalStatus.REJECTED
         withdrawal.processed_by = admin_id

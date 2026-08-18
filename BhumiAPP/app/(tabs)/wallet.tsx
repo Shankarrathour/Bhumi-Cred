@@ -63,6 +63,9 @@ export default function WalletScreen() {
   useFocusEffect(
     React.useCallback(() => {
       useAuthStore.getState().fetchProfile().catch(() => {});
+      fetchWallet().catch(() => {});
+      fetchTransactions().catch(() => {});
+      fetchBankAccounts().catch(() => {});
     }, [])
   );
   
@@ -411,36 +414,48 @@ export default function WalletScreen() {
         <View style={styles.txnSection}>
           <Text style={styles.sectionTitle}>Transaction History</Text>
           
-          {transactions.map((txn) => {
-            const isCredit = txn.type === 'credit';
-            return (
-              <View key={txn.id} style={styles.txnCard}>
-                <View style={[styles.txnIconBox, { backgroundColor: isCredit ? '#ECFDF5' : '#FFF1F2' }]}>
-                  <MaterialCommunityIcons 
-                    name={isCredit ? "cash-plus" : "cash-minus"} 
-                    size={22} 
-                    color={isCredit ? COLORS.success : COLORS.danger} 
-                  />
-                </View>
-                
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.txnDesc}>{txn.description}</Text>
-                  <Text style={styles.txnDate}>{txn.date} • {txn.id}</Text>
-                </View>
+          {transactions.length === 0 ? (
+            <View style={styles.emptyTxnContainer}>
+              <View style={styles.emptyTxnIconBox}>
+                <MaterialCommunityIcons name="swap-horizontal" size={32} color={COLORS.primary} />
+              </View>
+              <Text style={styles.emptyTxnTitle}>No Transactions Yet</Text>
+              <Text style={styles.emptyTxnSubtitle}>
+                Your payout earnings, carbon credit sales, and bank withdrawals will appear here.
+              </Text>
+            </View>
+          ) : (
+            transactions.map((txn) => {
+              const isCredit = txn.type === 'credit';
+              return (
+                <View key={txn.id} style={styles.txnCard}>
+                  <View style={[styles.txnIconBox, { backgroundColor: isCredit ? '#ECFDF5' : '#FFF1F2' }]}>
+                    <MaterialCommunityIcons 
+                      name={isCredit ? "cash-plus" : "cash-minus"} 
+                      size={22} 
+                      color={isCredit ? COLORS.success : COLORS.danger} 
+                    />
+                  </View>
+                  
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.txnDesc}>{txn.description}</Text>
+                    <Text style={styles.txnDate}>{txn.date} • {txn.id}</Text>
+                  </View>
 
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[styles.txnAmt, { color: isCredit ? COLORS.success : COLORS.danger }]}>
-                    {isCredit ? '+' : '-'} ₹{txn.amount}
-                  </Text>
-                  <View style={[styles.statusBadge, txn.status === 'Completed' ? styles.statusCompleted : styles.statusPending]}>
-                    <Text style={[styles.statusText, txn.status === 'Completed' ? styles.statusCompletedText : styles.statusPendingText]}>
-                      {txn.status}
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.txnAmt, { color: isCredit ? COLORS.success : COLORS.danger }]}>
+                      {isCredit ? '+' : '-'} ₹{txn.amount}
                     </Text>
+                    <View style={[styles.statusBadge, txn.status === 'Completed' ? styles.statusCompleted : styles.statusPending]}>
+                      <Text style={[styles.statusText, txn.status === 'Completed' ? styles.statusCompletedText : styles.statusPendingText]}>
+                        {txn.status}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </View>
 
       </ScrollView>
@@ -1050,5 +1065,39 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  emptyTxnContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 4,
+    ...SHADOWS.soft,
+  },
+  emptyTxnIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  emptyTxnTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.primaryDark,
+    marginBottom: 4,
+  },
+  emptyTxnSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 260,
   },
 });

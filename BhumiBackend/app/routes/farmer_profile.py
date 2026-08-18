@@ -313,3 +313,17 @@ async def upload_land_document(
         message="Land document uploaded successfully.",
         data=PhotoUploadResponse(url=url, message="Document uploaded successfully."),
     )
+
+
+@router.delete(
+    "/account",
+    response_model=MessageResponse,
+    summary="Delete farmer account",
+)
+async def delete_account(
+    current_farmer: CurrentFarmer,
+    svc: FarmerProfileService = Depends(get_farmer_profile_service),
+) -> MessageResponse:
+    await svc.delete_account(str(current_farmer.id))
+    return MessageResponse(message="Account deleted successfully.")
+

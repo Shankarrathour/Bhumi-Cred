@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated, Modal, Pressable, StatusBar, Platform, Image, DeviceEventEmitter, FlatList, RefreshControl, Alert, OpaqueColorValue } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Animated, Modal, Pressable, StatusBar, Platform, Image, DeviceEventEmitter, FlatList, RefreshControl, Alert, OpaqueColorValue, TextInput } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +23,7 @@ import { SevaBotModal } from '../../src/components/SevaBotModal';
 import { CardSkeleton, ListSkeleton, TimelineSkeleton, SkeletonBase } from '../../src/components/SkeletonLoader';
 import { AmbientEcoBackground, SeasonType } from '../../src/components/AmbientEcoBackground';
 import { SuccessOverlay } from '../../src/components/SuccessOverlay';
+import TrackingModal from '../../src/components/TrackingModal';
 import { NotificationDropdown } from '../../src/components/NotificationDropdown';
 import { PartnerHubModal, PartnerHubTab } from '../../src/components/PartnerHubModal';
 import { GovtBodyDashboardView } from '../../src/components/GovtBodyDashboardView';
@@ -127,10 +128,13 @@ export default function HomeScreen() {
 
   const { fetchNotifications } = useNotificationStore();
 
+  const fetchProfile = useAuthStore((state) => state.fetchProfile);
+
   useEffect(() => {
     fetchHomeDashboard();
     fetchHomeSchemes();
     fetchNotifications();
+    fetchProfile().catch(() => {});
     const loadData = async () => {
       setIndexIsLoading(true);
       await Promise.all([fetchDashboardData(), fetchBannersData(), fetchCmsData()]);
@@ -141,6 +145,7 @@ export default function HomeScreen() {
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
+    fetchProfile().catch(() => {});
     await Promise.all([fetchHomeDashboard(), fetchHomeSchemes(), fetchDashboardData(), fetchBannersData(), fetchCmsData()]);
     fetchNotifications();
     setRefreshing(false);
@@ -412,10 +417,10 @@ export default function HomeScreen() {
 
   // Computed total stats
   const totalLandAcres = plots.reduce((sum, plot) => sum + (plot.status === 'Approved' ? plot.acres : 0), 0);
-  const ecoScore = dashboardData?.overview?.eco_index ?? greenFamily?.score ?? 98;
-  const ecoChangePercent = dashboardData?.overview?.eco_index_change_percent ?? 5.2;
+  const ecoScore = dashboardData?.overview?.eco_index ?? user?.sustainability_score ?? greenFamily?.score ?? 0;
+  const ecoChangePercent = dashboardData?.overview?.eco_index_change_percent ?? 0;
   const totalCreditsVal = dashboardData?.overview?.co2_captures ?? totalCredits;
-  const districtGreenRankVal = dashboardData?.overview?.district_green_rank ?? 12;
+  const districtGreenRankVal = dashboardData?.overview?.district_green_rank ?? 1;
   const walletBalanceVal = dashboardData?.overview?.wallet_balance ?? walletBalance;
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -429,6 +434,10 @@ export default function HomeScreen() {
   }, [user?.city, user?.state]);
   const [isBotVisible, setBotVisible] = useState<boolean>(false);
   const [isNotificationOpen, setNotificationOpen] = useState<boolean>(false);
+  
+  const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
+  const [selectedPlotForTracking, setSelectedPlotForTracking] = useState<any>(null);
+  const [trackingModalVisible, setTrackingModalVisible] = useState(false);
   
   // Journey S-Curve Dimension hooks
   const [journeyWidth, setJourneyWidth] = useState(width - 32 - 40);
@@ -601,11 +610,21 @@ export default function HomeScreen() {
         <TouchableOpacity style={styles.hamburgerBtn} onPress={openDrawer}>
           <MaterialCommunityIcons name="menu" size={24} color={COLORS.textLight} />
         </TouchableOpacity>
-        {/* Modernized crop-tech top brand text logo */}
-        <View style={styles.brandContainer}>
-          <MaterialCommunityIcons name="leaf" size={18} color={COLORS.accent} style={{ marginRight: 4 }} />
+        {/* Centered Profile Avatar & Brand Title */}
+        <TouchableOpacity 
+          style={styles.brandContainer} 
+          onPress={() => router.push('/(tabs)/profile' as any)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.headerAvatarWrapper}>
+            {user?.farmerPhoto ? (
+              <Image source={{ uri: user.farmerPhoto }} style={styles.headerAvatarImg} />
+            ) : (
+              <MaterialCommunityIcons name="account-circle" size={22} color={COLORS.accent} />
+            )}
+          </View>
           <Text style={styles.brandTitle}>BhumiCred</Text>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.headerRight}>
           <TouchableOpacity
@@ -686,11 +705,25 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          {/* Search Field */}
+          <View style={styles.searchBarContainer}>
+            <View style={styles.searchBarBox}>
+              <MaterialCommunityIcons name="magnify" size={20} color="#64748B" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchBarInput}
+                placeholder="Search lands, carbon projects, products..."
+                placeholderTextColor="#94A3B8"
+                value={dashboardSearchQuery}
+                onChangeText={(text) => setDashboardSearchQuery(text)}
+              />
+            </View>
+          </View>
+
         {role === 'govt_body' && (
           <GovtBodyDashboardView />
         )}
 
-        {(role === 'partner' || role === 'vendor') && (
+        {(role === 'partner') && (
           <View style={{ paddingHorizontal: 4, marginTop: 16 }}>
             {/* Top Metrics Grid */}
             <View style={styles.partnerMetricsBlock}>
@@ -819,10 +852,11 @@ export default function HomeScreen() {
             </View>
           </View>
         )}
+        </View>
 
-
-          {/* Top Live Sustainability Meter Dashboard Overlay */}
-          <View style={[styles.metersDashboard, { gap: 5 }]}>
+        {/* Top Live Sustainability Meter Dashboard Overlay */}
+        <View style={styles.metersDashboard}>
+          <View style={styles.metersDashboardRow}>
             {/* Left Circular Meter Index */}
             <View style={styles.circularMeterCol}>
               <View style={styles.meterGlowRing}>
@@ -838,8 +872,15 @@ export default function HomeScreen() {
                 </LinearGradient>
               </View>
               <View style={styles.meterTrendRow}>
-                <MaterialCommunityIcons name="trending-up" size={14} color="#22C55E" style={{ marginRight: 4 }} />
-                <Text style={styles.meterTrendText}>+{ecoChangePercent}% this month</Text>
+                <MaterialCommunityIcons
+                  name={ecoChangePercent >= 0 ? "trending-up" : "trending-down"}
+                  size={14}
+                  color={ecoChangePercent >= 0 ? "#22C55E" : "#EF4444"}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={styles.meterTrendText}>
+                  {ecoChangePercent >= 0 ? `+${ecoChangePercent}%` : `${ecoChangePercent}%`} this month
+                </Text>
               </View>
             </View>
 
@@ -882,6 +923,32 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
+
+          {/* Contextual CTA on Hero Card */}
+          <TouchableOpacity
+            style={styles.heroCtaBtn}
+            onPress={() => {
+              const latestPlot = plots[0];
+              if (!latestPlot) {
+                DeviceEventEmitter.emit('openGlobalScheduler');
+              } else if (latestPlot.status !== 'Verified' && latestPlot.status !== 'Approved') {
+                setSelectedPlotForTracking(latestPlot);
+                setTrackingModalVisible(true);
+              } else {
+                router.push('/(tabs)/projects' as any);
+              }
+            }}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="leaf" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={styles.heroCtaText}>
+              {!plots.length 
+                ? 'Register Your First Land 🚜' 
+                : plots[0].status !== 'Verified' && plots[0].status !== 'Approved'
+                  ? 'Track Land Verification ⏳'
+                  : 'Enroll in Carbon Program 🌿'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Carousel Slider */}
@@ -942,49 +1009,171 @@ export default function HomeScreen() {
         <View style={styles.quickActionsContainer}>
           <Text style={styles.sectionTitle}>{t('dashboard.quick_actions')}</Text>
           <View style={styles.quickActionsGrid}>
+            {/* 1. Add Land */}
             <TouchableOpacity style={styles.actionPill} onPress={() => DeviceEventEmitter.emit('openGlobalScheduler')}>
-              <View style={[styles.actionIconBox, { backgroundColor: '#FFFFFF', padding: 4 }]}>
-                <Image source={require('../../assets/images/add_land_icon.jpg')} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
+              <View style={[styles.actionIconBox, { backgroundColor: '#DCFCE7' }]}>
+                <MaterialCommunityIcons name="map-marker-plus" size={26} color="#16A34A" />
               </View>
-              <Text style={styles.actionLabel}>{t('dashboard.action_add_land')}</Text>
+              <Text style={styles.actionLabel}>Add Land</Text>
             </TouchableOpacity>
 
+            {/* 2. Tree Insurance */}
             <TouchableOpacity style={styles.actionPill} onPress={() => router.push('/insurance' as any)}>
-              <View style={[styles.actionIconBox, { backgroundColor: '#FFFFFF', padding: 4 }]}>
-                <Image source={require('../../assets/images/register_trees_icon.jpg')} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
+              <View style={[styles.actionIconBox, { backgroundColor: '#ECFDF5' }]}>
+                <MaterialCommunityIcons name="tree" size={26} color="#059669" />
               </View>
-              <Text style={styles.actionLabel}>{t('dashboard.action_register_trees')}</Text>
+              <Text style={styles.actionLabel}>Tree Insurance</Text>
             </TouchableOpacity>
 
+            {/* 3. My Projects */}
             <TouchableOpacity style={styles.actionPill} onPress={() => router.push('/(tabs)/projects' as any)}>
-              <View style={[styles.actionIconBox, { backgroundColor: '#FFFFFF', padding: 4 }]}>
-                <Image source={require('../../assets/images/carbon_program_icon.jpg')} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
+              <View style={[styles.actionIconBox, { backgroundColor: '#E0F2FE' }]}>
+                <MaterialCommunityIcons name="molecule-co2" size={28} color="#0284C7" />
               </View>
-              <Text style={styles.actionLabel}>{t('dashboard.action_join_carbon')}</Text>
+              <Text style={styles.actionLabel}>My Projects</Text>
             </TouchableOpacity>
 
+            {/* 4. Soil Testing */}
+            <TouchableOpacity style={styles.actionPill} onPress={() => router.push('/soil-testing' as any)}>
+              <View style={[styles.actionIconBox, { backgroundColor: '#F3E8FF' }]}>
+                <MaterialCommunityIcons name="test-tube" size={26} color="#7C3AED" />
+              </View>
+              <Text style={styles.actionLabel}>Soil Testing</Text>
+            </TouchableOpacity>
+
+            {/* 5. Marketplace */}
             <TouchableOpacity style={styles.actionPill} onPress={() => router.push('/(tabs)/marketplace' as any)}>
-              <View style={[styles.actionIconBox, { backgroundColor: '#FFFFFF', padding: 4 }]}>
-                <Image source={require('../../assets/images/marketplace_icon.jpg')} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
+              <View style={[styles.actionIconBox, { backgroundColor: '#FEF3C7' }]}>
+                <MaterialCommunityIcons name="storefront-outline" size={26} color="#D97706" />
               </View>
-              <Text style={styles.actionLabel}>{t('dashboard.action_marketplace')}</Text>
+              <Text style={styles.actionLabel}>Marketplace</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.actionPill} onPress={() => router.push('/schemes' as any)}>
-              <View style={[styles.actionIconBox, { backgroundColor: '#FFFFFF', padding: 4 }]}>
-                <Image source={require('../../assets/images/schemes_icon.jpg')} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
+            {/* 6. Track Assets */}
+            <TouchableOpacity 
+              style={styles.actionPill} 
+              onPress={() => {
+                const latestPlot = plots[0];
+                if (latestPlot) {
+                  setSelectedPlotForTracking(latestPlot);
+                  setTrackingModalVisible(true);
+                } else {
+                  Alert.alert('Track Assets', 'No land plots registered yet. Register a plot to track verification status.');
+                }
+              }}
+            >
+              <View style={[styles.actionIconBox, { backgroundColor: '#FFE4E6' }]}>
+                <MaterialCommunityIcons name="radar" size={26} color="#E11D48" />
               </View>
-              <Text style={styles.actionLabel}>{t('dashboard.action_schemes')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionPill} onPress={() => router.push('/(tabs)/wallet' as any)}>
-              <View style={[styles.actionIconBox, { backgroundColor: '#FFFFFF', padding: 4 }]}>
-                <Image source={require('../../assets/images/withdraw_icon.jpg')} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
-              </View>
-              <Text style={styles.actionLabel}>{t('dashboard.action_withdraw')}</Text>
+              <Text style={styles.actionLabel}>Track Assets</Text>
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Wallet / Earnings Card */}
+        <TouchableOpacity 
+          style={styles.walletCardContainer}
+          activeOpacity={0.9}
+          onPress={() => router.push('/(tabs)/wallet' as any)}
+        >
+          <LinearGradient
+            colors={['#0F766E', '#115E59']}
+            style={styles.walletCardGrad}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.walletCardHeader}>
+              <View>
+                <Text style={styles.walletCardTitle}>Eco Earnings Wallet</Text>
+                <Text style={styles.walletCardSubtitle}>Carbon Payouts & Subsidies</Text>
+              </View>
+              <MaterialCommunityIcons name="wallet-outline" size={28} color="#FFFFFF" />
+            </View>
+            <View style={styles.walletCardAmountRow}>
+              <Text style={styles.walletCardSymbol}>₹</Text>
+              <Text style={styles.walletCardAmount}>{walletBalanceVal}</Text>
+            </View>
+            <View style={styles.walletCardFooter}>
+              <Text style={styles.walletWithdrawLink}>Withdraw Funds & View Ledger</Text>
+              <MaterialCommunityIcons name="arrow-right" size={16} color="#FFFFFF" />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Application / Project Timeline Card */}
+        <View style={styles.timelineCard}>
+          <Text style={styles.timelineCardTitle}>Land Verification & Enrollment</Text>
+          {plots.length === 0 ? (
+            <View style={styles.timelineEmpty}>
+              <MaterialCommunityIcons name="information-outline" size={20} color="#64748B" style={{ marginRight: 8 }} />
+              <Text style={styles.timelineEmptyText}>No active registrations. Get started with Add Land.</Text>
+            </View>
+          ) : (
+            <View style={styles.timelineFlow}>
+              {[
+                { label: 'GIS Geofence', status: 'done', icon: 'map-marker-radius' },
+                { label: 'Soil Baseline', status: plots[0].status === 'Verified' || plots[0].status === 'Approved' || plots[0].status === 'Auditing' ? 'done' : 'current', icon: 'test-tube' },
+                { label: 'Admin Approval', status: plots[0].status === 'Verified' || plots[0].status === 'Approved' ? 'done' : 'pending', icon: 'check-decagram' },
+                { label: 'Enrolled Program', status: plots[0].status === 'Verified' || plots[0].status === 'Approved' ? 'done' : 'pending', icon: 'leaf' },
+              ].map((step, idx) => {
+                const isDone = step.status === 'done';
+                const isCurrent = step.status === 'current';
+                return (
+                  <View key={idx} style={styles.timelineStepItem}>
+                    <View style={[
+                      styles.timelineNode,
+                      isDone && styles.timelineNodeDone,
+                      isCurrent && styles.timelineNodeCurrent
+                    ]}>
+                      <MaterialCommunityIcons 
+                        name={step.icon as any} 
+                        size={16} 
+                        color={isDone ? '#FFFFFF' : isCurrent ? COLORS.primary : '#94A3B8'} 
+                      />
+                    </View>
+                    <Text style={[
+                      styles.timelineNodeLabel,
+                      isDone && styles.timelineNodeLabelDone,
+                      isCurrent && styles.timelineNodeLabelCurrent
+                    ]}>
+                      {step.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+          {plots.length > 0 && (
+            <TouchableOpacity 
+              style={styles.timelineTrackLink}
+              onPress={() => {
+                setSelectedPlotForTracking(plots[0]);
+                setTrackingModalVisible(true);
+              }}
+            >
+              <Text style={styles.timelineTrackLinkText}>View Detailed Timeline Logs</Text>
+              <MaterialCommunityIcons name="chevron-right" size={16} color={COLORS.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Referral & Rewards Card */}
+        <TouchableOpacity 
+          style={styles.referralCard}
+          activeOpacity={0.9}
+          onPress={() => router.push('/referral' as any)}
+        >
+          <View style={styles.referralIconBox}>
+            <MaterialCommunityIcons name="gift-outline" size={24} color="#E11D48" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.referralTitle}>Refer & Earn Rewards</Text>
+            <Text style={styles.referralDesc}>
+              Get ₹150 inside your Eco Wallet for every farmer you invite.
+            </Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={20} color="#94A3B8" />
+        </TouchableOpacity>
 
         {/* Sustainability Badge Collection Shelf */}
         <View style={styles.badgeShelfSection}>
@@ -1434,7 +1623,7 @@ export default function HomeScreen() {
             </ScrollView>
 
             <View style={[styles.drawerFooter, { paddingBottom: 20 + insets.bottom }]}>
-              <TouchableOpacity style={styles.logoutBtn} onPress={() => { closeDrawer(); useAuthStore.getState().logout(); router.replace('/(auth)/login'); }}>
+              <TouchableOpacity style={styles.logoutBtn} onPress={async () => { closeDrawer(); await useAuthStore.getState().logout(); router.replace('/(auth)/welcome'); }}>
                 <MaterialCommunityIcons name="logout" size={20} color={COLORS.danger} />
                 <Text style={styles.logoutBtnText}>Logout</Text>
               </TouchableOpacity>
@@ -1446,6 +1635,15 @@ export default function HomeScreen() {
 
       {/* Dynamic Support AI Chat */}
       <SevaBotModal visible={isBotVisible} onClose={() => setBotVisible(false)} />
+
+      {selectedPlotForTracking && (
+        <TrackingModal
+          visible={trackingModalVisible}
+          onClose={() => setTrackingModalVisible(false)}
+          plotId={selectedPlotForTracking.id}
+          status={selectedPlotForTracking.status}
+        />
+      )}
 
       {/* Dynamic location selector */}
       <LocationPickerModal
@@ -1459,6 +1657,21 @@ export default function HomeScreen() {
         initialTab={partnerHubTab}
         onClose={() => setPartnerHubVisible(false)}
       />
+
+      {/* Bhumitra AI Floating Action Button (FAB) */}
+      <TouchableOpacity
+        style={styles.floatingAiFab}
+        onPress={() => setBotVisible(true)}
+        activeOpacity={0.85}
+      >
+        <LinearGradient
+          colors={['#10B981', '#047857']}
+          style={styles.floatingAiFabGradient}
+        >
+          <MaterialCommunityIcons name="robot" size={26} color="#FFFFFF" />
+          <View style={styles.floatingFabBadge} />
+        </LinearGradient>
+      </TouchableOpacity>
     </AmbientEcoBackground>
   );
 }
@@ -1623,7 +1836,7 @@ const styles = StyleSheet.create({
   headerBanner: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
-    paddingBottom: 68,
+    paddingBottom: 60,
     overflow: 'visible',
   },
   bannerRow: {
@@ -1652,7 +1865,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   quickActionsContainer: {
-    marginTop: 16,
+    marginTop: 12,
     paddingHorizontal: 20,
   },
   sectionTitle: {
@@ -1681,7 +1894,7 @@ const styles = StyleSheet.create({
   actionIconBox: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -1756,8 +1969,8 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   heroCarouselSection: {
-    marginTop: 112,
-    paddingBottom: 24,
+    marginTop: 8,
+    paddingBottom: 12,
   },
   heroSlideWrapper: {
     width: width,
@@ -2213,17 +2426,21 @@ const styles = StyleSheet.create({
   },
   // Premium metersDashboard styles
   metersDashboard: {
-    position: 'absolute',
-    bottom: -70,
-    left: 20,
-    right: 20,
+    marginHorizontal: 20,
+    marginTop: -45,
+    marginBottom: 8,
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: 16,
-    flexDirection: 'row',
+    flexDirection: 'column',
     borderWidth: 1.5,
     borderColor: COLORS.border,
     ...SHADOWS.glow,
+  },
+  metersDashboardRow: {
+    flexDirection: 'row',
+    gap: 5,
+    width: '100%',
   },
   circularMeterCol: {
     flex: 1.1,
@@ -2678,5 +2895,262 @@ const styles = StyleSheet.create({
     padding: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  floatingAiFab: {
+    position: 'absolute',
+    bottom: 28,
+    right: 20,
+    zIndex: 999,
+    elevation: 8,
+    shadowColor: '#047857',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  floatingAiFabGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  floatingFabBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#84CC16',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  headerAvatarWrapper: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+    overflow: 'hidden',
+  },
+  headerAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  searchBarContainer: {
+    width: '100%',
+    paddingHorizontal: 0,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  searchBarBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    width: '100%',
+    ...SHADOWS.small,
+  },
+  searchBarInput: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.textDark,
+    padding: 0,
+  },
+  heroCtaBtn: {
+    backgroundColor: COLORS.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#059669',
+    ...SHADOWS.small,
+  },
+  heroCtaText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  walletCardContainer: {
+    marginHorizontal: 16,
+    marginVertical: 10,
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...SHADOWS.medium,
+  },
+  walletCardGrad: {
+    padding: 20,
+  },
+  walletCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  walletCardTitle: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  walletCardSubtitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  walletCardAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 14,
+  },
+  walletCardSymbol: {
+    color: '#34D399',
+    fontSize: 18,
+    fontWeight: '800',
+    marginRight: 4,
+  },
+  walletCardAmount: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '900',
+  },
+  walletCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    marginTop: 18,
+    paddingTop: 12,
+  },
+  walletWithdrawLink: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  timelineCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 10,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.soft,
+  },
+  timelineCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.textDark,
+    marginBottom: 14,
+  },
+  timelineEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  timelineEmptyText: {
+    fontSize: 11.5,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  timelineFlow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 6,
+  },
+  timelineStepItem: {
+    alignItems: 'center',
+    width: (width - 64) / 4,
+  },
+  timelineNode: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+  },
+  timelineNodeDone: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  timelineNodeCurrent: {
+    backgroundColor: '#EFF6FF',
+    borderColor: COLORS.primary,
+  },
+  timelineNodeLabel: {
+    fontSize: 9.5,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  timelineNodeLabelDone: {
+    color: COLORS.textDark,
+    fontWeight: '700',
+  },
+  timelineNodeLabelCurrent: {
+    color: COLORS.primary,
+    fontWeight: '800',
+  },
+  timelineTrackLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginTop: 14,
+    paddingTop: 10,
+  },
+  timelineTrackLinkText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+    marginRight: 4,
+  },
+  referralCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 10,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.soft,
+  },
+  referralIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFE4E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  referralTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  referralDesc: {
+    fontSize: 10.5,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    marginTop: 2,
+    lineHeight: 14,
   },
 });

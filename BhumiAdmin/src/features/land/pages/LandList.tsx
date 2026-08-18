@@ -31,9 +31,35 @@ export interface LandParcelItem {
   duplicate_score?: number;
   assigned_project?: string;
   polygon_status?: string;
+  created_at?: string;
 }
 
-
+const formatDateTime = (dateStr?: string) => {
+  if (!dateStr) return { datePart: 'N/A', timePart: '' };
+  try {
+    let parsedStr = dateStr;
+    const hasT = dateStr.includes('T');
+    const hasZone = dateStr.includes('Z') || dateStr.includes('+') || (hasT && dateStr.split('T')[1].includes('-'));
+    if (!hasZone) {
+      parsedStr = dateStr + 'Z';
+    }
+    const d = new Date(parsedStr);
+    if (isNaN(d.getTime())) return { datePart: dateStr, timePart: '' };
+    const datePart = d.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+    const timePart = d.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+    return { datePart, timePart };
+  } catch {
+    return { datePart: dateStr, timePart: '' };
+  }
+};
 
 export const LandList = () => {
   const navigate = useNavigate();
@@ -76,6 +102,7 @@ export const LandList = () => {
         duplicate_score: item.verification_status === 'pending' ? 45.0 : 0,
         assigned_project: 'MP Green Afforestation Q1',
         polygon_status: item.boundary_polygon && item.boundary_polygon.length > 0 ? 'Geofenced boundary' : 'Clean Boundary',
+        created_at: item.created_at || new Date().toISOString(),
       }));
     }
     return [];
@@ -260,11 +287,12 @@ export const LandList = () => {
         </div>
 
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse min-w-[1100px]">
+          <table className="w-full text-left border-collapse min-w-[1250px]">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
                 <th className="py-3 px-4">Land ID</th>
                 <th className="py-3 px-4">Farmer</th>
+                <th className="py-3 px-4">Reg. Date & Time</th>
                 <th className="py-3 px-4">Area</th>
                 <th className="py-3 px-4">Village</th>
                 <th className="py-3 px-4">District</th>
@@ -276,12 +304,14 @@ export const LandList = () => {
             </thead>
             <tbody className="divide-y divide-[#F1F5F9]">
               {isLoading ? (
-                <tr><td colSpan={9} className="p-0"><SkeletonTable rows={6} cols={9} /></td></tr>
+                <tr><td colSpan={10} className="p-0"><SkeletonTable rows={6} cols={10} /></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9}>
+                <tr><td colSpan={10}>
                   <EmptyState icon={Map} title="No land parcels match tab filter" description="Try switching tabs or searching with a different keyword." />
                 </td></tr>
-              ) : filtered.map((item) => (
+              ) : filtered.map((item) => {
+                const dt = formatDateTime(item.created_at);
+                return (
                 <tr
                   key={item.id}
                   className="hover:bg-[#F8FAFC] transition-colors"
@@ -306,6 +336,18 @@ export const LandList = () => {
                         {item.farmer_name}
                       </div>
                       <div className="text-[10.5px] font-mono text-[#64748B]">{item.farmer_id}</div>
+                    </div>
+                  </td>
+
+                  {/* Column 3: Registration Date & Time */}
+                  <td className="py-3 px-4">
+                    <div>
+                      <div className="text-[12.5px] font-semibold text-[#0F172A]">
+                        {dt.datePart}
+                      </div>
+                      <div className="text-[10.5px] font-mono text-[#64748B]">
+                        {dt.timePart}
+                      </div>
                     </div>
                   </td>
 
@@ -360,7 +402,8 @@ export const LandList = () => {
                     </button>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>

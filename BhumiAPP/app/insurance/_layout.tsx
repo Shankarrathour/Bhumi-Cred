@@ -8,6 +8,7 @@ export default function InsuranceLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="register-single" />
       <Stack.Screen name="register-family" />
+      <Stack.Screen name="summary" />
       <Stack.Screen name="payment" />
       <Stack.Screen name="certificate" />
       <Stack.Screen name="policy-details" />

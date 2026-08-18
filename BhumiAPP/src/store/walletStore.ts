@@ -105,9 +105,9 @@ export const useWalletStore = create<WalletState>()(
             amount: tx.amount,
             type: tx.type as 'credit' | 'debit',
             status:
-              tx.status === 'completed'
+              (tx.status === 'completed' || tx.status === 'approved')
                 ? 'Completed'
-                : tx.status === 'rejected'
+                : (tx.status === 'rejected' || tx.status === 'failed')
                   ? 'Failed'
                   : 'Pending',
           }));

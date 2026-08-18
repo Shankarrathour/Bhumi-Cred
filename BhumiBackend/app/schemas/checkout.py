@@ -13,6 +13,7 @@ class CheckoutAddress(BaseModel):
 
 class CheckoutRequest(BaseModel):
     delivery_address: CheckoutAddress
+    payment_method: str = "wallet"
 
 class CheckoutItemResponse(BaseModel):
     quantity: int

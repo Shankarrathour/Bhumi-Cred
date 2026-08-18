@@ -218,7 +218,7 @@ export const Dashboard = () => {
           {/* Card 1: Total Farmers */}
           <KpiCard
             title="TOTAL FARMERS"
-            value={serverData?.overview_cards?.total_farmers?.toLocaleString() || "7,842"}
+            value={serverData?.overview_cards?.total_farmers ? serverData.overview_cards.total_farmers.toLocaleString() : "7,842"}
             icon={Sprout}
             iconBg="#F0FDF4"
             iconColor="#16A34A"
@@ -231,7 +231,7 @@ export const Dashboard = () => {
           {/* Card 2: Total Govt Bodies */}
           <KpiCard
             title="TOTAL GOVT BODIES"
-            value={serverData?.overview_cards?.total_govt_bodies?.toString() || "124"}
+            value={serverData?.overview_cards?.total_govt_bodies ? serverData.overview_cards.total_govt_bodies.toString() : "124"}
             icon={Building2}
             iconBg="#EFF6FF"
             iconColor="#2563EB"
@@ -244,7 +244,7 @@ export const Dashboard = () => {
           {/* Card 3: Total Partners */}
           <KpiCard
             title="TOTAL PARTNERS"
-            value={serverData?.overview_cards?.total_partners?.toString() || "892"}
+            value={serverData?.overview_cards?.total_partners ? serverData.overview_cards.total_partners.toString() : "892"}
             icon={Handshake}
             iconBg="#FFFBEB"
             iconColor="#D97706"
@@ -257,7 +257,7 @@ export const Dashboard = () => {
           {/* Card 4: Pending Approval */}
           <KpiCard
             title="PENDING APPROVAL"
-            value={serverData?.overview_cards?.pending_approval?.toString() || "38"}
+            value={serverData?.overview_cards?.pending_approval != null ? serverData.overview_cards.pending_approval.toString() : "38"}
             icon={Clock}
             iconBg="#FFFBEB"
             iconColor="#D97706"
@@ -270,7 +270,7 @@ export const Dashboard = () => {
           {/* Card 5: Pending KYC */}
           <KpiCard
             title="PENDING KYC"
-            value={serverData?.overview_cards?.pending_kyc?.toString() || "148"}
+            value={serverData?.overview_cards?.pending_kyc != null ? serverData.overview_cards.pending_kyc.toString() : "148"}
             icon={UserCheck}
             iconBg="#FEF2F2"
             iconColor="#EF4444"
@@ -283,7 +283,7 @@ export const Dashboard = () => {
           {/* Card 6: Pending Land */}
           <KpiCard
             title="PENDING LAND"
-            value={serverData?.overview_cards?.pending_land?.toString() || "312"}
+            value={serverData?.overview_cards?.pending_land != null ? serverData.overview_cards.pending_land.toString() : "312"}
             icon={Map}
             iconBg="#FFFBEB"
             iconColor="#F59E0B"
@@ -296,7 +296,7 @@ export const Dashboard = () => {
           {/* Card 7: Pending Projects */}
           <KpiCard
             title="PENDING PROJECTS"
-            value={serverData?.overview_cards?.pending_projects?.toString() || "24"}
+            value={serverData?.overview_cards?.pending_projects != null ? serverData.overview_cards.pending_projects.toString() : "24"}
             icon={FileText}
             iconBg="#EFF6FF"
             iconColor="#2563EB"
@@ -309,7 +309,7 @@ export const Dashboard = () => {
           {/* Card 8: Pending Insurance */}
           <KpiCard
             title="PENDING INSURANCE"
-            value={serverData?.overview_cards?.pending_insurance?.toString() || "67"}
+            value={serverData?.overview_cards?.pending_insurance != null ? serverData.overview_cards.pending_insurance.toString() : "67"}
             icon={ShieldCheck}
             iconBg="#F5F3FF"
             iconColor="#8B5CF6"
@@ -322,7 +322,7 @@ export const Dashboard = () => {
           {/* Card 9: Pending Withdrawals */}
           <KpiCard
             title="PENDING WITHDRAWALS"
-            value={serverData?.overview_cards?.pending_withdrawals?.toString() || "42"}
+            value={serverData?.overview_cards?.pending_withdrawals != null ? serverData.overview_cards.pending_withdrawals.toString() : "42"}
             icon={ArrowUpRight}
             iconBg="#FEF2F2"
             iconColor="#EF4444"
@@ -335,7 +335,7 @@ export const Dashboard = () => {
           {/* Card 10: Total Revenue */}
           <KpiCard
             title="TOTAL REVENUE"
-            value="₹2.84Cr"
+            value={serverData?.overview_cards?.total_revenue_inr ? `₹${(serverData.overview_cards.total_revenue_inr / 10000000).toFixed(2)}Cr` : "₹2.84Cr"}
             icon={TrendingUp}
             iconBg="#F0FDF4"
             iconColor="#16A34A"
@@ -348,7 +348,7 @@ export const Dashboard = () => {
           {/* Card 11: Total Carbon Credits */}
           <KpiCard
             title="TOTAL CARBON CREDITS"
-            value="1.24M"
+            value={serverData?.overview_cards?.total_carbon_credits_tco2e ? `${(serverData.overview_cards.total_carbon_credits_tco2e / 1000000).toFixed(2)}M` : "1.24M"}
             suffix=" tCO2e"
             icon={Cloud}
             iconBg="#F0FDF4"
@@ -362,7 +362,7 @@ export const Dashboard = () => {
           {/* Card 12: Total Marketplace Orders */}
           <KpiCard
             title="TOTAL MARKETPLACE ORDERS"
-            value={serverData?.overview_cards?.total_marketplace_orders?.toLocaleString() || "1,840"}
+            value={serverData?.overview_cards?.total_marketplace_orders ? serverData.overview_cards.total_marketplace_orders.toLocaleString() : "1,840"}
             icon={ShoppingBag}
             iconBg="#FFFBEB"
             iconColor="#D97706"

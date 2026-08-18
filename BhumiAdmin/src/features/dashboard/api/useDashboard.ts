@@ -1,7 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../../api/axios';
 
+export interface OverviewCardMetrics {
+  total_farmers: number;
+  total_govt_bodies: number;
+  total_partners: number;
+  pending_approval: number;
+  pending_kyc: number;
+  pending_land: number;
+  pending_projects: number;
+  pending_insurance: number;
+  pending_withdrawals: number;
+  total_revenue_inr: number;
+  total_carbon_credits_tco2e: number;
+  total_marketplace_orders: number;
+}
+
 export interface DashboardSummary {
+  overview_cards?: OverviewCardMetrics;
   product_summary: {
     total_products: number;
     approved_products: number;

@@ -21,12 +21,12 @@ class AdminFarmerListItem(BaseModel):
     full_name: Optional[str] = None
     state: Optional[str] = None
     district: Optional[str] = None
-    kyc_status: KYCStatus
-    is_active: bool
-    onboarding_completed: bool
-    total_acreage: float
-    sustainability_score: int
-    created_at: datetime
+    kyc_status: KYCStatus = KYCStatus.UNVERIFIED
+    is_active: bool = True
+    onboarding_completed: bool = False
+    total_acreage: float = 0.0
+    sustainability_score: int = 0
+    created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -74,19 +74,19 @@ class AdminFarmerDetailResponse(BaseModel):
     farmer_photo_url: Optional[str] = None
     id_proof_url: Optional[str] = None
     # Platform metrics
-    sustainability_score: int
-    total_acreage: float
-    total_trees: int
-    carbon_credits_generated: float
-    wallet_balance: float
+    sustainability_score: int = 0
+    total_acreage: float = 0.0
+    total_trees: int = 0
+    carbon_credits_generated: float = 0.0
+    wallet_balance: float = 0.0
     # App settings
-    locale: FarmerLocale
+    locale: FarmerLocale = FarmerLocale.EN
     # Status
-    is_active: bool
-    onboarding_completed: bool
+    is_active: bool = True
+    onboarding_completed: bool = False
     # Timestamps
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class AdminBankResponse(BaseModel):

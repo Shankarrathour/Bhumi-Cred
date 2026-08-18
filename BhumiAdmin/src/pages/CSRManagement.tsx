@@ -9,7 +9,6 @@ import {
   Search, 
   RefreshCw, 
   CheckCircle2, 
-  XCircle, 
   FileText, 
   FolderOpen, 
   Download, 
@@ -19,7 +18,7 @@ import {
   Briefcase,
   MapPin,
   Calendar,
-  Sparkles
+  ShieldCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { cn } from '../utils/cn';
@@ -52,12 +51,12 @@ export const CSRManagementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'companies' | 'impact' | 'reports'>('companies');
   
   // Real-time market state variables
-  const [totalCompanies, setTotalCompanies] = useState(6);
+  const [totalCompanies] = useState(6);
   const [totalBudgetCr, setTotalBudgetCr] = useState(48.5);
-  const [activeProjects, setActiveProjects] = useState(12);
-  const [totalTreesPlanted, setTotalTreesPlanted] = useState(380000);
-  const [farmerBeneficiaries, setFarmerBeneficiaries] = useState(4200);
-  const [co2SavedTotal, setCo2SavedTotal] = useState(76200);
+  const [activeProjects] = useState(12);
+  const [totalTreesPlanted] = useState(380000);
+  const [farmerBeneficiaries] = useState(4200);
+  const [co2SavedTotal] = useState(76200);
 
   // Search filter
   const [searchQuery, setSearchQuery] = useState('');

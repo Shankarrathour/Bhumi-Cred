@@ -100,7 +100,7 @@ class FarmerActivityLogResponse(BaseModel):
     activity_type: str
     title: str
     description: Optional[str] = None
-    timestamp: datetime
+    timestamp: Optional[datetime] = None
 
 
 class FarmerPublicResponse(BaseModel):

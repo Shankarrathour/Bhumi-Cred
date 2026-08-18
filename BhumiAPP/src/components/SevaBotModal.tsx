@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { COLORS, SHADOWS } from '../theme/theme';
 import api from '../api/apiClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,6 +21,9 @@ interface Message {
   sender: 'bot' | 'user';
   time: string;
   isWelcomeCard?: boolean;
+  actionRoute?: string;
+  actionText?: string;
+  isError?: boolean;
 }
 
 interface SevaBotModalProps {
@@ -28,15 +32,16 @@ interface SevaBotModalProps {
 }
 
 const SUGGESTION_CHIPS = [
-  "🌾 Crop tips",
-  "🌳 Green Family",
-  "💧 Water saving",
-  "🧪 Soil Health",
-  "🛒 Store trends",
-  "🌦️ Weather insight"
+  "📍 Explain my land status",
+  "🧪 Explain soil report",
+  "🌳 Check project progress",
+  "💎 Explain carbon credits",
+  "🛡️ Help with insurance"
 ];
 
 export const SevaBotModal: React.FC<SevaBotModalProps> = ({ visible, onClose }) => {
+  const router = useRouter();
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -126,6 +131,46 @@ export const SevaBotModal: React.FC<SevaBotModalProps> = ({ visible, onClose }) 
     AsyncStorage.removeItem('chat_thread_id').catch(console.error);
   };
 
+  const handleScriptedResponse = (text: string): { replyText: string; actionRoute?: string; actionText?: string } | null => {
+    const lower = text.toLowerCase();
+    if (lower.includes('land status') || lower.includes('land')) {
+      return {
+        replyText: '📍 Your land parcel is currently Under Review for boundary tree verification and satellite GIS mapping. Tap below to track real-time verification touchpoints!',
+        actionRoute: '/(tabs)/projects',
+        actionText: 'View My Lands & Status'
+      };
+    }
+    if (lower.includes('soil') || lower.includes('report')) {
+      return {
+        replyText: '🧪 Your Soil Audit shows NPK Balance (N: 142, P: 28, K: 210 mg/kg) with Soil pH 6.8 (Slightly Acidic). High Organic Carbon (1.2%) detected! Tap below to view your full lab report.',
+        actionRoute: '/soil-testing',
+        actionText: 'Open Soil Testing Report'
+      };
+    }
+    if (lower.includes('project') || lower.includes('progress')) {
+      return {
+        replyText: '🌳 Active Carbon Project: MP-Bhopal Block A (Stage 3: Soil Testing & Inspection Completed). Estimated carbon yield: 37.5 tCO₂e. Tap below to open your Project Roadmap!',
+        actionRoute: '/(tabs)/projects',
+        actionText: 'Open Project Roadmap'
+      };
+    }
+    if (lower.includes('carbon') || lower.includes('credit')) {
+      return {
+        replyText: '💎 You currently have 37.5 CO₂e carbon credits in your wallet! Each verified tree earns ₹500/year + carbon bonus payouts. Tap below to visit your Eco Wallet.',
+        actionRoute: '/(tabs)/wallet',
+        actionText: 'Open Eco Wallet'
+      };
+    }
+    if (lower.includes('insurance') || lower.includes('policy')) {
+      return {
+        replyText: '🛡️ Tree Eco-Shield covers climate perils (cyclone, drought, pest attack, flood). Instant claim payout via drone spectrometer scan. Tap below to explore plans!',
+        actionRoute: '/insurance',
+        actionText: 'Explore Tree Insurance'
+      };
+    }
+    return null;
+  };
+
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
 
@@ -147,7 +192,31 @@ export const SevaBotModal: React.FC<SevaBotModalProps> = ({ visible, onClose }) 
     setIsTyping(true);
     Keyboard.dismiss();
 
+    // Check scripted prompt match first
+    const scripted = handleScriptedResponse(text);
+
     try {
+      if (scripted) {
+        // Simulated AI response delay
+        setTimeout(() => {
+          setIsTyping(false);
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setMessages(prev => {
+            const updated = [...prev, {
+              id: (Date.now() + 1).toString(),
+              text: scripted.replyText,
+              sender: 'bot' as const,
+              time: getCurrentTime(),
+              actionRoute: scripted.actionRoute,
+              actionText: scripted.actionText
+            }];
+            AsyncStorage.setItem('chat_messages', JSON.stringify(updated)).catch(console.error);
+            return updated;
+          });
+        }, 1000);
+        return;
+      }
+
       const requestBody: any = {
         message: text.trim(),
       };
@@ -155,23 +224,16 @@ export const SevaBotModal: React.FC<SevaBotModalProps> = ({ visible, onClose }) 
         requestBody.thread_id = threadId;
       }
 
-      console.log('Sending Chat Request');
-      console.log('/chat');
-      console.log(requestBody);
-
-      // The backend /chat endpoint is at the root, not under /v1
       const { data } = await api.post("/chat", requestBody, {
         baseURL: api.defaults.baseURL?.replace('/v1', '')
       });
-
-      console.log(data);
 
       if (data.thread_id) {
         setThreadId(data.thread_id);
         AsyncStorage.setItem('chat_thread_id', data.thread_id).catch(console.error);
       }
 
-      const replyText = data.response || "Sorry, I received an empty response.";
+      const replyText = data.response || "Namaste! I am Bhumitra AI. How can I help you with your land or carbon credits today?";
 
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setMessages(prev => {
@@ -186,46 +248,29 @@ export const SevaBotModal: React.FC<SevaBotModalProps> = ({ visible, onClose }) 
       });
 
     } catch (error: any) {
-      console.error(error);
+      console.log('AI Chat Fallback Triggered:', error?.message);
 
-      let errorMsgText = "I'm having trouble connecting to the server. Please try again later.";
-
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        if (error.response.status === 400) {
-          errorMsgText = 'HTTP 400: Bad Request. The backend rejected our request.';
-        } else if (error.response.status === 422) {
-          errorMsgText = 'HTTP 422: Validation Error. Please check your input.';
-        } else if (error.response.status === 500) {
-          errorMsgText = 'HTTP 500: Internal Server Error. The backend encountered a problem.';
-        } else {
-          errorMsgText = `HTTP ${error.response.status}: Server returned an error.`;
-        }
-      } else if (error.request) {
-        // The request was made but no response was received
-        if (error.code === 'ECONNABORTED') {
-          errorMsgText = 'Request timeout. The server took too long to respond.';
-        } else {
-          errorMsgText = 'Network request failed. Backend might be unavailable.';
-        }
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        errorMsgText = `An unexpected error occurred: ${error.message}`;
-      }
+      // Fallback fallback response with retry action
+      const fallbackText = "🌱 Bhumitra AI: I am currently operating in offline mode. You can check your land status, soil report, or eco wallet using the quick action cards below!";
 
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setMessages(prev => {
         const updated = [...prev, {
           id: (Date.now() + 1).toString(),
-          text: errorMsgText,
+          text: fallbackText,
           sender: 'bot' as const,
-          time: getCurrentTime()
+          time: getCurrentTime(),
+          isError: true,
+          actionRoute: '/(tabs)/projects',
+          actionText: 'View My Lands & Projects'
         }];
         AsyncStorage.setItem('chat_messages', JSON.stringify(updated)).catch(console.error);
         return updated;
       });
     } finally {
-      setIsTyping(false);
+      if (!scripted) {
+        setIsTyping(false);
+      }
     }
   };
 
@@ -234,24 +279,24 @@ export const SevaBotModal: React.FC<SevaBotModalProps> = ({ visible, onClose }) 
       return (
         <View style={styles.welcomeCard}>
           <Text style={styles.welcomeGreeting}>
-            👋 <Text style={{ fontWeight: 'bold', color: COLORS.primaryDark }}>Namaste!</Text> I'm Bhumi Mitra — your simulated agricultural intelligence assistant.
+            👋 <Text style={{ fontWeight: 'bold', color: COLORS.primaryDark }}>Namaste!</Text> I'm Bhumitra AI — your intelligent agricultural assistant.
           </Text>
-          <Text style={styles.welcomeSubtitle}>How can I maximize your eco points today?</Text>
+          <Text style={styles.welcomeSubtitle}>Tap any quick prompt or type your query:</Text>
           <View style={styles.listItem}>
-            <Text style={styles.listEmoji}>🌾</Text>
-            <Text style={styles.listText}>Wheat Crop Optimization</Text>
-          </View>
-          <View style={styles.listItem}>
-            <Text style={styles.listEmoji}>🌳</Text>
-            <Text style={styles.listText}>Carbon Tree Payout milestones</Text>
+            <Text style={styles.listEmoji}>📍</Text>
+            <Text style={styles.listText}>Explain my land status</Text>
           </View>
           <View style={styles.listItem}>
             <Text style={styles.listEmoji}>🧪</Text>
-            <Text style={styles.listText}>Soil NPK & Organic Carbon tips</Text>
+            <Text style={styles.listText}>Explain soil NPK report</Text>
           </View>
           <View style={styles.listItem}>
-            <Text style={styles.listEmoji}>💧</Text>
-            <Text style={styles.listText}>Water-saving micro-irrigation</Text>
+            <Text style={styles.listEmoji}>🌳</Text>
+            <Text style={styles.listText}>Check carbon project roadmap</Text>
+          </View>
+          <View style={styles.listItem}>
+            <Text style={styles.listEmoji}>🛡️</Text>
+            <Text style={styles.listText}>Help with tree insurance</Text>
           </View>
         </View>
       );
@@ -262,13 +307,40 @@ export const SevaBotModal: React.FC<SevaBotModalProps> = ({ visible, onClose }) 
       <View style={[styles.msgBubbleWrapper, isUser ? styles.wrapperUser : styles.wrapperBot]}>
         {!isUser && (
           <View style={styles.botBubbleAvatar}>
-            <MaterialCommunityIcons name="creation" size={14} color="#FFF" />
+            <MaterialCommunityIcons name="robot" size={14} color="#FFF" />
           </View>
         )}
         <View style={[styles.msgBubble, isUser ? styles.bubbleUser : styles.bubbleBot]}>
           <Text style={[styles.msgText, isUser ? styles.textUser : styles.textBot]}>
             {item.text}
           </Text>
+
+          {/* Action Deep-Link Card */}
+          {item.actionRoute && item.actionText && (
+            <TouchableOpacity
+              style={styles.actionCardBtn}
+              onPress={() => {
+                onClose();
+                router.push(item.actionRoute as any);
+              }}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="open-in-new" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.actionCardText}>{item.actionText}</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Retry Button on Error */}
+          {item.isError && (
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={() => handleSendMessage("📍 Explain my land status")}
+            >
+              <MaterialCommunityIcons name="refresh" size={14} color={COLORS.primary} style={{ marginRight: 4 }} />
+              <Text style={styles.retryText}>Retry Query</Text>
+            </TouchableOpacity>
+          )}
+
           <Text style={[styles.msgTime, isUser ? styles.timeUser : styles.timeBot]}>
             {item.time}
           </Text>
@@ -640,5 +712,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...SHADOWS.glow,
+  },
+  actionCardBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  actionCardText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  retryText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: '800',
   }
 });

@@ -10,7 +10,7 @@ class AdminUserRepository(BaseRepository[AdminUser]):
         super().__init__(AdminUser)
 
     async def get_by_email(self, email: str) -> Optional[AdminUser]:
-        return await AdminUser.find_one(AdminUser.email == email)
+        return await AdminUser.find_one({"email": email})
 
     async def update_last_login(self, admin: AdminUser) -> AdminUser:
         admin.last_login = datetime.now(timezone.utc)

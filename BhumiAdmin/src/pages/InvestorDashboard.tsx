@@ -7,20 +7,14 @@ import {
   TrendingUp, 
   Activity, 
   ShieldCheck, 
-  Award, 
-  Search, 
   RefreshCw, 
   Download, 
-  Upload, 
-  FileText, 
   FolderOpen, 
-  ChevronRight, 
-  Sparkles, 
-  Database,
   Layers,
   Droplets,
   Coins,
-  Percent
+  Percent,
+  CheckCircle2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { cn } from '../utils/cn';
@@ -47,12 +41,12 @@ export const InvestorDashboardPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'esg' | 'financials' | 'cap-table' | 'documents'>('esg');
   
   // Real-time market state variables
-  const [totalRevenueCr, setTotalRevenueCr] = useState(14.80);
-  const [growthPercent, setGrowthPercent] = useState(145.2);
-  const [carbonOffsetTons, setCarbonOffsetTons] = useState(128000);
-  const [totalProjects, setTotalProjects] = useState(34);
-  const [roiPercent, setRoiPercent] = useState(18.4);
-  const [esgRating, setEsgRating] = useState('AAA');
+  const [totalRevenueCr] = useState(14.80);
+  const [growthPercent] = useState(145.2);
+  const [carbonOffsetTons] = useState(128000);
+  const [totalProjects] = useState(34);
+  const [roiPercent] = useState(18.4);
+  const [esgRating] = useState('AAA');
 
   // Dilution Modeler State
   const [newInvestmentAmountCr, setNewInvestmentAmountCr] = useState('');
@@ -62,7 +56,7 @@ export const InvestorDashboardPage: React.FC = () => {
   const [predictorCapitalInrCr, setPredictorCapitalInrCr] = useState(10);
 
   // Initial Seed Shareholders list
-  const [capTable, setCapTable] = useState<CapTableItem[]>([
+  const [capTable] = useState<CapTableItem[]>([
     { shareholder: 'Aarav Sharma (Founder & CEO)', sharesOwned: 4200000, originalOwnership: 42.0, currentOwnership: 42.0, type: 'Founder' },
     { shareholder: 'Devika Patel (Co-Founder & CTO)', sharesOwned: 2800000, originalOwnership: 28.0, currentOwnership: 28.0, type: 'Co-Founder' },
     { shareholder: 'Green Canopy Capital (Seed VC)', sharesOwned: 1800000, originalOwnership: 18.0, currentOwnership: 18.0, type: 'Seed VC' },

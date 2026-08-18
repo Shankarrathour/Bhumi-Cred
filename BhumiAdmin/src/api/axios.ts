@@ -15,13 +15,15 @@ export const apiClient = axios.create({
 // Request interceptor — reads admin_access_token (set by Zustand auth store)
 apiClient.interceptors.request.use(
   (config) => {
-    // ⚠️ FIX: was reading 'token' — now reads 'admin_access_token' to match
-    // the Zustand useAuthStore which saves under 'admin_access_token'
     const token =
       localStorage.getItem('admin_access_token') ||
-      localStorage.getItem('token'); // legacy fallback
+      localStorage.getItem('token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      config.headers = config.headers || {};
+      config.headers['Authorization'] = `Bearer ${token}`;
+      if (typeof (config.headers as any).set === 'function') {
+        (config.headers as any).set('Authorization', `Bearer ${token}`);
+      }
     }
     return config;
   },
@@ -35,13 +37,16 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Clear all possible token keys used across the codebase
+      console.log('[Admin Axios] 401 for', error.config?.url, '— clearing stale tokens, redirecting to login');
       localStorage.removeItem('admin_access_token');
       localStorage.removeItem('admin_refresh_token');
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
-      window.dispatchEvent(new Event('auth:unauthorized'));
+      // Redirect to login only if not already there
+      if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/auth')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

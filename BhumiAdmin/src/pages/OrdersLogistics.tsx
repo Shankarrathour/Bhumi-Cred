@@ -15,7 +15,7 @@ export const OrdersLogistics: React.FC = () => {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/admin/orders');
+      const res = await api.get('/admin/marketplace-orders');
       const apiOrders = Array.isArray(res.data) ? res.data : (res.data?.data || []);
       setOrders(apiOrders);
     } catch (err) {
@@ -28,7 +28,7 @@ export const OrdersLogistics: React.FC = () => {
 
   const handleUpdateStatus = async (orderId: string, newStatus: string) => {
     try {
-      await api.put(`/admin/orders/${orderId}/status?status=${newStatus}`);
+      await api.patch(`/admin/marketplace-orders/${orderId}/status`, { status: newStatus });
       toast.success(`Order status updated to ${newStatus}`);
       fetchOrders();
     } catch (err) {
@@ -102,66 +102,71 @@ export const OrdersLogistics: React.FC = () => {
                 </td>
               </tr>
             ) : (
-              filtered.map(order => (
-                <tr key={order.id || order.order_number} className="hover:bg-emerald-900/20 transition-colors">
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-emerald-900/30 rounded-lg text-emerald-400">
-                        <Truck className="w-4 h-4" />
+              filtered.map(order => {
+                const rawStatus = (order.order_status || order.status || 'Pending').toUpperCase();
+                const displayDate = order.order_date || (order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN') : '');
+                
+                return (
+                  <tr key={order.id || order.order_id} className="hover:bg-emerald-900/20 transition-colors">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-900/30 rounded-lg text-emerald-400">
+                          <Truck className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-emerald-50 truncate max-w-[220px]" title={order.order_id || `#${order.id}`}>
+                            {order.order_id || `#${order.id?.slice(-8)}`}
+                          </p>
+                          <p className="text-xs text-emerald-400/70">{displayDate}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-emerald-50 truncate max-w-[220px]" title={order.order_number || `#${order.id}`}>
-                          {order.order_number || `#${order.id?.slice(-8)}`}
-                        </p>
-                        <p className="text-xs text-emerald-400/70">{new Date(order.created_at || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <p className="font-medium text-emerald-100 text-xs">{order.farmer_name || 'Farmer'}</p>
-                    <p className="text-emerald-400/70 font-mono text-[11px] truncate max-w-[150px]">
-                      {order.vendor_public_id || (order.vendor_id && order.vendor_id !== 'None' ? `VID-${order.vendor_id.slice(-6).toUpperCase()}` : 'Direct Merchant')}
-                    </p>
-                  </td>
-                  <td className="p-4">
-                    <p className="font-medium text-emerald-50">₹{order.total_amount}</p>
-                    <p className="text-xs text-emerald-400/70">{order.items?.length || 1} items</p>
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      order.status?.toUpperCase() === 'DELIVERED' ? 'bg-emerald-100 text-emerald-800' :
-                      order.status?.toUpperCase() === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                      (order.status?.toUpperCase() === 'PENDING' || order.status?.toUpperCase() === 'CONFIRMED') ? 'bg-amber-100 text-amber-800' :
-                      'bg-blue-100 text-blue-800'
-                    }`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right">
-                    {(order.status?.toUpperCase() === 'PENDING' || order.status?.toUpperCase() === 'CONFIRMED') && (
-                      <button
-                        onClick={() => handleUpdateStatus(order.id || order.order_number, 'SHIPPED')}
-                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Truck className="w-3.5 h-3.5" /> Approve &amp; Ship
-                      </button>
-                    )}
-                    {order.status?.toUpperCase() === 'SHIPPED' && (
-                      <button
-                        onClick={() => handleUpdateStatus(order.id || order.order_number, 'DELIVERED')}
-                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5" /> Mark Delivered
-                      </button>
-                    )}
-                    {order.status?.toUpperCase() === 'DELIVERED' && (
-                      <span className="text-xs text-emerald-400 font-mono font-medium px-2.5 py-1 bg-emerald-950/80 rounded-lg border border-emerald-800/40">
-                        ✅ Fulfilled
+                    </td>
+                    <td className="p-4">
+                      <p className="font-medium text-emerald-100 text-xs">{order.buyer_name || 'Farmer'}</p>
+                      <p className="text-emerald-400/70 font-mono text-[11px] truncate max-w-[150px]" title={order.vendor_name}>
+                        {order.vendor_name || 'Direct Merchant'}
+                      </p>
+                    </td>
+                    <td className="p-4">
+                      <p className="font-medium text-emerald-50">₹{order.total_amount}</p>
+                      <p className="text-xs text-emerald-400/70 truncate max-w-[180px]" title={order.product_name}>{order.product_name}</p>
+                    </td>
+                    <td className="p-4">
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        rawStatus === 'DELIVERED' ? 'bg-emerald-100 text-emerald-800' :
+                        rawStatus === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                        (rawStatus === 'PENDING' || rawStatus === 'CONFIRMED') ? 'bg-amber-100 text-amber-800' :
+                        'bg-blue-100 text-blue-800'
+                      }`}>
+                        {order.order_status || order.status}
                       </span>
-                    )}
-                  </td>
-                </tr>
-              ))
+                    </td>
+                    <td className="p-4 text-right">
+                      {(rawStatus === 'PENDING' || rawStatus === 'CONFIRMED') && (
+                        <button
+                          onClick={() => handleUpdateStatus(order.id || order.order_id, 'SHIPPED')}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Truck className="w-3.5 h-3.5" /> Approve &amp; Ship
+                        </button>
+                      )}
+                      {rawStatus === 'SHIPPED' && (
+                        <button
+                          onClick={() => handleUpdateStatus(order.id || order.order_id, 'DELIVERED')}
+                          className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" /> Mark Delivered
+                        </button>
+                      )}
+                      {rawStatus === 'DELIVERED' && (
+                        <span className="text-xs text-emerald-400 font-mono font-medium px-2.5 py-1 bg-emerald-950/80 rounded-lg border border-emerald-800/40">
+                          ✅ Fulfilled
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

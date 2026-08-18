@@ -265,10 +265,6 @@ class WalletService:
         if pending:
             raise PendingWithdrawalExistsException()
 
-        bank_account = await self._banks.get_active_by_farmer(farmer_id)
-        if not bank_account:
-            raise BankAccountNotFoundException()
-
         now = datetime.now(timezone.utc)
         withdrawal = WithdrawalRequest(
             farmer_id=farmer_id,
@@ -294,6 +290,22 @@ class WalletService:
             withdrawal.upi_id = data.upi_id
 
         await self._withdrawals.create(withdrawal)
+
+        # Create pending WalletTransaction so it immediately appears in transaction history
+        tx = WalletTransaction(
+            farmer_id=farmer_id,
+            wallet_id=str(wallet.id),
+            amount=data.amount,
+            type=TransactionType.DEBIT,
+            status=TransactionStatus.PENDING,
+            description=f"Withdrawal Payout ({data.payment_method.upper()})",
+            reference_id=str(withdrawal.id),
+            created_at=now,
+            updated_at=now,
+        )
+        await self._txs.create(tx)
+        withdrawal.transaction_id = str(tx.id)
+        await withdrawal.save()
 
         try:
             await self._notifications.create_admin_notification(
@@ -328,18 +340,34 @@ class WalletService:
         wallet.updated_at = now
         await wallet.save()
 
-        tx = WalletTransaction(
-            farmer_id=farmer_id,
-            wallet_id=str(wallet.id),
-            amount=amount,
-            type=TransactionType.CREDIT,
-            status=TransactionStatus.COMPLETED,
-            description=description,
-            reference_id=reference_id,
-            created_at=now,
-            updated_at=now,
-        )
-        await self._txs.create(tx)
+        # Check if there is an existing pending transaction for this reference (e.g. from sell-credits)
+        tx = None
+        if reference_id:
+            tx = await WalletTransaction.find_one(
+                WalletTransaction.farmer_id == farmer_id,
+                WalletTransaction.reference_id == reference_id,
+                WalletTransaction.status == TransactionStatus.PENDING,
+            )
+
+        if tx:
+            tx.status = TransactionStatus.COMPLETED
+            tx.description = description
+            tx.amount = amount  # update amount if it was adjusted by admin
+            tx.updated_at = now
+            await tx.save()
+        else:
+            tx = WalletTransaction(
+                farmer_id=farmer_id,
+                wallet_id=str(wallet.id),
+                amount=amount,
+                type=TransactionType.CREDIT,
+                status=TransactionStatus.COMPLETED,
+                description=description,
+                reference_id=reference_id,
+                created_at=now,
+                updated_at=now,
+            )
+            await self._txs.create(tx)
 
         # Keep denormalised balance in sync
         farmer = await self._farmers.get_by_id(farmer_id)

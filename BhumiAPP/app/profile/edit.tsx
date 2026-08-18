@@ -420,7 +420,9 @@ export default function EditProfileScreen() {
         visible={isCalendarVisible}
         onClose={() => setIsCalendarVisible(false)}
         onSelectDate={setDob}
-        initialDate={dob} />
+        initialDate={dob}
+        mode="dob"
+      />
     </View>
   );
 }

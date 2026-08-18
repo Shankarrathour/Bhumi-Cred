@@ -4,8 +4,8 @@ import axios from 'axios';
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/v1';
 
-let _accessToken: string | null = localStorage.getItem('admin_access_token');
-let _refreshToken: string | null = localStorage.getItem('admin_refresh_token');
+let _accessToken: string | null = localStorage.getItem('admin_access_token') || localStorage.getItem('token');
+let _refreshToken: string | null = localStorage.getItem('admin_refresh_token') || localStorage.getItem('refreshToken');
 let _onRefresh: ((newAccess: string, newRefresh: string) => void) | null = null;
 let _onUnauthorized: (() => void) | null = null;
 

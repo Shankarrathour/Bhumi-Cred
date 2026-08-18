@@ -66,23 +66,28 @@ async def list_admin_orders(current_admin: CurrentAdmin) -> SuccessResponse[List
         raw_status = str(order.status.value) if hasattr(order.status, 'value') else str(order.status)
         order_status = status_map.get(raw_status.upper(), "Pending")
         
+        order_num = order.order_number or f"AGR-{str(order.id)[:8].upper()}"
+        tracking_num = f"TRK-{order_num.replace('AGR-', '')}"
+        total_amount = order.final_total or 0.0
+        order_date = order.created_at.strftime("%Y-%m-%d %H:%M") if order.created_at else datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+
         response_data.append(
             AdminOrderResponse(
                 id=str(order.id),
-                order_id=order.order_number,
+                order_id=order_num,
                 buyer_name=buyer_name,
                 buyer_id=buyer_id,
                 vendor_name=vendor_name,
                 vendor_gstin=vendor_gstin,
                 product_name=product_name,
                 category=category,
-                total_amount=order.final_total,
+                total_amount=total_amount,
                 payment_mode="Wallet",
                 payment_status="PAID",
                 order_status=order_status,
-                tracking_id=f"TRK-{order.order_number.replace('AGR-', '')}",
+                tracking_id=tracking_num,
                 shipping_partner="Delhivery",
-                order_date=order.created_at.strftime("%Y-%m-%d %H:%M")
+                order_date=order_date
             )
         )
         
@@ -148,22 +153,27 @@ async def update_admin_order_status(
     }
     order_status = status_map.get(new_status_str, "Pending")
     
+    order_num = order.order_number or f"AGR-{str(order.id)[:8].upper()}"
+    tracking_num = f"TRK-{order_num.replace('AGR-', '')}"
+    total_amount = order.final_total or 0.0
+    order_date = order.created_at.strftime("%Y-%m-%d %H:%M") if order.created_at else datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+
     response_data = AdminOrderResponse(
         id=str(order.id),
-        order_id=order.order_number,
+        order_id=order_num,
         buyer_name=buyer_name,
         buyer_id=buyer_id,
         vendor_name=vendor_name,
         vendor_gstin=vendor_gstin,
         product_name=product_name,
         category="Seeds & Saplings",
-        total_amount=order.final_total,
+        total_amount=total_amount,
         payment_mode="Wallet",
         payment_status="PAID",
         order_status=order_status,
-        tracking_id=f"TRK-{order.order_number.replace('AGR-', '')}",
+        tracking_id=tracking_num,
         shipping_partner="Delhivery",
-        order_date=order.created_at.strftime("%Y-%m-%d %H:%M")
+        order_date=order_date
     )
     
     return SuccessResponse(message="Order status updated successfully", data=response_data)

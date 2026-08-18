@@ -152,7 +152,7 @@ interface MarketplaceState {
   
   setCheckoutAddress: (address: CheckoutAddress) => void;
   prepareCheckout: (address: CheckoutAddress) => Promise<boolean>;
-  checkout: (vendorName: string) => Promise<string>;
+  checkout: (vendorName: string, paymentMethod?: string) => Promise<string>;
   
   acceleratedCheckoutItem: CartItem | null;
   setAcceleratedCheckoutItem: (item: CartItem | null) => void;
@@ -734,7 +734,7 @@ export const useMarketplaceStore = create<MarketplaceState>()(
         }
       },
 
-      checkout: async (vendorName) => {
+      checkout: async (vendorName, paymentMethod = 'wallet') => {
         const { isAuthenticated } = useAuthStore.getState();
         const address = get().checkoutAddress;
         
@@ -773,7 +773,10 @@ export const useMarketplaceStore = create<MarketplaceState>()(
 
         set({ isLoading: true });
         try {
-          const { data } = await api.post('/orders', { delivery_address: address });
+          const { data } = await api.post('/orders', { 
+            delivery_address: address,
+            payment_method: paymentMethod
+          });
           
           // Clear cart immediately upon successful order creation
           set({ 

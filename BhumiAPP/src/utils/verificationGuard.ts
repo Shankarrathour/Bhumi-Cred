@@ -3,14 +3,14 @@ import { useAuthStore } from '../store/authStore';
 
 const VERIFICATION_MESSAGES: Record<'pending' | 'rejected', { title: string; message: string }> = {
   pending: {
-    title: 'Verification Pending',
+    title: 'Admin Verification Required ⏳',
     message:
-      'Your profile verification is still pending. Once your profile is verified by the Admin, you will be able to use this feature.',
+      'Your farmer registration is currently under Admin verification. The Add Land feature will be automatically enabled in your app as soon as your profile is verified and approved by the Admin.',
   },
   rejected: {
-    title: 'Verification Rejected',
+    title: 'Verification Rejected ❌',
     message:
-      'Your profile verification was rejected by the Admin. Please update your profile/KYC information and submit it again before using this feature.',
+      'Your profile verification was rejected by the Admin. Please update your profile/KYC information and resubmit before adding land parcels.',
   },
 };
 
@@ -34,13 +34,24 @@ const VERIFICATION_MESSAGES: Record<'pending' | 'rejected', { title: string; mes
  * this is a UX convenience, not the source of truth.
  */
 export function isFarmerVerified(): boolean {
-  const status = useAuthStore.getState().user?.verificationStatus;
+  const user = useAuthStore.getState().user;
 
-  if (status === 'approved') {
+  if (user?.isActive === false) {
+    Alert.alert(
+      'Account Suspended 🛑',
+      'Your farmer account has been suspended by Admin. Please contact Bhumi support.'
+    );
+    return false;
+  }
+
+  const status = (user?.verificationStatus || '').toLowerCase();
+  const kycStatus = ((user as any)?.kyc_status || (user as any)?.kycStatus || '').toLowerCase();
+
+  if (status === 'approved' || status === 'verified' || kycStatus === 'approved' || kycStatus === 'verified') {
     return true;
   }
 
-  const key = status === 'rejected' ? 'rejected' : 'pending';
+  const key = status === 'rejected' || kycStatus === 'rejected' ? 'rejected' : 'pending';
   const { title, message } = VERIFICATION_MESSAGES[key];
   Alert.alert(title, message);
   return false;

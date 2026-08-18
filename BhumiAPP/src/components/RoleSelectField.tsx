@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../theme/theme';
 
-export type AuthRole = 'farmer' | 'govt_body' | 'partner' | 'vendor';
+import { AuthRole } from '../store/authStore';
+export type { AuthRole };
 
 interface RoleSelectFieldProps {
   value: AuthRole;

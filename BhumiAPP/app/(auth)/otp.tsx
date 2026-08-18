@@ -29,6 +29,7 @@ export default function OTPScreen() {
 
   const [otp, setOtp] = useState(['', '', '', '']);
   const [showNotification, setShowNotification] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [countdown, setCountdown] = useState(RESEND_COOLDOWN);
   const inputRefs = useRef<(TextInput | null)[]>([]);
@@ -67,6 +68,7 @@ export default function OTPScreen() {
     const otpValue = otp.join('');
     if (otpValue.length !== 4) return;
 
+    setIsVerifying(true);
     try {
       const success = await verifyOtpStore(otpValue);
       if (success) {
@@ -100,6 +102,8 @@ export default function OTPScreen() {
       }
     } catch (err) {
       Alert.alert('Error', 'Verification failed due to connection error.');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -206,12 +210,12 @@ export default function OTPScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.primaryButton, (isLoading || otp.join('').length !== 4) && styles.buttonDisabled]}
+              style={[styles.primaryButton, (isVerifying || otp.join('').length !== 4) && styles.buttonDisabled]}
               onPress={handleVerify}
-              disabled={isLoading || otp.join('').length !== 4}
+              disabled={isVerifying || otp.join('').length !== 4}
               activeOpacity={0.85}
             >
-              {isLoading ? (
+              {isVerifying ? (
                 <ActivityIndicator color={COLORS.primaryDark} />
               ) : (
                 <Text style={styles.primaryButtonText}>Verify & Proceed</Text>

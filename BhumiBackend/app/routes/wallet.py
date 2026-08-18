@@ -218,6 +218,25 @@ async def sell_carbon_credits(
     )
     await sale.save()
 
+    # Create pending WalletTransaction for history
+    from datetime import datetime, timezone
+    from app.models.wallet import Wallet, WalletTransaction, TransactionType, TransactionStatus
+    wallet = await Wallet.find_one(Wallet.farmer_id == str(farmer.id))
+    wallet_id = str(wallet.id) if wallet else str(farmer.id)
+    now = datetime.now(timezone.utc)
+    tx = WalletTransaction(
+        farmer_id=str(farmer.id),
+        wallet_id=wallet_id,
+        amount=net_amount,
+        type=TransactionType.CREDIT,
+        status=TransactionStatus.PENDING,
+        description=f"Sold {credits_to_sell} CO₂e Carbon Credits",
+        reference_id=str(sale.id),
+        created_at=now,
+        updated_at=now,
+    )
+    await tx.save()
+
     try:
         await notification_svc.create_admin_notification(
             "Credit Sale",

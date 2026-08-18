@@ -39,7 +39,7 @@ export default function RootLayout() {
     if (!_hasHydrated) return;
 
     // Check if the user is currently inside the authentication screen flows
-    const inAuthGroup = (segments[0] as string) === '(auth)' || (segments[0] as string) === '(vendor_auth)';
+    const inAuthGroup = (segments[0] as string) === '(auth)';
     // Onboarding is a special post-registration screen — not an auth screen, but
     // also not a "fully authenticated" screen.  We must NOT redirect away from it.
     const inOnboarding = segments[0] === 'onboarding';
@@ -65,6 +65,15 @@ export default function RootLayout() {
 
     return () => clearTimeout(timer);
   }, [_hasHydrated, isAuthenticated, segments]);
+
+  // Periodic account status pulse — automatically logs out farmer if Admin deletes or deactivates account
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const interval = setInterval(() => {
+      useAuthStore.getState().fetchProfile().catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   if (!_hasHydrated) {
     return null;

@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Globe2, LayoutDashboard, Sprout, Building2, Map,
   FileText, ShieldCheck, CreditCard, ShoppingBag, Wallet,
-  KeyRound, ClipboardList, Settings, LogOut, X, Gift,
-  Users, CheckSquare, FileCheck, BarChart3, Bell, LifeBuoy, Monitor, Activity,
+  KeyRound, ClipboardList, Settings, LogOut, X,
+  Users, BarChart3, Bell, LifeBuoy, Monitor, Activity,
   Cpu, Layers, DollarSign, Plane, ArrowLeftRight, BookOpen, FolderKanban, LineChart
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
@@ -91,7 +91,7 @@ const NAV_GROUPS: NavGroupType[] = [
 
 export const Sidebar: React.FC = () => {
   const { hasRole } = useAuth();
-  const { collapsed, mobileOpen, closeMobile, isMobile } = useSidebar();
+  const { collapsed, closeMobile, isMobile } = useSidebar();
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.auth.user);

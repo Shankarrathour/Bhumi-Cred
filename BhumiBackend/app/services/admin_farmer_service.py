@@ -150,19 +150,47 @@ class AdminFarmerService:
 
     @staticmethod
     def _to_land_response(p: LandParcel) -> LandParcelResponse:
+        coords_str = None
+        if p.coordinates:
+            coords_str = f"{p.coordinates.latitude:.4f}, {p.coordinates.longitude:.4f}"
+
         return LandParcelResponse(
             id=str(p.id),
-            survey_number=p.survey_number,
+            name=p.name,
+            khasra_number=p.khasra_number or p.survey_number,
+            survey_number=p.survey_number or p.khasra_number,
             area_acres=p.area_acres,
+            area_unit=p.area_unit or "Acre",
             ownership_type=p.ownership_type,
+            plantation_date=p.plantation_date,
             is_irrigated=p.is_irrigated,
+            belongs_to_another_person=p.belongs_to_another_person,
+            fathers_name=p.fathers_name,
+            country=p.country or "India",
             state=p.state,
             district=p.district,
+            city=p.city,
+            gram_panchayat=p.gram_panchayat,
+            vikash_khand=p.vikash_khand,
             tehsil=p.tehsil,
             village=p.village,
+            full_address=p.full_address,
+            landmark=p.landmark,
+            coordinates=p.coordinates,
+            boundary_polygon=p.boundary_polygon,
+            land_type=p.land_type,
+            crop_type=p.crop_type,
+            soil_type=p.soil_type,
+            soil_organic_carbon=p.soil_organic_carbon,
+            tree_stock_count=p.tree_stock_count,
+            plantation_area_acres=p.plantation_area_acres,
+            agroforestry_species=p.agroforestry_species,
+            trees=getattr(p, "trees", []),
             land_document_url=p.land_document_url,
+            land_photo_urls=getattr(p, "land_photo_urls", []),
             verification_status=p.verification_status,
             verification_remarks=p.verification_remarks,
+            correction_fields=getattr(p, "correction_fields", None),
             verified_at=p.verified_at,
             created_at=p.created_at,
             updated_at=p.updated_at,
@@ -243,7 +271,8 @@ class AdminFarmerService:
             farmer_public_id=farmer.farmer_id if farmer else None,
             farmer_name=farmer.full_name if farmer else None,
             farmer_mobile=farmer.mobile if farmer else "",
-            survey_number=p.survey_number,
+            khasra_number=p.khasra_number or p.survey_number,
+            survey_number=p.survey_number or p.khasra_number,
             area_acres=p.area_acres,
             ownership_type=p.ownership_type,
             is_irrigated=p.is_irrigated,
@@ -267,10 +296,12 @@ class AdminFarmerService:
             tree_stock_count=p.tree_stock_count,
             plantation_area_acres=p.plantation_area_acres,
             agroforestry_species=p.agroforestry_species,
+            trees=getattr(p, "trees", []),
             land_document_url=p.land_document_url,
             land_photo_urls=getattr(p, "land_photo_urls", []),
             verification_status=p.verification_status,
             verification_remarks=p.verification_remarks,
+            correction_fields=getattr(p, "correction_fields", None),
             verified_at=p.verified_at,
             created_at=p.created_at,
             updated_at=p.updated_at,
@@ -556,6 +587,19 @@ class AdminFarmerService:
             ip_address=ip_address,
         )
         try:
+            await FarmerActivityLog(
+                farmer_id=str(farmer.id),
+                activity_type="APPROVED",
+                title="Profile Verified by Admin ✅",
+                description=f"KYC approved by admin {admin.name or admin.email}.",
+                performed_by_id=str(admin.id),
+                performed_by_role="admin",
+                timestamp=now,
+            ).insert()
+        except Exception as e:
+            logger.warning(f"Failed to log FarmerActivityLog for approve: {e}")
+
+        try:
             await self._notifications.create_notification(
                 str(farmer.id),
                 "Profile Verified",
@@ -596,6 +640,19 @@ class AdminFarmerService:
             remarks=kyc_remarks or "",
         )
         try:
+            await FarmerActivityLog(
+                farmer_id=str(farmer.id),
+                activity_type="REJECTED",
+                title="KYC Rejected by Admin ❌",
+                description=f"Reason: {kyc_remarks or 'Documents unreadable or incomplete'}",
+                performed_by_id=str(admin.id),
+                performed_by_role="admin",
+                timestamp=now,
+            ).insert()
+        except Exception as e:
+            logger.warning(f"Failed to log FarmerActivityLog for reject: {e}")
+
+        try:
             await self._notifications.create_notification(
                 str(farmer.id),
                 "Profile Rejected",
@@ -618,8 +675,9 @@ class AdminFarmerService:
         self, farmer_id: str, admin: AdminUser, ip_address: str = ""
     ) -> KYCActionResponse:
         farmer = await self._get_farmer(farmer_id)
+        now = datetime.now(timezone.utc)
         farmer.is_active = False
-        farmer.updated_at = datetime.now(timezone.utc)
+        farmer.updated_at = now
         await farmer.save()
         await self._audit.log_event(
             action="FARMER_BLOCKED",
@@ -631,6 +689,19 @@ class AdminFarmerService:
             actor_role=admin.role.value if hasattr(admin.role, "value") else str(admin.role),
             ip_address=ip_address,
         )
+        try:
+            await FarmerActivityLog(
+                farmer_id=str(farmer.id),
+                activity_type="ACCOUNT_SUSPENDED",
+                title="Account Suspended by Admin 🛑",
+                description=f"Farmer account blocked by admin {admin.name or admin.email}.",
+                performed_by_id=str(admin.id),
+                performed_by_role="admin",
+                timestamp=now,
+            ).insert()
+        except Exception as e:
+            logger.warning(f"Failed to log FarmerActivityLog for block: {e}")
+
         return KYCActionResponse(
             id=str(farmer.id),
             kyc_status=farmer.kyc_status,
@@ -642,8 +713,9 @@ class AdminFarmerService:
         self, farmer_id: str, admin: AdminUser, ip_address: str = ""
     ) -> KYCActionResponse:
         farmer = await self._get_farmer(farmer_id)
+        now = datetime.now(timezone.utc)
         farmer.is_active = True
-        farmer.updated_at = datetime.now(timezone.utc)
+        farmer.updated_at = now
         await farmer.save()
         await self._audit.log_event(
             action="FARMER_UNBLOCKED",
@@ -655,6 +727,19 @@ class AdminFarmerService:
             actor_role=admin.role.value if hasattr(admin.role, "value") else str(admin.role),
             ip_address=ip_address,
         )
+        try:
+            await FarmerActivityLog(
+                farmer_id=str(farmer.id),
+                activity_type="ACCOUNT_ACTIVATED",
+                title="Account Reactivated by Admin ✅",
+                description=f"Farmer account unblocked by admin {admin.name or admin.email}.",
+                performed_by_id=str(admin.id),
+                performed_by_role="admin",
+                timestamp=now,
+            ).insert()
+        except Exception as e:
+            logger.warning(f"Failed to log FarmerActivityLog for unblock: {e}")
+
         return KYCActionResponse(
             id=str(farmer.id),
             kyc_status=farmer.kyc_status,
@@ -666,11 +751,22 @@ class AdminFarmerService:
         self, farmer_id: str, project_id: str
     ) -> dict:
         farmer = await self._get_farmer(farmer_id)
-        # Store or record project assignment
+        now = datetime.now(timezone.utc)
+        try:
+            await FarmerActivityLog(
+                farmer_id=str(farmer.id),
+                activity_type="PROJECT_ASSIGNED",
+                title="Carbon Project Assigned 🌳",
+                description=f"Assigned to Carbon Credit Project ID {project_id}.",
+                timestamp=now,
+            ).insert()
+        except Exception as e:
+            logger.warning(f"Failed to log FarmerActivityLog for project assignment: {e}")
+
         return {
             "farmer_id": str(farmer.id),
             "project_id": project_id,
-            "assigned_at": datetime.now(timezone.utc).isoformat(),
+            "assigned_at": now.isoformat(),
             "status": "assigned"
         }
 

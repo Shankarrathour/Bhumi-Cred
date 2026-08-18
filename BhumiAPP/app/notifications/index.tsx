@@ -7,10 +7,24 @@ import DetailPageHeader from '../../src/components/DetailPageHeader';
 import { EmptyState } from '../../src/components/EmptyState';
 import { ListSkeleton } from '../../src/components/SkeletonLoader';
 
+import { useRouter } from 'expo-router';
+
 const ICON_BY_TYPE: Record<string, { icon: keyof typeof MaterialCommunityIcons.glyphMap; color: string }> = {
   kyc: { icon: 'shield-check', color: COLORS.primary },
+  otp: { icon: 'key-outline', color: '#8B5CF6' },
   land: { icon: 'map-marker-check', color: COLORS.secondary },
+  land_submitted: { icon: 'file-document-outline', color: COLORS.primary },
+  admin_review: { icon: 'clock-outline', color: '#3B82F6' },
+  correction: { icon: 'alert-circle-outline', color: '#EA580C' },
+  approved: { icon: 'check-decagram', color: COLORS.success },
+  land_approved: { icon: 'check-decagram', color: COLORS.success },
   project: { icon: 'leaf', color: COLORS.success },
+  project_assigned: { icon: 'leaf', color: COLORS.success },
+  mrv_scheduled: { icon: 'satellite-variant', color: '#0F766E' },
+  soil_report: { icon: 'flask-outline', color: '#0284C7' },
+  insurance: { icon: 'shield-check-outline', color: COLORS.primary },
+  payment: { icon: 'cash-register', color: '#EAB308' },
+  referral: { icon: 'gift-outline', color: '#EC4899' },
   sale: { icon: 'cash-multiple', color: COLORS.accentDark },
   payout: { icon: 'cash', color: '#EAB308' },
   marketplace: { icon: 'storefront', color: COLORS.primaryLight },
@@ -20,6 +34,35 @@ const ICON_BY_TYPE: Record<string, { icon: keyof typeof MaterialCommunityIcons.g
 
 const getTypeStyle = (type: string) => ICON_BY_TYPE[type] || ICON_BY_TYPE.system;
 
+const getDeepLinkTarget = (type: string): string => {
+  switch (type) {
+    case 'otp':
+      return '/(auth)/otp';
+    case 'land_submitted':
+      return '/profile/add-land';
+    case 'admin_review':
+    case 'correction':
+    case 'approved':
+    case 'land_approved':
+    case 'project':
+    case 'project_assigned':
+    case 'mrv_scheduled':
+      return '/(tabs)/projects';
+    case 'soil_report':
+      return '/soil-testing';
+    case 'insurance':
+      return '/insurance/certificate';
+    case 'payment':
+    case 'payout':
+    case 'sale':
+      return '/(tabs)/wallet';
+    case 'referral':
+      return '/referral';
+    default:
+      return '/(tabs)';
+  }
+};
+
 const formatNotificationDate = (raw: string): string => {
   const parsed = new Date(raw);
   if (isNaN(parsed.getTime())) return raw;
@@ -27,6 +70,7 @@ const formatNotificationDate = (raw: string): string => {
 };
 
 export default function NotificationsScreen() {
+  const router = useRouter();
   const { notifications, fetchNotifications, markAsRead } = useNotificationStore();
   const [isLoading, setIsLoading] = useState(true);
 
@@ -39,10 +83,14 @@ export default function NotificationsScreen() {
     if (!item.read) {
       markAsRead(item.id);
     }
-  }, [markAsRead]);
+    const targetRoute = getDeepLinkTarget(item.type);
+    router.push(targetRoute as any);
+  }, [markAsRead, router]);
 
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const { icon, color } = getTypeStyle(item.type);
+
+
     return (
       <TouchableOpacity
         style={[styles.card, !item.read && styles.unreadCard]}
@@ -58,7 +106,9 @@ export default function NotificationsScreen() {
             {!item.read && <View style={styles.unreadDot} />}
           </View>
           <Text style={styles.itemMessage} numberOfLines={3}>{item.message}</Text>
-          <Text style={styles.itemTime}>{formatNotificationDate(item.date)}</Text>
+          <View style={styles.footerRow}>
+            <Text style={styles.itemTime}>{formatNotificationDate(item.date)}</Text>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -167,9 +217,27 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '700',
     color: COLORS.textSecondary,
-    marginTop: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     opacity: 0.75,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  actionBtnBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '14',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  actionBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
   },
 });

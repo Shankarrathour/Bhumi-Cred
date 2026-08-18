@@ -30,6 +30,7 @@ interface AssignedFarmer {
   assignedProject: string;
   treesPlanted: number;
   documentsCount: number;
+  khasraNumber?: string;
 }
 
 const MOCK_FARMERS: AssignedFarmer[] = [
@@ -44,6 +45,7 @@ const MOCK_FARMERS: AssignedFarmer[] = [
     assignedProject: 'Narmada Eco-Timber Plantation',
     treesPlanted: 120,
     documentsCount: 4,
+    khasraNumber: '142/2',
   },
   {
     id: 'FAR-902',
@@ -186,6 +188,15 @@ export default function FarmersTabScreen() {
                     <Text style={styles.gridVal}>{item.documentsCount} Vaulted</Text>
                   </View>
                 </View>
+
+                {item.khasraNumber ? (
+                  <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center' }}>
+                    <MaterialCommunityIcons name="file-document-outline" size={13} color={COLORS.primary} />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.primaryDark, marginLeft: 4 }}>
+                      Plot Khasra No: {item.khasraNumber}
+                    </Text>
+                  </View>
+                ) : null}
 
                 <View style={styles.projectFooter}>
                   <MaterialCommunityIcons name="sprout-outline" size={14} color={COLORS.primary} />

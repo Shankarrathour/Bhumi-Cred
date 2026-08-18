@@ -108,8 +108,22 @@ async def connect_db() -> None:
     from app.models.tree_registration import TreeRegistration
     from app.models.notification import Notification
     from app.models.tree_plan import TreePlan
+    from app.models.soil_test import SoilTestBooking
     from app.models.counter import Counter
     from app.models.climate_risk_insurance import ClimateRiskInsuranceCard
+    from app.models.support_ticket import SupportTicket
+    from app.models.govt import (
+        GovtOrganization, Department, AuthorizedPerson, GovtScheme, SchemeApplication, SubsidyDisbursement
+    )
+    from app.models.partner import (
+        Partner, PartnerAgreement, CommissionStructure, PartnerJurisdiction, PartnerStaff,
+        GISApiLog, InsuranceMasterPlan, CarbonOfftakeContract, VendorOrder, PartnerComplianceAudit,
+        PartnerPerformance, PartnerRevenue, PartnerRating
+    )
+    from app.models.tree_insurance import (
+        TreeInsurancePolicy, TreeInsuranceClaim, InsuranceCompany, InsuranceSurveyor, ClaimSettlement,
+        PolicyPremium, PolicyRenewal, InsuranceSpeciesRate, InsuranceSatelliteAudit, InsuranceReinsuranceAllocation, ClaimHistory
+    )
 
     # Rebuild Pydantic forward references for models using Link
     AdminUser.model_rebuild()
@@ -205,6 +219,7 @@ async def connect_db() -> None:
                     FinancialAuditLog,
                     EscrowAccount,
                     TaxDeductionCertificate,
+                    SoilTestBooking,
 
                     WalletWithdrawal,
                     FinancialSettlement,
@@ -227,6 +242,37 @@ async def connect_db() -> None:
                     TreePlan,
                     Counter,
                     ClimateRiskInsuranceCard,
+                    SupportTicket,
+                    GovtOrganization,
+                    Department,
+                    AuthorizedPerson,
+                    GovtScheme,
+                    SchemeApplication,
+                    SubsidyDisbursement,
+                    Partner,
+                    PartnerAgreement,
+                    CommissionStructure,
+                    PartnerJurisdiction,
+                    PartnerStaff,
+                    GISApiLog,
+                    InsuranceMasterPlan,
+                    CarbonOfftakeContract,
+                    VendorOrder,
+                    PartnerComplianceAudit,
+                    PartnerPerformance,
+                    PartnerRevenue,
+                    PartnerRating,
+                    TreeInsurancePolicy,
+                    TreeInsuranceClaim,
+                    InsuranceCompany,
+                    InsuranceSurveyor,
+                    ClaimSettlement,
+                    PolicyPremium,
+                    PolicyRenewal,
+                    InsuranceSpeciesRate,
+                    InsuranceSatelliteAudit,
+                    InsuranceReinsuranceAllocation,
+                    ClaimHistory,
                 ],
                 allow_index_dropping=True,
             )

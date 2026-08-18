@@ -20,7 +20,7 @@ async def get_active_banners():
     Fetch all active banners for the mobile application.
     Sorted by priority (ascending), so priority 1 comes before 999.
     """
-    banners = await Banner.find(Banner.is_active == True).sort("+priority").to_list()
+    banners = await Banner.find({"is_active": True}).sort("+priority").to_list()
     
     # Format for response
     response_banners = []

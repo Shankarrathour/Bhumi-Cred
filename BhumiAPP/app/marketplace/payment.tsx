@@ -66,10 +66,10 @@ export default function PaymentScreen() {
 
       if (isAccelerated && acceleratedItem) {
         await addToCart(acceleratedItem.product, acceleratedItem.quantity);
+        useMarketplaceStore.getState().setAcceleratedCheckoutItem(null);
       }
 
-      const orderId = await checkoutStore('Agri Marketplace Order');
-      useMarketplaceStore.getState().setAcceleratedCheckoutItem(null);
+      const orderId = await checkoutStore('Agri Marketplace Order', selectedMethod);
 
       setIsProcessing(false);
       setActiveFlow('none');

@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Settings, Save, Shield, Globe, CreditCard, AlertCircle, Loader2,
-  Lock, Mail, Building2, Key, Eye, EyeOff, ShieldAlert, Percent,
-  Wallet, Receipt, Smartphone, HardDrive, MapPin, BarChart3,
-  CheckCircle2, RefreshCw, Plus, Trash2, Send, Cpu, Bell, Bot, Sparkles, MessageSquare
+  Settings, Save, Shield, CreditCard, Loader2,
+  Key, Eye, EyeOff, Percent,
+  Wallet, Plus, Trash2, Send, Cpu
 } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import {
   usePlatformInfo,
@@ -21,13 +20,13 @@ import {
 } from '../api/useSettings';
 
 export const SystemSettings: React.FC = () => {
-  const { data: platformInfo } = usePlatformInfo();
-  const { data: remoteSettings, isLoading: isLoadingSettings } = useGetSettings();
+  usePlatformInfo();
+  const { data: remoteSettings } = useGetSettings();
   const { mutate: saveSettings, isPending } = useSaveSettings();
-  const { data: apiKeysData, isLoading: isLoadingKeys } = useApiKeys();
-  const { mutate: createKey, isPending: isCreatingKey } = useCreateApiKey();
+  const { data: apiKeysData } = useApiKeys();
+  const { mutate: createKey } = useCreateApiKey();
   const { mutate: revokeKey } = useRevokeApiKey();
-  const { mutate: testIntegration, isPending: isTesting } = useTestIntegration();
+  const { mutate: testIntegration } = useTestIntegration();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
@@ -43,15 +42,11 @@ export const SystemSettings: React.FC = () => {
 
   // Secrets visibility toggles
   const [showRazorpayKey, setShowRazorpayKey] = useState(false);
-  const [showSmsKey, setShowSmsKey] = useState(false);
-  const [showMapboxToken, setShowMapboxToken] = useState(false);
-  const [showFcmKey, setShowFcmKey] = useState(false);
-  const [showAiKey, setShowAiKey] = useState(false);
 
   // New API Key Modal state
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [newKeyPartner, setNewKeyPartner] = useState('');
-  const [newKeyRateLimit, setNewKeyRateLimit] = useState(100);
+  const [newKeyRateLimit] = useState(100);
 
   // Main System Settings Form State (All 15 Specified Settings Parameters)
   const [form, setForm] = useState<SystemSettingsPayload>({

@@ -12,7 +12,7 @@ import { RoleSelectField } from '../../src/components/RoleSelectField';
 export default function LoginScreen() {
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
-  const isLoading = useAuthStore((state) => state.isLoading);
+  const [isLoading, setIsLoading] = useState(false);
   const [mobile, setMobile] = useState('');
   const [role, setRole] = useState<AuthRole>('farmer');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -24,6 +24,7 @@ export default function LoginScreen() {
       return;
     }
 
+    setIsLoading(true);
     try {
       await login(mobile, role);
       router.push({
@@ -45,6 +46,8 @@ export default function LoginScreen() {
       } else {
         Alert.alert('Error', getEnglishApiErrorMessage(err, 'Unable to initiate login. Please try again.'));
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 

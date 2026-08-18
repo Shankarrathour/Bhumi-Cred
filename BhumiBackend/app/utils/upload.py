@@ -9,16 +9,19 @@ from app.core.exceptions import BadRequestException
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
-ALLOWED_DOCUMENT_TYPES = {"image/jpeg", "image/png", "application/pdf"}
-MAX_PHOTO_BYTES = 5 * 1024 * 1024       # 5 MB
-MAX_DOCUMENT_BYTES = 10 * 1024 * 1024  # 10 MB
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "application/octet-stream"}
+ALLOWED_DOCUMENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "application/pdf", "application/octet-stream"}
+MAX_PHOTO_BYTES = 10 * 1024 * 1024       # 10 MB
+MAX_DOCUMENT_BYTES = 15 * 1024 * 1024    # 15 MB
 
 _MIME_TO_EXT: dict[str, str] = {
     "image/jpeg": "jpg",
+    "image/jpg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
+    "image/heic": "jpg",
     "application/pdf": "pdf",
+    "application/octet-stream": "jpg",
 }
 
 
@@ -28,20 +31,17 @@ def validate_upload(
     allowed_types: set[str],
     max_bytes: int,
 ) -> str:
-    """Validate MIME type and file size.
-
-    Returns the normalised content_type string (charset suffix stripped).
-    Raises BadRequestException on validation failure.
-
-    Used by both upload_file() and CloudinaryService.upload() so validation
-    logic is never duplicated across storage backends.
-    """
-    ct = (content_type or "").split(";")[0].strip()
-    if ct not in allowed_types:
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if not ct or ct == "application/octet-stream":
+        ct = "image/jpeg"
+    
+    # Check if the content type is allowed or is any standard image format
+    if ct not in allowed_types and not ct.startswith("image/"):
         raise BadRequestException(
             f"Invalid file type '{ct}'. Allowed: {', '.join(sorted(allowed_types))}.",
             "INVALID_FILE_TYPE",
         )
+    
     if content_size > max_bytes:
         mb = max_bytes // (1024 * 1024)
         raise BadRequestException(

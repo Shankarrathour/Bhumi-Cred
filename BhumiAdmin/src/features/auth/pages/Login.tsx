@@ -5,6 +5,7 @@ import { Eye, EyeOff, Leaf, Lock, Mail, ChevronRight, Shield, BarChart3, Globe2 
 import { motion } from 'framer-motion';
 import { login } from '../../../store/slices/authSlice';
 import { loginApi } from '../api/authApi';
+import { setAdminTokens } from '../../../api/apiClient';
 
 const FEATURES = [
   { icon: Globe2,    title: 'Command Center',    desc: 'Real-time satellite & drone monitoring' },
@@ -35,8 +36,11 @@ export const Login = () => {
 
     try {
       const response = await loginApi({ email, password });
+      setAdminTokens(response.tokens.access_token, response.tokens.refresh_token);
       localStorage.setItem('token', response.tokens.access_token);
       localStorage.setItem('refreshToken', response.tokens.refresh_token);
+      localStorage.setItem('admin_access_token', response.tokens.access_token);
+      localStorage.setItem('admin_refresh_token', response.tokens.refresh_token);
       dispatch(login({
         token: response.tokens.access_token,
         user: {

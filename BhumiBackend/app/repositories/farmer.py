@@ -78,10 +78,6 @@ class FarmerRepository(BaseRepository[Farmer]):
         
         if kyc_status:
             query["kyc_status"] = kyc_status
-        else:
-            # Exclude farmers who started registration but never completed onboarding.
-            # kyc_status stays UNVERIFIED until the farmer submits identity documents.
-            query["kyc_status"] = {"$ne": "unverified"}
         
         if is_active is not None:
             query["is_active"] = is_active

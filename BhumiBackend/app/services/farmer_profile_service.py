@@ -193,9 +193,13 @@ class FarmerProfileService:
     def _land_response(p: LandParcel) -> LandParcelResponse:
         return LandParcelResponse(
             id=str(p.id),
-            survey_number=p.survey_number,
+            name=getattr(p, "name", None),
+            khasra_number=p.khasra_number or p.survey_number,
+            survey_number=p.survey_number or p.khasra_number,
             area_acres=p.area_acres,
+            area_unit=getattr(p, "area_unit", None),
             ownership_type=p.ownership_type,
+            plantation_date=getattr(p, "plantation_date", None),
             is_irrigated=p.is_irrigated,
             belongs_to_another_person=p.belongs_to_another_person,
             fathers_name=p.fathers_name,
@@ -211,16 +215,19 @@ class FarmerProfileService:
             landmark=p.landmark,
             coordinates=p.coordinates,
             boundary_polygon=p.boundary_polygon,
+            land_type=getattr(p, "land_type", None),
             crop_type=p.crop_type,
             soil_type=p.soil_type,
             soil_organic_carbon=p.soil_organic_carbon,
             tree_stock_count=p.tree_stock_count,
             plantation_area_acres=p.plantation_area_acres,
             agroforestry_species=p.agroforestry_species,
+            trees=getattr(p, "trees", []),
             land_document_url=p.land_document_url,
             land_photo_urls=getattr(p, "land_photo_urls", []),
             verification_status=p.verification_status,
             verification_remarks=p.verification_remarks,
+            correction_fields=getattr(p, "correction_fields", None),
             verified_at=p.verified_at,
             created_at=p.created_at,
             updated_at=p.updated_at,
@@ -415,9 +422,13 @@ class FarmerProfileService:
         now = datetime.now(timezone.utc)
         parcel = LandParcel(
             farmer_id=farmer_id,
-            survey_number=data.survey_number,
+            name=data.name,
+            khasra_number=data.khasra_number or data.survey_number,
+            survey_number=data.survey_number or data.khasra_number,
             area_acres=data.area_acres,
+            area_unit=data.area_unit,
             ownership_type=data.ownership_type,
+            plantation_date=data.plantation_date,
             is_irrigated=data.is_irrigated,
             belongs_to_another_person=data.belongs_to_another_person,
             fathers_name=data.fathers_name,
@@ -433,11 +444,13 @@ class FarmerProfileService:
             landmark=data.landmark,
             coordinates=data.coordinates,
             boundary_polygon=data.boundary_polygon,
+            land_type=data.land_type,
             crop_type=data.crop_type,
             soil_type=data.soil_type,
-            tree_stock_count=data.tree_stock_count,
+            tree_stock_count=sum(t.count for t in data.trees) if data.trees else data.tree_stock_count,
             plantation_area_acres=data.plantation_area_acres,
             agroforestry_species=data.agroforestry_species,
+            trees=data.trees or [],
             land_document_url=data.land_document_url,
             land_photo_urls=data.land_photo_urls or [],
             verification_status=LandVerificationStatus.PENDING,
@@ -468,6 +481,11 @@ class FarmerProfileService:
             raise LandParcelNotFoundException()
         for field, value in data.model_dump(exclude_none=True).items():
             setattr(parcel, field, value)
+        
+        if parcel.verification_status == LandVerificationStatus.CORRECTION_REQUIRED:
+            parcel.verification_status = LandVerificationStatus.SUBMITTED
+            parcel.correction_fields = None
+            
         parcel.updated_at = datetime.now(timezone.utc)
         await parcel.save()
         await self._recalc_acreage(farmer)
@@ -625,8 +643,9 @@ class FarmerProfileService:
             farmer_id, document_type, file.filename,
         )
         from app.core.exceptions import BadRequestException as _BadReq
-        if document_type not in ("aadhaar", "pan"):
-            raise _BadReq("document_type must be 'aadhaar' or 'pan'.", "INVALID_DOCUMENT_TYPE")
+        valid_types = ("aadhaar", "aadhaar_front", "aadhaar_back", "pan")
+        if document_type not in valid_types:
+            raise _BadReq("document_type must be 'aadhaar', 'aadhaar_front', 'aadhaar_back', or 'pan'.", "INVALID_DOCUMENT_TYPE")
 
         farmer = await self._get_farmer(farmer_id)
         if farmer.kyc_status == KYCStatus.APPROVED:
@@ -634,21 +653,25 @@ class FarmerProfileService:
 
         existing = farmer.identity_details or IdentityDetails()
 
-        def _build(aadhaar_url: Optional[str], pan_url: Optional[str],
-                   aadhaar_asset=None, pan_asset=None) -> IdentityDetails:
-            return IdentityDetails(
-                aadhaar_number=existing.aadhaar_number,
-                pan_number=existing.pan_number,
-                aadhaar_url=aadhaar_url,
-                pan_url=pan_url,
-                aadhaar_asset=aadhaar_asset,
-                pan_asset=pan_asset,
-                submitted_at=existing.submitted_at or datetime.now(timezone.utc),
-            )
+        def _update_identity(url: str, asset=None):
+            idd = farmer.identity_details or IdentityDetails(submitted_at=datetime.now(timezone.utc))
+            if document_type in ("aadhaar", "aadhaar_front"):
+                idd.aadhaar_url = url
+                idd.aadhaar_front_url = url
+                if asset: idd.aadhaar_asset = asset
+            elif document_type == "aadhaar_back":
+                idd.aadhaar_back_url = url
+            elif document_type == "pan":
+                idd.pan_url = url
+                idd.pan_card_url = url
+                if asset: idd.pan_asset = asset
+            if not idd.submitted_at:
+                idd.submitted_at = datetime.now(timezone.utc)
+            farmer.identity_details = idd
 
         if self._cloudinary and self._cloudinary.is_enabled:
             folder = f"bhumi/{settings.cloudinary_env}/farmers/{farmer_id}/identity"
-            old_asset = existing.aadhaar_asset if document_type == "aadhaar" else existing.pan_asset
+            old_asset = existing.aadhaar_asset if document_type in ("aadhaar", "aadhaar_front") else (existing.pan_asset if document_type == "pan" else None)
 
             try:
                 new_asset = await self._cloudinary.upload(
@@ -667,16 +690,7 @@ class FarmerProfileService:
                 raise
 
             try:
-                if document_type == "aadhaar":
-                    farmer.identity_details = _build(
-                        new_asset.secure_url, existing.pan_url,
-                        new_asset, existing.pan_asset,
-                    )
-                else:
-                    farmer.identity_details = _build(
-                        existing.aadhaar_url, new_asset.secure_url,
-                        existing.aadhaar_asset, new_asset,
-                    )
+                _update_identity(new_asset.secure_url, new_asset)
                 farmer.updated_at = datetime.now(timezone.utc)
                 await farmer.save()
                 logger.info(
@@ -700,12 +714,7 @@ class FarmerProfileService:
             file, f"identity/{farmer_id}/{document_type}",
             ALLOWED_DOCUMENT_TYPES, MAX_DOCUMENT_BYTES,
         )
-        if document_type == "aadhaar":
-            farmer.identity_details = _build(url, existing.pan_url,
-                                             existing.aadhaar_asset, existing.pan_asset)
-        else:
-            farmer.identity_details = _build(existing.aadhaar_url, url,
-                                             existing.aadhaar_asset, existing.pan_asset)
+        _update_identity(url)
         farmer.updated_at = datetime.now(timezone.utc)
         try:
             await farmer.save()
@@ -738,3 +747,19 @@ class FarmerProfileService:
             has_bank_details=bool(bd and bd.account_number),
             onboarding_completed=farmer.onboarding_completed,
         )
+
+    async def delete_account(self, farmer_id: str) -> None:
+        farmer = await self._get_farmer(farmer_id)
+        farmer.is_active = False
+        farmer.updated_at = datetime.now(timezone.utc)
+        await farmer.save()
+
+        try:
+            parcels = await self._land.get_active_by_farmer(farmer_id)
+            for p in parcels:
+                p.is_active = False
+                p.updated_at = datetime.now(timezone.utc)
+                await p.save()
+        except Exception as e:
+            logger.warning(f"Error deactivating land parcels on delete_account: {e}")
+

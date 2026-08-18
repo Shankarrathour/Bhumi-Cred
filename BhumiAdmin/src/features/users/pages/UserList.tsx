@@ -497,7 +497,6 @@ export const UserList = () => {
                         </td>
                         {IAM_ACTIONS.map(act => {
                           const isChecked = !!currentPerms[act];
-                          const isSuper = matrixRole === 'Super Admin';
                           return (
                             <td key={act} className="text-center">
                               <input

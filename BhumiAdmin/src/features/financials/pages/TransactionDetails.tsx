@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle, XCircle, Send, History, Building2,
@@ -7,6 +7,7 @@ import {
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { downloadPDFDocument } from '../../../utils/pdfExporter';
+import { useEcosystemStore } from '../../../store';
 import toast from 'react-hot-toast';
 
 export const TransactionDetails = () => {
@@ -15,33 +16,51 @@ export const TransactionDetails = () => {
 
   // 5 Specified Withdrawal Action Controls & Tabs: Approve, Reject, Transfer, UTR, History
   const [activeTab, setActiveTab] = useState<'Overview' | 'Transfer' | 'UTR' | 'History'>('Overview');
-  const [txnStatus, setTxnStatus] = useState<'Approved' | 'Pending' | 'Rejected'>('Pending');
-  const [utrNumber, setUtrNumber] = useState('UTR-2026-9021-SBIN');
+  
+  const { withdrawals, fetchWithdrawals, processWithdrawal } = useEcosystemStore();
+
+  useEffect(() => {
+    fetchWithdrawals();
+  }, [fetchWithdrawals]);
+
+  const matchedWithdrawal = withdrawals.find(w => w.id === id || w.transactionHash === id);
+
+  const [txnStatus, setTxnStatus] = useState<'Approved' | 'Pending' | 'Rejected'>(
+    matchedWithdrawal ? (matchedWithdrawal.status === 'Disbursed' ? 'Approved' : matchedWithdrawal.status === 'Rejected' ? 'Rejected' : 'Pending') : 'Pending'
+  );
+  
+  const [utrNumber, setUtrNumber] = useState(matchedWithdrawal?.transactionHash || `UTR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}-SBIN`);
 
   const safeId = id || 'TXN-9001';
 
   const transaction = {
     id: safeId,
-    txnId: safeId.startsWith('TXN-') ? safeId : `TXN-CRB-${safeId.slice(-4).toUpperCase()}`,
-    user_name: 'Ramesh Patel',
-    user_id: 'FARM-MP-8091',
+    txnId: matchedWithdrawal?.id || (safeId.startsWith('TXN-') ? safeId : `TXN-CRB-${safeId.slice(-4).toUpperCase()}`),
+    user_name: matchedWithdrawal?.farmerName || 'Shankar Rathore',
+    user_id: matchedWithdrawal?.farmerId || 'FAR-000085',
     user_type: 'Farmer',
-    amount: 42500,
+    amount: matchedWithdrawal?.amount || 42500,
     category: 'Carbon Credit Income Payout',
-    utr: utrNumber,
-    bankName: 'State Bank of India (SBI)',
-    bankAccount: 'SBI Escrow A/C #XXXX-XXXX-9901',
-    ifscCode: 'SBIN0001024',
-    requestedAt: '05 Aug 2026, 10:30 AM',
-    processedAt: '05 Aug 2026, 11:15 AM',
+    utr: matchedWithdrawal?.transactionHash || utrNumber,
+    bankName: matchedWithdrawal?.bankName || 'State Bank of India (SBI)',
+    bankAccount: matchedWithdrawal?.accountNumber || 'SBI Escrow A/C #XXXX-XXXX-9901',
+    ifscCode: matchedWithdrawal?.ifscCode || 'SBIN0001024',
+    requestedAt: matchedWithdrawal?.requestedDate || '05 Aug 2026, 10:30 AM',
+    processedAt: matchedWithdrawal?.processedBy || '05 Aug 2026, 11:15 AM',
   };
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    if (matchedWithdrawal) {
+      await processWithdrawal(matchedWithdrawal.id, 'Disbursed', 'Admin', 'Payout approved by admin');
+    }
     setTxnStatus('Approved');
     toast.success(`Transaction ${transaction.txnId} approved successfully!`);
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
+    if (matchedWithdrawal) {
+      await processWithdrawal(matchedWithdrawal.id, 'Rejected', 'Admin', 'Bank details mismatch');
+    }
     setTxnStatus('Rejected');
     toast.error(`Transaction ${transaction.txnId} rejected.`);
   };

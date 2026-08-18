@@ -145,3 +145,10 @@ api_router.include_router(uploads_router)
 from app.routes.admin_settings import router as admin_settings_router
 api_router.include_router(admin_settings_router)
 
+# ── Module 20: Support Tickets (Farmer/Vendor) ────────────────────────────────
+from app.routes.vendor_support import router as vendor_support_router
+api_router.include_router(vendor_support_router)
+
+# ── Module 21: Soil Testing & Reports ─────────────────────────────────────────
+from app.routes.soil_testing import router as soil_testing_router
+api_router.include_router(soil_testing_router)
