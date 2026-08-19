@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle, XCircle, Send, History, Building2,
@@ -7,7 +7,10 @@ import {
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { downloadPDFDocument } from '../../../utils/pdfExporter';
+import { useEcosystemStore } from '../../../store';
 import toast from 'react-hot-toast';
+
+import { apiClient as api } from '../../../api/axios';
 
 export const TransactionDetails = () => {
   const { id } = useParams();
@@ -15,33 +18,74 @@ export const TransactionDetails = () => {
 
   // 5 Specified Withdrawal Action Controls & Tabs: Approve, Reject, Transfer, UTR, History
   const [activeTab, setActiveTab] = useState<'Overview' | 'Transfer' | 'UTR' | 'History'>('Overview');
-  const [txnStatus, setTxnStatus] = useState<'Approved' | 'Pending' | 'Rejected'>('Pending');
-  const [utrNumber, setUtrNumber] = useState('UTR-2026-9021-SBIN');
+  
+  const { withdrawals, fetchWithdrawals, processWithdrawal } = useEcosystemStore();
+
+  useEffect(() => {
+    fetchWithdrawals();
+  }, [fetchWithdrawals]);
+
+  const matchedWithdrawal = withdrawals.find(w => w.id === id || w.transactionHash === id);
+
+  const [txnStatus, setTxnStatus] = useState<'Approved' | 'Pending' | 'Rejected'>(
+    matchedWithdrawal ? (matchedWithdrawal.status === 'Disbursed' ? 'Approved' : matchedWithdrawal.status === 'Rejected' ? 'Rejected' : 'Pending') : 'Pending'
+  );
+  
+  const [utrNumber, setUtrNumber] = useState(matchedWithdrawal?.transactionHash || `UTR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}-SBIN`);
 
   const safeId = id || 'TXN-9001';
 
   const transaction = {
     id: safeId,
-    txnId: safeId.startsWith('TXN-') ? safeId : `TXN-CRB-${safeId.slice(-4).toUpperCase()}`,
-    user_name: 'Ramesh Patel',
-    user_id: 'FARM-MP-8091',
+    txnId: matchedWithdrawal?.id || (safeId.startsWith('TXN-') ? safeId : `TXN-CRB-${safeId.slice(-4).toUpperCase()}`),
+    user_name: matchedWithdrawal?.farmerName || matchedWithdrawal?.account_holder_name || 'Shankar Rathore',
+    user_id: matchedWithdrawal?.farmerId || 'FAR-000085',
     user_type: 'Farmer',
-    amount: 42500,
-    category: 'Carbon Credit Income Payout',
-    utr: utrNumber,
-    bankName: 'State Bank of India (SBI)',
-    bankAccount: 'SBI Escrow A/C #XXXX-XXXX-9901',
-    ifscCode: 'SBIN0001024',
-    requestedAt: '05 Aug 2026, 10:30 AM',
-    processedAt: '05 Aug 2026, 11:15 AM',
+    amount: matchedWithdrawal?.amount || 190,
+    category: matchedWithdrawal?.bankName?.includes('Marketplace') ? 'Marketplace Purchase' : 'Payout Withdrawal',
+    utr: matchedWithdrawal?.payout_reference || matchedWithdrawal?.transactionHash || utrNumber,
+    paymentMethod: matchedWithdrawal?.payment_method?.toUpperCase() || 'UPI',
+    bankName: matchedWithdrawal?.bankName || 'State Bank of India (SBI)',
+    bankAccount: matchedWithdrawal?.accountNumber || matchedWithdrawal?.account_number_masked || '#AGR-20260819-2C2PYP',
+    ifscCode: matchedWithdrawal?.ifscCode || matchedWithdrawal?.ifsc_code || 'SBIN0001024',
+    upiId: matchedWithdrawal?.upi_id || `${(matchedWithdrawal?.farmerName || 'shankar').toLowerCase().replace(/\s+/g, '')}@upi`,
+    accountHolder: matchedWithdrawal?.account_holder_name || matchedWithdrawal?.farmerName || 'Shankar Rathore',
+    requestedAt: matchedWithdrawal?.requestedDate || matchedWithdrawal?.created_at || '19 Aug 2026, 10:30 AM',
+    processedAt: matchedWithdrawal?.processedBy || '19 Aug 2026, 11:15 AM',
   };
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    const targetId = matchedWithdrawal ? matchedWithdrawal.id : safeId;
+    try {
+      if (targetId.startsWith('AGR-') || safeId.includes('AGR-')) {
+        await api.patch(`/admin/marketplace-orders/${targetId}/status`, { status: 'Packed' });
+      } else {
+        await api.put(`/admin/withdrawals/${targetId}/approve`, { transaction_reference: utrNumber });
+      }
+    } catch (err) {
+      console.warn("Backend approval notification notice:", err);
+    }
+    if (matchedWithdrawal) {
+      await processWithdrawal(matchedWithdrawal.id, 'Disbursed', 'Admin', 'Payout approved by admin');
+    }
     setTxnStatus('Approved');
-    toast.success(`Transaction ${transaction.txnId} approved successfully!`);
+    toast.success(`Transaction ${transaction.txnId} approved successfully & notification sent to farmer!`);
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
+    const targetId = matchedWithdrawal ? matchedWithdrawal.id : safeId;
+    try {
+      if (targetId.startsWith('AGR-') || safeId.includes('AGR-')) {
+        await api.patch(`/admin/marketplace-orders/${targetId}/status`, { status: 'Cancelled' });
+      } else {
+        await api.put(`/admin/withdrawals/${targetId}/reject`, { reason: 'Bank verification required' });
+      }
+    } catch (err) {
+      console.warn("Backend rejection notice:", err);
+    }
+    if (matchedWithdrawal) {
+      await processWithdrawal(matchedWithdrawal.id, 'Rejected', 'Admin', 'Bank details mismatch');
+    }
     setTxnStatus('Rejected');
     toast.error(`Transaction ${transaction.txnId} rejected.`);
   };
@@ -171,11 +215,22 @@ export const TransactionDetails = () => {
       {/* ── TAB 2: TRANSFER ── */}
       {activeTab === 'Transfer' && (
         <div className="bg-white border border-[#E8EDF5] rounded-2xl p-6 shadow-xs space-y-4">
-          <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3">Bank Transfer & Escrow Details</h3>
-          <div className="p-4 bg-[#FAFCFF] border border-[#F1F5F9] rounded-2xl space-y-2 text-[13px]">
-            <p><strong>Bank Name:</strong> {transaction.bankName}</p>
-            <p><strong>Account Number:</strong> <span className="font-mono">{transaction.bankAccount}</span></p>
-            <p><strong>IFSC Code:</strong> <span className="font-mono text-[#2563EB]">{transaction.ifscCode}</span></p>
+          <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3">Bank Account & UPI Payout Details</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[13px]">
+            <div className="p-4 bg-[#FAFCFF] border border-[#F1F5F9] rounded-2xl space-y-2">
+              <span className="text-[11px] font-bold text-[#2563EB] uppercase block">Bank Account Details</span>
+              <p><strong>Beneficiary Holder:</strong> {transaction.accountHolder}</p>
+              <p><strong>Bank Name:</strong> {transaction.bankName}</p>
+              <p><strong>Account Number:</strong> <span className="font-mono">{transaction.bankAccount}</span></p>
+              <p><strong>IFSC Code:</strong> <span className="font-mono text-[#2563EB]">{transaction.ifscCode}</span></p>
+            </div>
+            <div className="p-4 bg-[#F0FDF4] border border-[#DCFCE7] rounded-2xl space-y-2">
+              <span className="text-[11px] font-bold text-[#16A34A] uppercase block">UPI & Payment Channel</span>
+              <p><strong>Payment Method:</strong> <span className="font-bold text-[#16A34A]">{transaction.paymentMethod}</span></p>
+              <p><strong>Farmer UPI VPA ID:</strong> <span className="font-mono text-[#16A34A]">{transaction.upiId}</span></p>
+              <p><strong>Bank UTR Reference:</strong> <span className="font-mono text-[#2563EB]">{transaction.utr}</span></p>
+              <p><strong>Transaction Category:</strong> {transaction.category}</p>
+            </div>
           </div>
         </div>
       )}

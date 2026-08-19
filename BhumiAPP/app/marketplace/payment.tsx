@@ -27,10 +27,10 @@ export default function PaymentScreen() {
   const itemsToCheckout = isAccelerated ? [acceleratedItem] : cart;
   
   // Use backend totals if available, otherwise fallback to local calc for mock/unauthenticated mode
-  const basePrice = checkoutSummaryResponse ? checkoutSummaryResponse.subtotal : itemsToCheckout.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-  const shipping = checkoutSummaryResponse ? checkoutSummaryResponse.delivery_charge : (basePrice > 500 ? 0 : 40);
-  const taxes = 0; // GST is included in product price per backend or not provided, we won't mock it to prevent desync
-  const totalPrice = checkoutSummaryResponse ? checkoutSummaryResponse.final_total : (basePrice + shipping);
+  const basePrice = checkoutSummaryResponse ? checkoutSummaryResponse.subtotal : itemsToCheckout.reduce((sum, item) => sum + (item.product.originalPrice || item.product.price) * item.quantity, 0);
+  const shipping = checkoutSummaryResponse ? checkoutSummaryResponse.delivery_charge : (basePrice > 500 ? 0 : 50);
+  const discount = checkoutSummaryResponse ? checkoutSummaryResponse.discount : itemsToCheckout.reduce((sum, item) => sum + ((item.product.originalPrice || item.product.price) - item.product.price) * item.quantity, 0);
+  const totalPrice = checkoutSummaryResponse ? checkoutSummaryResponse.final_total : Math.max(0, basePrice + shipping - discount);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [showOptionsSheet, setShowOptionsSheet] = useState(false);
@@ -66,10 +66,10 @@ export default function PaymentScreen() {
 
       if (isAccelerated && acceleratedItem) {
         await addToCart(acceleratedItem.product, acceleratedItem.quantity);
+        useMarketplaceStore.getState().setAcceleratedCheckoutItem(null);
       }
 
-      const orderId = await checkoutStore('Agri Marketplace Order');
-      useMarketplaceStore.getState().setAcceleratedCheckoutItem(null);
+      const orderId = await checkoutStore('Agri Marketplace Order', selectedMethod);
 
       setIsProcessing(false);
       setActiveFlow('none');
@@ -134,11 +134,11 @@ export default function PaymentScreen() {
               {shipping === 0 ? 'FREE' : `₹${shipping.toFixed(2)}`}
             </Text>
           </View>
-          {checkoutSummaryResponse && checkoutSummaryResponse.discount > 0 && (
+          {discount > 0 && (
             <View style={styles.tableRow}>
               <Text style={styles.tableColName}>Discount</Text>
               <Text style={[styles.tableColVal, { color: COLORS.success }]}>
-                -₹{checkoutSummaryResponse.discount.toFixed(2)}
+                -₹{discount.toFixed(2)}
               </Text>
             </View>
           )}

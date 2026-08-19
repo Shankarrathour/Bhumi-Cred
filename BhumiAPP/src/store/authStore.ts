@@ -7,69 +7,7 @@ import { resolveMediaUrl } from '../utils/resolveMediaUrl';
 // import { useWalletStore } from './walletStore';
 // import { useMarketplaceStore } from './marketplaceStore';
 
-export type AuthRole = 'farmer' | 'vendor';
-
-export interface VendorProfile {
-  id: string;
-  vendorId: string | null;
-  name: string | null;
-  fatherName: string | null;
-  email: string | null;
-  phone: string;
-  dob: string | null;
-  gender: string | null;
-  profilePhotoUrl: string | null;
-  businessName: string | null;
-  gstNumber: string | null;
-  yearsOfExperience: number | null;
-  businessDescription: string | null;
-  address: string | null;
-  state: string | null;
-  district: string | null;
-  tehsil: string | null;
-  gramPanchayat: string | null;
-  villageCity: string | null;
-  pincode: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  kycIdentityType: string | null;
-  kycIdentityNumber: string | null;
-  kycDocumentFrontUrl: string | null;
-  kycDocumentBackUrl: string | null;
-  bankAccountNumber: string | null;
-  bankIfsc: string | null;
-  bankHolderName: string | null;
-  status: string; // "Pending" | "Active" | "Rejected" | "Suspended"
-  rejectionReason: string | null;
-  isVerified: boolean;
-  walletBalance: number;
-}
-
-export interface VendorWizardData {
-  name?: string;
-  fatherName?: string;
-  email?: string;
-  dob?: string;
-  gender?: string;
-  businessName?: string;
-  gstNumber?: string;
-  yearsOfExperience?: number;
-  businessDescription?: string;
-  address?: string;
-  state?: string;
-  district?: string;
-  tehsil?: string;
-  gramPanchayat?: string;
-  villageCity?: string;
-  pincode?: string;
-  latitude?: number;
-  longitude?: number;
-  kycIdentityType?: string;
-  kycIdentityNumber?: string;
-  bankAccountNumber?: string;
-  bankIfsc?: string;
-  bankHolderName?: string;
-}
+export type AuthRole = 'farmer' | 'govt_body' | 'partner';
 
 export interface UserProfile {
   farmerId?: string;
@@ -106,7 +44,6 @@ interface AuthState {
   isAuthenticated: boolean;
   role: AuthRole;
   user: UserProfile | null;
-  vendor: VendorProfile | null;
   accessToken: string | null;
   refreshToken: string | null;
   onboardingStep: number;
@@ -118,11 +55,11 @@ interface AuthState {
   login: (mobile: string, role?: AuthRole) => Promise<void>;
   verifyOtp: (otp: string) => Promise<boolean>;
   fetchProfile: () => Promise<void>;
-  fetchVendorProfile: () => Promise<void>;
-  updateVendorProfile: (payload: VendorWizardData) => Promise<boolean>;
   logout: () => void;
+  deleteAccount: () => Promise<void>;
   updateOnboardingData: (data: Partial<UserProfile>) => void;
   setVerificationStatus: (status: UserProfile['verificationStatus']) => void;
+  setIsActive: (isActive: boolean) => void;
   setOnboardingStep: (step: number) => void;
   completeOnboarding: () => Promise<void>;
   registerMobile: (mobile: string, role?: AuthRole) => Promise<void>;
@@ -154,51 +91,16 @@ const defaultUser: UserProfile = {
   occupation: '',
 };
 
-function mapVendorResponse(v: any): VendorProfile {
-  return {
-    id: v.id,
-    vendorId: v.vendor_id ?? null,
-    name: v.name,
-    fatherName: v.father_name,
-    email: v.email,
-    phone: v.phone,
-    dob: v.dob,
-    gender: v.gender,
-    profilePhotoUrl: resolveMediaUrl(v.profile_photo_url) ?? null,
-    businessName: v.business_name,
-    gstNumber: v.gst_number,
-    yearsOfExperience: v.years_of_experience,
-    businessDescription: v.business_description,
-    address: v.address,
-    state: v.state,
-    district: v.district,
-    tehsil: v.tehsil,
-    gramPanchayat: v.gram_panchayat,
-    villageCity: v.village_city,
-    pincode: v.pincode,
-    latitude: v.latitude,
-    longitude: v.longitude,
-    kycIdentityType: v.kyc_identity_type,
-    kycIdentityNumber: v.kyc_identity_number,
-    kycDocumentFrontUrl: resolveMediaUrl(v.kyc_document_front_url) ?? null,
-    kycDocumentBackUrl: resolveMediaUrl(v.kyc_document_back_url) ?? null,
-    bankAccountNumber: v.bank_account_number,
-    bankIfsc: v.bank_ifsc,
-    bankHolderName: v.bank_holder_name,
-    status: v.status,
-    rejectionReason: v.rejection_reason,
-    isVerified: v.is_verified,
-    walletBalance: v.wallet_balance,
-  };
-}
+
 
 function kycStatusToVerification(
   kycStatus: string,
   onboardingCompleted: boolean,
 ): UserProfile['verificationStatus'] {
-  if (kycStatus === 'approved') return 'approved';
-  if (kycStatus === 'rejected') return 'rejected';
-  if (kycStatus === 'pending' || onboardingCompleted) return 'pending';
+  const s = (kycStatus || '').toLowerCase();
+  if (s === 'approved' || s === 'verified') return 'approved';
+  if (s === 'rejected') return 'rejected';
+  if (s === 'pending' || onboardingCompleted) return 'pending';
   return 'unverified';
 }
 
@@ -208,7 +110,6 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       role: 'farmer',
       user: null,
-      vendor: null,
       accessToken: null,
       refreshToken: null,
       onboardingStep: 1,
@@ -223,7 +124,8 @@ export const useAuthStore = create<AuthState>()(
       login: async (mobile: string, role: AuthRole = 'farmer') => {
         set({ isLoading: true, error: null, role });
         try {
-          const { data } = await api.post('/auth/login/send-otp', { mobile, role });
+          const apiRole = role;
+          const { data } = await api.post('/auth/login/send-otp', { mobile, role: apiRole });
           set({
             user: { ...defaultUser, mobile },
             isLoading: false,
@@ -243,8 +145,6 @@ export const useAuthStore = create<AuthState>()(
 
       verifyOtp: async (otp: string) => {
         const role = get().role;
-        // login()/registerMobile() always stash the pending mobile on `user.mobile`
-        // (a temporary holding place pre-verification) regardless of role.
         const mobile = get().user?.mobile;
         if (!mobile) {
           set({ error: 'Mobile number not set.' });
@@ -252,7 +152,8 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ isLoading: true, error: null });
         try {
-          const { data } = await api.post('/auth/verify-otp', { mobile, otp, role });
+          const apiRole = role;
+          const { data } = await api.post('/auth/verify-otp', { mobile, otp, role: apiRole });
           const { tokens } = data;
 
           setAuthTokens(tokens.access_token, tokens.refresh_token);
@@ -267,29 +168,19 @@ export const useAuthStore = create<AuthState>()(
             },
           );
 
-          if (data.role === 'vendor') {
-            set({
-              accessToken: tokens.access_token,
-              refreshToken: tokens.refresh_token,
-              vendor: mapVendorResponse(data.vendor),
-              isAuthenticated: data.vendor.status === 'Active',
-              isLoading: false,
-            });
-            return true;
-          }
-
-          // ── Farmer path — unchanged behavior ──────────────────────────────
-          const farmer = data.farmer;
-          const verificationStatus = kycStatusToVerification(
-            farmer.kyc_status,
-            farmer.onboarding_completed,
-          );
+          const userRecord = data.farmer || data.vendor || {};
+          const verificationStatus = userRecord.kyc_status
+            ? kycStatusToVerification(
+                userRecord.kyc_status,
+                userRecord.onboarding_completed,
+              )
+            : 'approved';
 
           const updatedUser: UserProfile = {
             ...defaultUser,
-            farmerId: farmer.farmer_id,
-            mobile: farmer.mobile,
-            fullName: farmer.full_name || '',
+            farmerId: userRecord.farmer_id || userRecord.vendor_id || 'ID-001',
+            mobile: userRecord.mobile || userRecord.phone || mobile,
+            fullName: userRecord.full_name || userRecord.name || '',
             verificationStatus,
           };
 
@@ -297,18 +188,17 @@ export const useAuthStore = create<AuthState>()(
             accessToken: tokens.access_token,
             refreshToken: tokens.refresh_token,
             user: updatedUser,
-            isAuthenticated: verificationStatus === 'approved',
+            isAuthenticated: true,
             isLoading: false,
           });
 
-          // Fetch the full farmer profile from the backend (fire-and-forget).
-          // This populates all profile fields (address, photo, email, etc.) beyond
-          // the minimal data returned by the auth token response.
-          get().fetchProfile().catch(() => {});
+          if (data.farmer) {
+            get().fetchProfile().catch(() => {});
+          }
 
           return true;
         } catch (err: any) {
-          const msg = err?.response?.data?.message || 'Invalid OTP.';
+          const msg = err?.response?.data?.message || 'OTP verification failed. Please try again.';
           set({ isLoading: false, error: msg });
           return false;
         }
@@ -324,6 +214,10 @@ export const useAuthStore = create<AuthState>()(
             api.get('/farmer/address'),
           ]);
 
+          if (profileRes.status === 'rejected') {
+            throw profileRes.reason;
+          }
+
           const p = profileRes.status === 'fulfilled' ? profileRes.value.data?.data : null;
           const a = addressRes.status === 'fulfilled' ? addressRes.value.data?.data : null;
           const addr = a?.current_address;
@@ -335,7 +229,7 @@ export const useAuthStore = create<AuthState>()(
           });
 
           const computedVerificationStatus = p ? kycStatusToVerification(p.kyc_status, p.onboarding_completed) : currentUser.verificationStatus;
-          const computedIsActive = p != null ? (p.is_active ?? true) : true;
+          const computedIsActive = p != null ? (p.is_active ?? true) : (currentUser.isActive ?? true);
 
           console.log('[authStore] fetchProfile computed:', {
             verificationStatus: computedVerificationStatus,
@@ -345,6 +239,7 @@ export const useAuthStore = create<AuthState>()(
           const updatedUser: UserProfile = {
             ...currentUser,
             verificationStatus: computedVerificationStatus,
+            isActive: computedIsActive,
             farmerId: p?.farmer_id || currentUser.farmerId,
             fullName: p?.full_name || currentUser.fullName,
             fatherName: p?.father_name || currentUser.fatherName,
@@ -369,15 +264,31 @@ export const useAuthStore = create<AuthState>()(
             tehsil: addr?.tehsil || currentUser.tehsil,
           };
 
+          if (computedIsActive === false && currentUser.isActive !== false) {
+            try {
+              require('./notificationStore').useNotificationStore.getState().addNotification({
+                title: 'Account Suspended by Admin ⚠️',
+                message: 'Your farmer profile account has been suspended by the Admin. Features and transactions are temporarily locked.',
+                type: 'system'
+              });
+            } catch (e) {
+              console.log('Error adding suspension notification', e);
+            }
+          }
+
           const walletBal: number = p?.wallet_balance ?? get().walletBalance;
           const ecoScore: number = p?.sustainability_score ?? get().sustainabilityScore;
+
+          if (computedIsActive === false) {
+            console.warn('[authStore] Farmer account is inactive/deleted. Auto logging out...');
+            get().logout();
+            return;
+          }
 
           set({
             user: updatedUser,
             walletBalance: walletBal,
             sustainabilityScore: ecoScore,
-            // Promote isAuthenticated when admin has approved the farmer.
-            // This unblocks routing from /onboarding step 4 to /(tabs) on next app open.
             ...(computedVerificationStatus === 'approved' && computedIsActive !== false
               ? { isAuthenticated: true }
               : {}),
@@ -385,35 +296,62 @@ export const useAuthStore = create<AuthState>()(
 
           // Sync wallet balance into walletStore so the Wallet screen reflects real data.
           require('./walletStore').useWalletStore.getState().syncBalance(walletBal);
-        } catch (err) {
+        } catch (err: any) {
           console.warn('[authStore] fetchProfile failed:', err);
+          const status = err?.response?.status;
+          const errCode = err?.response?.data?.error_code;
+          if (status === 404 || status === 401 || status === 403 || errCode === 'FARMER_NOT_FOUND' || errCode === 'FARMER_BLOCKED') {
+            get().logout();
+          }
         }
       },
 
       logout: async () => {
         const { refreshToken } = get();
+        // 1. Immediately clear local auth tokens and Zustand state
+        setAuthTokens(null, null);
+        set({
+          isAuthenticated: false,
+          role: 'farmer',
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          onboardingStep: 1,
+          otpDebug: null,
+        });
+
+        // 2. Clear feature stores
+        try { require('./marketplaceStore').useMarketplaceStore.getState().clearCart(); } catch {}
+        try { require('./walletStore').useWalletStore.getState().resetWallet(); } catch {}
+        try { require('./landStore').useLandStore.getState().resetLandStore(); } catch {}
+        try { require('./notificationStore').useNotificationStore.getState().clearNotifications(); } catch {}
+
+        // 3. Fire-and-forget backend notification
+        if (refreshToken) {
+          api.post('/auth/logout', { refresh_token: refreshToken }).catch(() => {});
+        }
+      },
+
+      deleteAccount: async () => {
         try {
-          if (refreshToken) {
-            await api.post('/auth/logout', { refresh_token: refreshToken });
-          }
-        } catch {
-          // Proceed regardless — clear local state.
+          await api.delete('/farmer/account');
+        } catch (err) {
+          console.warn('[authStore] deleteAccount API error:', err);
         } finally {
           setAuthTokens(null, null);
           set({
             isAuthenticated: false,
             role: 'farmer',
             user: null,
-            vendor: null,
             accessToken: null,
             refreshToken: null,
             onboardingStep: 1,
             otpDebug: null,
           });
-          require('./marketplaceStore').useMarketplaceStore.getState().clearCart();
-          require('./walletStore').useWalletStore.getState().resetWallet();
-          require('./landStore').useLandStore.getState().resetLandStore();
-          require('./notificationStore').useNotificationStore.getState().clearNotifications();
+          try { require('./marketplaceStore').useMarketplaceStore.getState().clearCart(); } catch {}
+          try { require('./walletStore').useWalletStore.getState().resetWallet(); } catch {}
+          try { require('./landStore').useLandStore.getState().resetLandStore(); } catch {}
+          try { require('./notificationStore').useNotificationStore.getState().clearNotifications(); } catch {}
         }
       },
 
@@ -435,6 +373,27 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      setIsActive: (isActive: boolean) => {
+        const currentUser = get().user;
+        const prevIsActive = currentUser?.isActive;
+        const newUser = currentUser
+          ? { ...currentUser, isActive }
+          : { ...defaultUser, isActive };
+        set({ user: newUser });
+
+        if (isActive === false && prevIsActive !== false) {
+          try {
+            require('./notificationStore').useNotificationStore.getState().addNotification({
+              title: 'Account Suspended by Admin ⚠️',
+              message: 'Your farmer profile account has been suspended by the Admin. Features and transactions are temporarily locked.',
+              type: 'system'
+            });
+          } catch (e) {
+            console.log('Error adding suspension notification', e);
+          }
+        }
+      },
+
       setOnboardingStep: (step: number) => {
         set({ onboardingStep: step });
       },
@@ -443,18 +402,21 @@ export const useAuthStore = create<AuthState>()(
         const user = get().user;
         if (!user) return;
 
-        // Optimistic: advance to success screen immediately (original behavior).
         set({
           user: { ...user, verificationStatus: 'pending' },
           onboardingStep: 4,
         });
 
-        // Background: persist to backend. Errors are logged but do not block UX.
+        // Background: persist to backend database.
         try {
           const profilePayload: Record<string, any> = {
             full_name: user.fullName || undefined,
             father_name: user.fatherName || undefined,
             email: user.email || undefined,
+            gender: user.gender ? user.gender.toLowerCase() : undefined,
+            category: user.category ? user.category.toLowerCase() : undefined,
+            education: user.education ? user.education.toLowerCase() : undefined,
+            occupation: user.occupation || undefined,
           };
           if (user.dob) {
             try {
@@ -503,12 +465,19 @@ export const useAuthStore = create<AuthState>()(
           }
         }
 
+        // Refresh profile from database so local state reflects true MongoDB state
+        try {
+          await get().fetchProfile();
+        } catch (err) {
+          console.warn('[authStore] fetchProfile after onboarding failed:', err);
+        }
       },
 
       registerMobile: async (mobile: string, role: AuthRole = 'farmer') => {
         set({ isLoading: true, error: null, role });
         try {
-          const { data } = await api.post('/auth/register/send-otp', { mobile, role });
+          const apiRole = role;
+          const { data } = await api.post('/auth/register/send-otp', { mobile, role: apiRole });
           set({
             user: { ...defaultUser, mobile },
             isLoading: false,
@@ -526,55 +495,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      fetchVendorProfile: async () => {
-        if (get().role !== 'vendor') return;
-        try {
-          const { data } = await api.get('/vendor/auth/me');
-          set({
-            vendor: mapVendorResponse(data),
-            isAuthenticated: data.status === 'Active',
-          });
-        } catch (err) {
-          console.warn('[authStore] fetchVendorProfile failed:', err);
-        }
-      },
 
-      updateVendorProfile: async (payload: VendorWizardData) => {
-        set({ isLoading: true, error: null });
-        try {
-          const { data } = await api.put('/vendor/auth/me', {
-            name: payload.name,
-            father_name: payload.fatherName,
-            email: payload.email,
-            dob: payload.dob,
-            gender: payload.gender,
-            business_name: payload.businessName,
-            gst_number: payload.gstNumber,
-            years_of_experience: payload.yearsOfExperience,
-            business_description: payload.businessDescription,
-            address: payload.address,
-            state: payload.state,
-            district: payload.district,
-            tehsil: payload.tehsil,
-            gram_panchayat: payload.gramPanchayat,
-            village_city: payload.villageCity,
-            pincode: payload.pincode,
-            latitude: payload.latitude,
-            longitude: payload.longitude,
-            kyc_identity_type: payload.kycIdentityType,
-            kyc_identity_number: payload.kycIdentityNumber,
-            bank_account_number: payload.bankAccountNumber,
-            bank_ifsc: payload.bankIfsc,
-            bank_holder_name: payload.bankHolderName,
-          });
-          set({ vendor: mapVendorResponse(data), isLoading: false });
-          return true;
-        } catch (err: any) {
-          const msg = err?.response?.data?.message || 'Unable to submit your details. Please try again.';
-          set({ isLoading: false, error: msg });
-          return false;
-        }
-      },
     }),
     {
       name: 'bhumicred_auth_store',
@@ -603,7 +524,7 @@ export const useAuthStore = create<AuthState>()(
             console.log("[DEBUG-AUTH] 3. No access token in hydrated state.");
           }
           
-          useAuthStore.setState({ _hasHydrated: true });
+          useAuthStore.setState({ _hasHydrated: true, isLoading: false, error: null });
           console.log("[DEBUG-AUTH] 4. _hasHydrated set to true.");
         };
       },

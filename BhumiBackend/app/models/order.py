@@ -43,6 +43,7 @@ class Order(Document):
     final_total: float
     
     delivery_address: OrderAddressSnapshot
+    payment_method: str = "wallet"
     status: OrderStatus = OrderStatus.PENDING
     status_history: List[OrderStatusHistory] = []
     

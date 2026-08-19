@@ -49,12 +49,7 @@ export const NAVIGATION_ITEMS: NavItem[] = [
     icon: Globe,
     roles: ['super_admin', 'operations_admin', 'carbon_project_manager'],
   },
-  {
-    title: 'Vendors Manager',
-    path: '/admin/vendors',
-    icon: Store,
-    roles: ['super_admin', 'vendor_manager'],
-  },
+
   {
     title: 'Products Moderation',
     path: '/admin/marketplace',
@@ -149,12 +144,7 @@ export const NAVIGATION_ITEMS: NavItem[] = [
     icon: FileCode,
     roles: ['super_admin', 'vendor_manager'],
   },
-  {
-    title: 'Support Desk',
-    path: '/admin/support',
-    icon: MessageSquare,
-    roles: ['super_admin', 'support_manager', 'operations_admin'],
-  },
+
   {
     title: 'System Logs',
     path: '/admin/activity-logs',

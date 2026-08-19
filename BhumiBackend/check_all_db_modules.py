@@ -14,7 +14,6 @@ from app.config.settings import settings
 from app.models.farmer import Farmer
 from app.models.family_member import FamilyMember
 from app.models.land_parcel import LandParcel
-from app.models.support_ticket import SupportTicket
 from app.models.notification import Notification
 
 from app.models.govt import (
@@ -82,7 +81,7 @@ async def main():
 
     all_models = [
         # 1. Farmer Core
-        Farmer, FamilyMember, LandParcel, SupportTicket, Notification,
+        Farmer, FamilyMember, LandParcel, Notification,
         # 2. Government Body
         GovtOrganization, Department, AuthorizedPerson, GovtScheme, SchemeApplication, SubsidyDisbursement,
         # 3. Partner Management

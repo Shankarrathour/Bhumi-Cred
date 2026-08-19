@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from app.models.land_parcel import LandParcel
 from app.models.farmer import Farmer
 from app.schemas.admin_land import AdminLandParcelResponse
@@ -105,7 +105,8 @@ class AdminLandService:
         self,
         land_id: str,
         status: str,
-        remarks: Optional[str] = None
+        remarks: Optional[str] = None,
+        correction_fields: Optional[List[str]] = None
     ) -> AdminLandParcelResponse:
         from bson import ObjectId
         from bson.errors import InvalidId
@@ -142,31 +143,109 @@ class AdminLandService:
         land.verification_status = status.lower()
         if remarks:
             land.verification_remarks = remarks
+        if correction_fields is not None:
+            land.correction_fields = correction_fields
         if status.lower() in ['verified', 'approved']:
             land.verified_at = datetime.utcnow()
             
         await land.save()
         
         # Create Notification
-        if status.lower() in ['verified', 'approved']:
-            notification = Notification(
-                farmer_id=str(land.farmer_id),
-                title="Land Verified",
-                message="Your submitted land has been verified successfully.",
-                type="land"
-            )
-            await notification.insert()
-        elif status.lower() == 'rejected':
-            message = "Your land verification has been rejected. Please review the remarks and resubmit if required."
-            if remarks:
-                message += f" Remarks: {remarks}"
-            notification = Notification(
-                farmer_id=str(land.farmer_id),
-                title="Land Verification Rejected",
-                message=message,
-                type="land"
-            )
-            await notification.insert()
+        notif_title = "Land Update"
+        notif_msg = f"Your land verification status has been updated to: {status.upper()}."
+        
+        status_lower = status.lower()
+        if status_lower in ['verified', 'approved']:
+            notif_title = "Land Approved"
+            notif_msg = "Congratulations! Your land parcel has been approved."
+        elif status_lower == 'under_review':
+            notif_title = "Land Under Review"
+            notif_msg = "Your land application is now under active admin GIS review."
+        elif status_lower == 'correction_required':
+            notif_title = "Action Required: Correction Requested"
+            fields_str = f" Fields: {', '.join(correction_fields)}" if correction_fields else ""
+            notif_msg = f"Admin requested correction: {remarks or 'Please check detail'}.{fields_str}"
+        elif status_lower == 'project_assigned':
+            notif_title = "Project Assigned"
+            notif_msg = f"Your land parcel is assigned to Carbon Project: {remarks or 'MP Agroforestry Canopy'}"
+        elif status_lower == 'rejected':
+            notif_title = "Land Rejected"
+            notif_msg = f"Land application rejected. Reason: {remarks or 'No reason provided'}"
+
+        # If status is project_assigned, approved, or verified, auto-enroll farmer into ProjectEnrollment
+        if status_lower in ['project_assigned', 'verified', 'approved']:
+            try:
+                from app.models.project_enrollment import (
+                    ProjectEnrollment, EnrollmentStatus, ProjectStage, InsuranceProtection, InsurancePolicy, InsuranceStatus
+                )
+                from app.models.sustainability_project import SustainabilityProject
+                from datetime import datetime, timezone
+                
+                target_proj = await SustainabilityProject.find_one(SustainabilityProject.is_active == True)
+                proj_id = target_proj.project_id if target_proj else "ar-carban"
+
+                fid = str(land.farmer_id)
+                existing_enrollment = await ProjectEnrollment.find_one(
+                    ProjectEnrollment.farmer_id == fid
+                )
+                if existing_enrollment:
+                    existing_enrollment.status = EnrollmentStatus.ACTIVE
+                    existing_enrollment.current_stage = ProjectStage.ACTIVE_MONITORING
+                    existing_enrollment.stage_project_assigned = True
+                    existing_enrollment.stage_land_registered = True
+                    existing_enrollment.stage_inspection_completed = True
+                    existing_enrollment.stage_soil_verified = True
+                    existing_enrollment.stage_trees_registered = True
+                    existing_enrollment.stage_insurance_activated = True
+                    existing_enrollment.stage_mrv_monitoring_started = True
+                    existing_enrollment.land_verified = True
+                    existing_enrollment.trees_verified = True
+                    existing_enrollment.mrv_verified = True
+                    await existing_enrollment.save()
+                else:
+                    now = datetime.now(timezone.utc)
+                    new_enrollment = ProjectEnrollment(
+                        farmer_id=fid,
+                        project_id=proj_id,
+                        status=EnrollmentStatus.ACTIVE,
+                        current_stage=ProjectStage.ACTIVE_MONITORING,
+                        progress_percent=70,
+                        land_area_acres=land.area_acres,
+                        registered_trees=int(land.area_acres * 5) if land.area_acres > 0 else 100,
+                        insured_trees=int(land.area_acres * 5) if land.area_acres > 0 else 100,
+                        green_family_count=int(land.area_acres * 5) // 5 if land.area_acres > 0 else 20,
+                        estimated_carbon_impact=round(land.area_acres * 3.4, 2),
+                        sustainability_score=min(100, 50 + int(land.area_acres * 2)),
+                        land_verified=True,
+                        trees_verified=True,
+                        mrv_verified=True,
+                        stage_project_assigned=True,
+                        stage_land_registered=True,
+                        stage_inspection_completed=True,
+                        stage_soil_verified=True,
+                        stage_trees_registered=True,
+                        stage_insurance_activated=True,
+                        stage_mrv_monitoring_started=True,
+                        insurance=InsuranceProtection(
+                            policy=InsurancePolicy.GREEN_SHIELD,
+                            status=InsuranceStatus.ACTIVE,
+                            protected_trees=int(land.area_acres * 5) if land.area_acres > 0 else 100,
+                            claim_eligibility_percent=100,
+                            duration_years=3,
+                        ),
+                        joined_at=now,
+                    )
+                    await new_enrollment.insert()
+            except Exception as ex:
+                print(f"[AdminLandService] Error auto-enrolling project: {ex}")
+
+        notification = Notification(
+            farmer_id=str(land.farmer_id),
+            title=notif_title,
+            message=notif_msg,
+            type="land"
+        )
+        await notification.insert()
         
         farmer = await Farmer.get(ObjectId(land.farmer_id))
         farmer_name = farmer.full_name if farmer else "Unknown Farmer"

@@ -1,18 +1,68 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ShoppingCart, Plus, RefreshCw, Eye, Check, X, Store, Package,
-  TrendingUp, Tag, Truck, RotateCcw, Star, FileText, User, CreditCard,
-  CheckCircle, Clock, ShieldCheck, Download, AlertTriangle, Cpu, Layers
+  ShoppingCart, RefreshCw, Eye, Store, Package, TrendingUp, RotateCcw, Download, Layers, CheckCircle, Truck
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
-import { EmptyState, SkeletonTable } from '../../../components/ui/EmptyState';
-import { useMarketplaceProducts } from '../api/useMarketplace';
+import { useMarketplaceProducts, useAdminOrders, useUpdateAdminOrderStatus } from '../api/useMarketplace';
 import { downloadPDFDocument, downloadCSVDocument } from '../../../utils/pdfExporter';
 import toast from 'react-hot-toast';
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ModalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
+
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error in Modal:", error, errorInfo);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-2xl max-w-lg w-full shadow-2xl space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-red-500 font-bold text-lg">⚠️</span>
+            <h3 className="text-sm font-bold text-red-800">
+              Modal Render Crash Catch
+            </h3>
+          </div>
+          <div className="text-xs text-red-700 space-y-1">
+            <p className="font-bold">{this.state.error?.toString()}</p>
+            <p className="font-mono text-[10px] bg-red-100/60 p-2 rounded overflow-auto max-h-40 leading-relaxed">
+              {this.state.error?.stack}
+            </p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 
 // 8 Specified Marketplace Categories
 export const MARKETPLACE_CATEGORIES = [
@@ -295,7 +345,7 @@ const SEEDED_ORDERS: MarketplaceOrderItem[] = [
   },
 ];
 
-const SEEDED_VENDORS: VendorProfileItem[] = [
+export const SEEDED_VENDORS: VendorProfileItem[] = [
   {
     id: 'VND-101',
     vendor_id: 'VND-101',
@@ -337,16 +387,20 @@ export const Marketplace = () => {
 
   const [productsList] = useState<MarketplaceProductItem[]>(SEEDED_PRODUCTS);
   const [ordersList, setOrdersList] = useState<MarketplaceOrderItem[]>(SEEDED_ORDERS);
-  const [vendorsList] = useState<VendorProfileItem[]>(SEEDED_VENDORS);
-
   // Selected Order for Order Details Modal
   const [selectedOrder, setSelectedOrder] = useState<MarketplaceOrderItem | null>(null);
 
-  // Selected Vendor for Vendor Profile Modal
-  const [selectedVendor, setSelectedVendor] = useState<VendorProfileItem | null>(null);
-  const [vendorActiveTab, setVendorActiveTab] = useState<'Vendor Profile' | 'Products' | 'Inventory' | 'Orders' | 'Payments' | 'Ratings'>('Vendor Profile');
+  const { refetch } = useMarketplaceProducts();
+  const { data: adminOrdersData } = useAdminOrders();
+  const { mutate: updateOrderStatus } = useUpdateAdminOrderStatus();
 
-  const { data: apiData, isLoading, refetch } = useMarketplaceProducts();
+  useEffect(() => {
+    if (adminOrdersData?.data) {
+      const realOrders = adminOrdersData.data;
+      const mockOrders = SEEDED_ORDERS.filter(so => !realOrders.some((ro: any) => ro.order_id === so.order_id));
+      setOrdersList([...realOrders, ...mockOrders]);
+    }
+  }, [adminOrdersData]);
 
   const filteredProducts = useMemo(() => {
     return productsList.filter(p => {
@@ -367,9 +421,24 @@ export const Marketplace = () => {
   }, [ordersList, search, orderStatusFilter]);
 
   const handleUpdateOrderStatus = (orderId: string, newStatus: (typeof ORDER_STATUSES)[number]) => {
+    const orderObj = ordersList.find(o => o.id === orderId);
+    const isRealOrder = orderId.length === 24;
+
+    if (isRealOrder) {
+      updateOrderStatus({ orderId, status: newStatus }, {
+        onSuccess: () => {
+          toast.success(`Order status updated to "${newStatus}" successfully!`);
+        },
+        onError: () => {
+          toast.error("Failed to update order status on server.");
+        }
+      });
+    } else {
+      toast.success(`Order ${orderObj?.order_id || orderId} status updated to "${newStatus}"!`);
+    }
+
     setOrdersList(prev => prev.map(o => {
       if (o.id === orderId) {
-        toast.success(`Order ${o.order_id} status updated to "${newStatus}"!`);
         return { ...o, order_status: newStatus };
       }
       return o;
@@ -380,13 +449,32 @@ export const Marketplace = () => {
   };
 
   const handleProcessRefund = (orderId: string) => {
+    const orderObj = ordersList.find(o => o.id === orderId);
+    const isRealOrder = orderId.length === 24;
+
+    if (isRealOrder) {
+      updateOrderStatus({ orderId, status: 'Returned' }, {
+        onSuccess: () => {
+          toast.success(`Refund of ₹${(orderObj?.total_amount ?? 0).toLocaleString()} processed & notification sent!`);
+        },
+        onError: () => {
+          toast.error("Failed to sync refund on backend server.");
+        }
+      });
+    } else {
+      toast.success(`Refund of ₹${(orderObj?.total_amount ?? 0).toLocaleString()} processed for Order ${orderObj?.order_id || orderId}!`);
+    }
+
     setOrdersList(prev => prev.map(o => {
       if (o.id === orderId) {
-        toast.success(`Refund of ₹${o.total_amount.toLocaleString()} processed for Order ${o.order_id}!`);
         return { ...o, payment_status: 'REFUNDED', order_status: 'Returned' };
       }
       return o;
     }));
+
+    if (selectedOrder && selectedOrder.id === orderId) {
+      setSelectedOrder(prev => prev ? { ...prev, payment_status: 'REFUNDED', order_status: 'Returned' } : null);
+    }
   };
 
   return (
@@ -409,7 +497,7 @@ export const Marketplace = () => {
                 downloadCSVDocument(
                   'Marketplace_Orders_Report.csv',
                   ['Order ID', 'Buyer Name', 'Vendor', 'Product', 'Amount', 'Payment', 'Order Status', 'Tracking ID'],
-                  ordersList.map(o => [o.order_id, o.buyer_name, o.vendor_name, o.product_name, o.total_amount, o.payment_status, o.order_status, o.tracking_id])
+                  ordersList.map(o => [o.order_id, o.buyer_name, o.vendor_name, o.product_name, o.total_amount ?? 0, o.payment_status, o.order_status, o.tracking_id])
                 );
                 toast.success('Exported Marketplace Orders CSV!');
               }}
@@ -425,18 +513,17 @@ export const Marketplace = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard title="TOTAL SKUS IN CATALOG" value={productsList.length} icon={Package} iconBg="#F0FDF4" iconColor="#16A34A" />
         <KpiCard title="TOTAL ORDERS PROCESSED" value={ordersList.length} icon={ShoppingCart} iconBg="#EFF6FF" iconColor="#2563EB" />
-        <KpiCard title="ACTIVE VENDORS" value={vendorsList.length} icon={Store} iconBg="#F5F3FF" iconColor="#8B5CF6" />
+        <KpiCard title="ACTIVE PARTNERS" value={892} icon={Store} iconBg="#F5F3FF" iconColor="#8B5CF6" />
         <KpiCard title="GROSS MARKETPLACE SALES" value="₹5,20,800" icon={TrendingUp} iconBg="#ECFDF5" iconColor="#059669" />
       </div>
 
-      {/* ── MAIN TABS (Products, Categories, Orders, Vendors) ── */}
+      {/* ── MAIN TABS (Products, Categories, Orders) ── */}
       <div className="flex items-center justify-between border-b border-[#E8EDF5] pb-2 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           {[
             { id: 'products', label: `Products (${productsList.length})`, icon: Package },
             { id: 'categories', label: `8 Categories`, icon: Layers },
             { id: 'orders', label: `Orders (${ordersList.length})`, icon: ShoppingCart },
-            { id: 'vendors', label: `Vendor Profiles (${vendorsList.length})`, icon: Store },
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = activeMainTab === tab.id;
@@ -602,7 +689,7 @@ export const Marketplace = () => {
                     </td>
                     <td className="py-3 px-4 text-[12.5px] font-semibold text-[#0F172A]">{o.product_name}</td>
                     <td className="py-3 px-4 text-[12px] text-[#475569]">{o.vendor_name}</td>
-                    <td className="py-3 px-4 text-[13px] font-extrabold text-[#16A34A]">₹{o.total_amount.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-[13px] font-extrabold text-[#16A34A]">₹{(o.total_amount ?? 0).toLocaleString()}</td>
                     <td className="py-3 px-4">
                       <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${o.payment_status === 'PAID' ? 'bg-[#F0FDF4] text-[#16A34A]' : 'bg-[#FEF2F2] text-[#EF4444]'}`}>
                         {o.payment_status}
@@ -616,9 +703,38 @@ export const Marketplace = () => {
                       />
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button onClick={() => setSelectedOrder(o)} className="btn btn-secondary btn-sm gap-1 ml-auto cursor-pointer">
-                        <Eye size={13} /> Order Details
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {o.order_status === 'Pending' && (
+                          <button
+                            onClick={() => handleUpdateOrderStatus(o.id, 'Packed')}
+                            className="px-2.5 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg border border-[#DCFCE7] transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                            title="Approve order & send to packing"
+                          >
+                            <CheckCircle size={13} /> Approve Order
+                          </button>
+                        )}
+                        {o.order_status === 'Packed' && (
+                          <button
+                            onClick={() => handleUpdateOrderStatus(o.id, 'Shipped')}
+                            className="px-2.5 py-1 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] text-[11.5px] font-bold rounded-lg border border-[#DBEAFE] transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                            title="Dispatch & ship order"
+                          >
+                            <Truck size={13} /> Dispatch & Ship
+                          </button>
+                        )}
+                        {o.order_status === 'Shipped' && (
+                          <button
+                            onClick={() => handleUpdateOrderStatus(o.id, 'Delivered')}
+                            className="px-2.5 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg border border-[#DCFCE7] transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                            title="Mark order delivered"
+                          >
+                            <CheckCircle size={13} /> Mark Delivered
+                          </button>
+                        )}
+                        <button onClick={() => setSelectedOrder(o)} className="btn btn-secondary btn-sm gap-1 cursor-pointer">
+                          <Eye size={13} /> Order Details
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -628,51 +744,12 @@ export const Marketplace = () => {
         </div>
       )}
 
-      {/* ── 4. VENDORS TAB ── */}
-      {activeMainTab === 'vendors' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {vendorsList.map((v) => (
-            <div key={v.id} className="p-5 bg-white border border-[#E8EDF5] rounded-2xl shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-[15px] font-bold text-[#0F172A]">{v.company}</h4>
-                  <p className="text-[11px] font-mono text-[#64748B]">{v.vendor_id} • GSTIN: {v.gstin}</p>
-                </div>
-                <span className="text-[12px] font-extrabold text-[#D97706] bg-[#FFFBEB] px-2.5 py-0.5 rounded-lg border border-[#FEF3C7]">
-                  ★ {v.rating}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-[12px]">
-                <div className="p-2 bg-[#FAFCFF] rounded-lg">
-                  <span className="text-[10px] font-bold uppercase text-[#94A3B8]">Products</span>
-                  <p className="font-bold text-[#0F172A]">{v.total_products}</p>
-                </div>
-                <div className="p-2 bg-[#FAFCFF] rounded-lg">
-                  <span className="text-[10px] font-bold uppercase text-[#94A3B8]">Orders</span>
-                  <p className="font-bold text-[#2563EB]">{v.total_orders}</p>
-                </div>
-                <div className="p-2 bg-[#FAFCFF] rounded-lg">
-                  <span className="text-[10px] font-bold uppercase text-[#94A3B8]">Payouts</span>
-                  <p className="font-bold text-[#16A34A]">{v.total_payouts}</p>
-                </div>
-              </div>
-              <button onClick={() => { setSelectedVendor(v); setVendorActiveTab('Vendor Profile'); }} className="btn btn-secondary btn-sm w-full gap-1 cursor-pointer">
-                <Store size={14} /> Open Vendor Dashboard
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
 
-      {/* ── ORDER DETAILS MODAL (All 6 Specified Attributes: Buyer, Vendor, Invoice, Tracking, Refund, Payment) ── */}
-      <AnimatePresence>
-        {selectedOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-5"
+      {selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <ModalErrorBoundary>
+            <div
+              className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-5 my-auto max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
               <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
                 <div className="flex items-center gap-2">
@@ -708,14 +785,32 @@ export const Marketplace = () => {
                 {/* 4. Payment */}
                 <div className="p-3.5 bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl space-y-1">
                   <span className="text-[10.5px] font-bold uppercase text-[#16A34A]">4. Payment & Amount</span>
-                  <p className="text-[16px] font-extrabold text-[#16A34A]">₹{selectedOrder.total_amount.toLocaleString()}</p>
+                  <p className="text-[16px] font-extrabold text-[#16A34A]">₹{(selectedOrder.total_amount ?? 0).toLocaleString()}</p>
                   <p className="text-[11px] text-[#475569]">Mode: {selectedOrder.payment_mode} ({selectedOrder.payment_status})</p>
                 </div>
               </div>
 
               {/* Status Updater */}
-              <div className="p-3.5 border border-[#E8EDF5] rounded-xl space-y-2 bg-[#F8FAFC]">
-                <span className="text-[11px] font-bold text-[#0F172A] uppercase">Update Order Status</span>
+              <div className="p-3.5 border border-[#E8EDF5] rounded-xl space-y-2.5 bg-[#F8FAFC]">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-[11px] font-bold text-[#0F172A] uppercase">Update Order Status</span>
+                  {selectedOrder.order_status === 'Pending' && (
+                    <button
+                      onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'Packed')}
+                      className="px-3 py-1 bg-[#16A34A] hover:bg-[#15803D] text-white text-[12px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <CheckCircle size={14} /> Approve & Pack Order
+                    </button>
+                  )}
+                  {selectedOrder.order_status === 'Packed' && (
+                    <button
+                      onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'Shipped')}
+                      className="px-3 py-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[12px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Truck size={14} /> Dispatch & Ship Order
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {ORDER_STATUSES.map(s => (
                     <button
@@ -752,7 +847,7 @@ export const Marketplace = () => {
                         'Buyer': selectedOrder.buyer_name,
                         'Vendor': selectedOrder.vendor_name,
                         'Product': selectedOrder.product_name,
-                        'Total Amount': `₹${selectedOrder.total_amount.toLocaleString()}`,
+                        'Total Amount': `₹${(selectedOrder.total_amount ?? 0).toLocaleString()}`,
                         'Payment Mode': selectedOrder.payment_mode,
                       },
                     });
@@ -763,97 +858,12 @@ export const Marketplace = () => {
                   <Download size={14} /> 6. Download Invoice PDF
                 </button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+            </div>
+          </ModalErrorBoundary>
+        </div>
+      )}
 
-      {/* ── VENDOR DASHBOARD MODAL (All 6 Specified Tabs: Vendor Profile, Products, Inventory, Orders, Payments, Ratings) ── */}
-      <AnimatePresence>
-        {selectedVendor && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-4"
-            >
-              <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
-                <div>
-                  <h3 className="text-[16px] font-bold text-[#0F172A]">{selectedVendor.company}</h3>
-                  <p className="text-[11px] font-mono text-[#64748B]">{selectedVendor.vendor_id} • GSTIN: {selectedVendor.gstin}</p>
-                </div>
-                <button onClick={() => setSelectedVendor(null)} className="text-[#94A3B8] hover:text-[#0F172A] text-lg font-bold cursor-pointer">×</button>
-              </div>
 
-              {/* 6 Specified Vendor Profile Tabs */}
-              <div className="flex items-center gap-1 border-b border-[#E8EDF5] overflow-x-auto pb-1 custom-scrollbar">
-                {[
-                  'Vendor Profile',
-                  'Products',
-                  'Inventory',
-                  'Orders',
-                  'Payments',
-                  'Ratings'
-                ].map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setVendorActiveTab(t as any)}
-                    className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all cursor-pointer whitespace-nowrap ${vendorActiveTab === t ? 'bg-[#F0FDF4] text-[#16A34A] border border-[#DCFCE7]' : 'text-[#64748B]'}`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-
-              {/* Tab 1: Vendor Profile */}
-              {vendorActiveTab === 'Vendor Profile' && (
-                <div className="space-y-3 text-[12.5px]">
-                  <p><strong>Contact Person:</strong> {selectedVendor.contact_person}</p>
-                  <p><strong>Phone:</strong> {selectedVendor.phone}</p>
-                  <p><strong>Email:</strong> {selectedVendor.email}</p>
-                  <p><strong>PAN Number:</strong> {selectedVendor.pan}</p>
-                </div>
-              )}
-
-              {/* Tab 2: Products */}
-              {vendorActiveTab === 'Products' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#0F172A]">{selectedVendor.total_products} Listed Products in Marketplace Catalog</p>
-                </div>
-              )}
-
-              {/* Tab 3: Inventory */}
-              {vendorActiveTab === 'Inventory' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#16A34A]">Inventory Stock Level: 100% In Stock</p>
-                </div>
-              )}
-
-              {/* Tab 4: Orders */}
-              {vendorActiveTab === 'Orders' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#2563EB]">{selectedVendor.total_orders} Orders Assigned to Vendor</p>
-                </div>
-              )}
-
-              {/* Tab 5: Payments */}
-              {vendorActiveTab === 'Payments' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#16A34A]">Total Payouts Settled: {selectedVendor.total_payouts}</p>
-                </div>
-              )}
-
-              {/* Tab 6: Ratings */}
-              {vendorActiveTab === 'Ratings' && (
-                <div className="space-y-2 text-[12.5px]">
-                  <p className="font-bold text-[#D97706]">Vendor Rating Score: ★ {selectedVendor.rating} / 5.0</p>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
     </div>
   );

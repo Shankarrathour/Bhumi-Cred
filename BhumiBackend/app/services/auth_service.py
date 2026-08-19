@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from app.auth.jwt import create_access_token, TOKEN_TYPE_FARMER, TOKEN_TYPE_VENDOR
+from app.auth.jwt import create_access_token, TOKEN_TYPE_FARMER, TOKEN_TYPE_GOVT, TOKEN_TYPE_PARTNER
 from app.auth.password import hash_otp, verify_otp
 from app.auth.otp import generate_otp, generate_refresh_token, hash_refresh_token
 from app.config.settings import settings
@@ -10,7 +10,6 @@ from app.core.exceptions import (
     OTPInvalidException,
     OTPMaxAttemptsException,
     FarmerBlockedException,
-    VendorBlockedException,
     InvalidTokenException,
     MobileAlreadyRegisteredException,
     MobileNotRegisteredException,
@@ -18,12 +17,10 @@ from app.core.exceptions import (
 )
 from app.integrations.sms import send_otp_sms
 from app.models.farmer import Farmer, KYCStatus
-from app.models.vendor import Vendor
 from app.models.otp_session import OTPSession
 from app.models.refresh_token import RefreshTokenSession, TokenOwnerType
 from app.repositories.audit_log import AuditLogRepository
 from app.repositories.farmer import FarmerRepository
-from app.repositories.vendor import VendorRepository
 from app.repositories.otp_session import OTPSessionRepository
 from app.repositories.refresh_token import RefreshTokenRepository
 from app.schemas.auth import (
@@ -33,7 +30,6 @@ from app.schemas.auth import (
     SendOTPResponse,
 )
 from app.schemas.farmer import FarmerPublicResponse
-from app.schemas.vendor_auth import VendorProfileResponse
 from app.repositories.notification import NotificationRepository
 from app.services.notification_service import NotificationService
 
@@ -47,16 +43,12 @@ class AuthService:
         otp_repo: OTPSessionRepository,
         token_repo: RefreshTokenRepository,
         audit_repo: AuditLogRepository,
-        vendor_repo: VendorRepository | None = None,
         notification_service: NotificationService | None = None,
     ):
         self._farmers = farmer_repo
         self._otps = otp_repo
         self._tokens = token_repo
         self._audit = audit_repo
-        # Optional for backward compatibility with any other construction site;
-        # role="vendor" calls will fail loudly if this wasn't provided.
-        self._vendors = vendor_repo or VendorRepository()
         self._notifications = notification_service or NotificationService(NotificationRepository())
 
     # ── Send OTP variants ────────────────────────────────────────────────────
@@ -66,64 +58,26 @@ class AuthService:
         return await self._do_send_otp(mobile, role="farmer")
 
     async def register_send_otp(self, mobile: str, role: str = "farmer") -> SendOTPResponse:
-        """Registration flow: mobile must not belong to a completed registration
-        under the requested role, and must not already belong to the other role."""
-        if role == "vendor":
-            other = await self._farmers.get_by_mobile(mobile)
-            if other and not (
-                other.kyc_status == KYCStatus.UNVERIFIED and not other.onboarding_completed
-            ):
-                raise AccountRoleMismatchException("farmer")
-
-            existing = await self._vendors.get_by_phone(mobile)
-            # A bare OTP-created stub (no name yet) never completed the wizard —
-            # treat it the same as "not registered" so registration can resume.
-            if existing and existing.name:
-                raise MobileAlreadyRegisteredException()
-            return await self._do_send_otp(mobile, role="vendor")
-
+        """Registration flow: mobile must not belong to an active registration."""
         existing = await self._farmers.get_by_mobile(mobile)
-        # Allow re-sending OTP if a previous attempt was abandoned (kyc_status still UNVERIFIED).
-        # Reject only when the farmer has progressed past the initial registration step.
-        if existing and existing.kyc_status != KYCStatus.UNVERIFIED:
-            raise MobileAlreadyRegisteredException()
-
-        # Any vendor record — even a wizard-incomplete stub — is a strong signal
-        # this number is vendor-owned, since it's only created via an explicit
-        # role selection + verified OTP (unlike a farmer's auto-created stub).
-        other_vendor = await self._vendors.get_by_phone(mobile)
-        if other_vendor:
-            raise AccountRoleMismatchException("vendor")
-
-        return await self._do_send_otp(mobile, role="farmer")
+        if existing:
+            if getattr(existing, "role", "farmer") != role:
+                raise AccountRoleMismatchException(getattr(existing, "role", "farmer"))
+            if existing.kyc_status != KYCStatus.UNVERIFIED:
+                raise MobileAlreadyRegisteredException()
+        return await self._do_send_otp(mobile, role=role)
 
     async def login_send_otp(self, mobile: str, role: str = "farmer") -> SendOTPResponse:
-        """Login flow: mobile must belong to an existing, fully-registered account
-        under the requested role. If it belongs to the other role, raise a clear
-        role-mismatch error instead of a generic not-registered error."""
-        if role == "vendor":
-            vendor = await self._vendors.get_by_phone(mobile)
-            if not vendor or not vendor.name:
-                farmer = await self._farmers.get_by_mobile(mobile)
-                if farmer and not (
-                    farmer.kyc_status == KYCStatus.UNVERIFIED and not farmer.onboarding_completed
-                ):
-                    raise AccountRoleMismatchException("farmer")
-                raise MobileNotRegisteredException()
-            return await self._do_send_otp(mobile, role="vendor")
-
+        """Login flow: mobile must belong to an existing account under the requested role."""
         existing = await self._farmers.get_by_mobile(mobile)
-        # Treat incomplete registrations (UNVERIFIED + not onboarded) identically to
-        # an unregistered mobile — they never completed registration.
         if not existing or (
             existing.kyc_status == KYCStatus.UNVERIFIED
             and not existing.onboarding_completed
         ):
-            vendor = await self._vendors.get_by_phone(mobile)
-            if vendor:
-                raise AccountRoleMismatchException("vendor")
             raise MobileNotRegisteredException()
-        return await self._do_send_otp(mobile, role="farmer")
+        if getattr(existing, "role", "farmer") != role:
+            raise AccountRoleMismatchException(getattr(existing, "role", "farmer"))
+        return await self._do_send_otp(mobile, role=role)
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
@@ -149,12 +103,64 @@ class AuthService:
         user_agent: str = "",
         ip_address: str = "",
     ) -> RoleAuthResponse:
-        if role == "vendor":
-            return await self._verify_otp_vendor(
-                mobile, otp, user_agent=user_agent, ip_address=ip_address
-            )
-        return await self._verify_otp_farmer(
-            mobile, otp, user_agent=user_agent, ip_address=ip_address
+        await self._consume_otp(mobile, otp, role=role)
+
+        farmer, is_new = await self._farmers.find_or_create(mobile, role=role)
+
+        if not farmer.is_active:
+            raise FarmerBlockedException()
+
+        owner_type = TokenOwnerType.FARMER
+        token_type = TOKEN_TYPE_FARMER
+        if role == "govt_body":
+            owner_type = TokenOwnerType.GOVT
+            token_type = TOKEN_TYPE_GOVT
+        elif role == "partner":
+            owner_type = TokenOwnerType.PARTNER
+            token_type = TOKEN_TYPE_PARTNER
+
+        token_pair = await self._issue_tokens(
+            farmer, token_type=token_type, owner_type=owner_type, user_agent=user_agent, ip_address=ip_address
+        )
+
+        await self._audit.log_event(
+            action=f"{role.upper()}_REGISTERED" if is_new else f"{role.upper()}_LOGIN",
+            entity_type="Farmer",
+            entity_id=str(farmer.id),
+            admin_id=str(farmer.id),
+            admin_name=farmer.full_name or farmer.mobile,
+            actor_type=role,
+            actor_role=role,
+            ip_address=ip_address,
+            remarks=f"Authenticated as {role} via OTP verification.",
+        )
+
+        if is_new and role == "farmer":
+            try:
+                await self._notifications.create_admin_notification(
+                    "Farmer Registered",
+                    f"Farmer {farmer.farmer_id} ({farmer.full_name or 'Unknown'}) has successfully registered.",
+                    type="registration",
+                    actor_type="farmer",
+                )
+            except Exception:
+                logger.exception(f"Failed to create admin notification for new farmer {farmer.id}")
+
+        return RoleAuthResponse(
+            tokens=token_pair,
+            role=role,
+            is_new=is_new,
+            farmer=FarmerPublicResponse(
+                id=str(farmer.id),
+                farmer_id=farmer.farmer_id,
+                mobile=farmer.mobile,
+                full_name=farmer.full_name,
+                kyc_status=farmer.kyc_status,
+                onboarding_completed=farmer.onboarding_completed,
+                wallet_balance=farmer.wallet_balance,
+                sustainability_score=farmer.sustainability_score,
+                locale=farmer.locale,
+            ),
         )
 
     async def _consume_otp(self, mobile: str, otp: str, role: str) -> None:
@@ -324,17 +330,7 @@ class AuthService:
         if not session:
             raise InvalidTokenException("Invalid or expired refresh token.")
 
-        if session.owner_type == TokenOwnerType.VENDOR:
-            vendor = await self._vendors.get_by_id(session.owner_id)
-            if not vendor or not vendor.is_active:
-                await self._tokens.revoke(session)
-                raise VendorBlockedException()
-            await self._tokens.revoke(session)
-            return await self._issue_vendor_tokens(
-                vendor, user_agent=user_agent, ip_address=ip_address
-            )
-
-        if session.owner_type != TokenOwnerType.FARMER:
+        if session.owner_type not in (TokenOwnerType.FARMER, TokenOwnerType.GOVT, TokenOwnerType.PARTNER):
             raise InvalidTokenException("Invalid or expired refresh token.")
 
         farmer = await self._farmers.get_by_id(session.owner_id)
@@ -342,10 +338,15 @@ class AuthService:
             await self._tokens.revoke(session)
             raise FarmerBlockedException()
 
-        # Rotate: revoke old, issue new
+        token_type = TOKEN_TYPE_FARMER
+        if session.owner_type == TokenOwnerType.GOVT:
+            token_type = TOKEN_TYPE_GOVT
+        elif session.owner_type == TokenOwnerType.PARTNER:
+            token_type = TOKEN_TYPE_PARTNER
+
         await self._tokens.revoke(session)
         return await self._issue_tokens(
-            farmer, user_agent=user_agent, ip_address=ip_address
+            farmer, token_type=token_type, owner_type=session.owner_type, user_agent=user_agent, ip_address=ip_address
         )
 
     # ── Logout ────────────────────────────────────────────────────────────────
@@ -357,20 +358,23 @@ class AuthService:
             await self._tokens.revoke(session)
             farmer = await self._farmers.get_by_id(session.owner_id)
             if farmer:
+                role = getattr(farmer, "role", "farmer")
                 await self._audit.log_event(
-                    action="FARMER_LOGOUT",
+                    action=f"{role.upper()}_LOGOUT",
                     entity_type="Farmer",
                     entity_id=str(farmer.id),
                     admin_id=str(farmer.id),
                     admin_name=farmer.full_name or farmer.mobile,
-                    actor_type="farmer",
-                    actor_role="farmer",
+                    actor_type=role,
+                    actor_role=role,
                     ip_address=ip_address,
                 )
 
     async def _issue_tokens(
         self,
         farmer: Farmer,
+        token_type: str = TOKEN_TYPE_FARMER,
+        owner_type: TokenOwnerType = TokenOwnerType.FARMER,
         user_agent: str = "",
         ip_address: str = "",
     ) -> TokenPair:
@@ -378,7 +382,7 @@ class AuthService:
 
         access_token, expires_in = create_access_token(
             subject=farmer_id,
-            token_type=TOKEN_TYPE_FARMER,
+            token_type=token_type,
             extra_claims={"mobile": farmer.mobile},
         )
 
@@ -387,39 +391,7 @@ class AuthService:
 
         session = RefreshTokenSession.create(
             owner_id=farmer_id,
-            owner_type=TokenOwnerType.FARMER,
-            token_hash=refresh_hash,
-            user_agent=user_agent,
-            ip_address=ip_address,
-        )
-        await self._tokens.create(session)
-
-        return TokenPair(
-            access_token=access_token,
-            refresh_token=raw_refresh,
-            expires_in=expires_in,
-        )
-
-    async def _issue_vendor_tokens(
-        self,
-        vendor: Vendor,
-        user_agent: str = "",
-        ip_address: str = "",
-    ) -> TokenPair:
-        vendor_id = str(vendor.id)
-
-        access_token, expires_in = create_access_token(
-            subject=vendor_id,
-            token_type=TOKEN_TYPE_VENDOR,
-            extra_claims={"phone": vendor.phone},
-        )
-
-        raw_refresh = generate_refresh_token()
-        refresh_hash = hash_refresh_token(raw_refresh)
-
-        session = RefreshTokenSession.create(
-            owner_id=vendor_id,
-            owner_type=TokenOwnerType.VENDOR,
+            owner_type=owner_type,
             token_hash=refresh_hash,
             user_agent=user_agent,
             ip_address=ip_address,

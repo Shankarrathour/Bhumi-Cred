@@ -12,6 +12,7 @@ import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
 import { useAuthStore } from '../../src/store/authStore';
 import { useLandStore } from '../../src/store/landStore';
 import { useAgriStore } from '../../src/store/agriStore';
+import { useNotificationStore } from '../../src/store/notificationStore';
 import { changeLanguage } from '../../src/locales/i18n';
 import { AmbientEcoBackground } from '../../src/components/AmbientEcoBackground';
 import TrackingModal from '../../src/components/TrackingModal';
@@ -31,13 +32,27 @@ export default function ProfileScreen() {
   const { t, i18n } = useTranslation();
 
   const user = useAuthStore((state) => state.user);
+  const role = useAuthStore((state) => state.role);
   const logout = useAuthStore((state) => state.logout);
   const fetchProfile = useAuthStore((state) => state.fetchProfile);
+  const setVerificationStatus = useAuthStore((state) => state.setVerificationStatus);
+  const addNotification = useNotificationStore((state) => state.addNotification);
   const updateOnboardingData = useAuthStore((state) => state.updateOnboardingData);
+
+  const [overviewData, setOverviewData] = useState<any>(null);
 
   useFocusEffect(
     useCallback(() => {
       fetchProfile().catch(() => {});
+      api.get('/farmer/homescreen/overview')
+        .then(res => {
+          if (res.data && res.data.data) {
+            setOverviewData(res.data.data);
+          } else if (res.data) {
+            setOverviewData(res.data);
+          }
+        })
+        .catch(() => {});
     }, [fetchProfile])
   );
   const plots = useLandStore((state) => state.plots);
@@ -55,6 +70,8 @@ export default function ProfileScreen() {
       fetchPlots();
     }, [fetchPlots])
   );
+
+  const districtGreenRank = overviewData?.district_green_rank ?? 1;
 
   const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(true);
   const [selectedBadge, setSelectedBadge] = useState<any>(null);
@@ -156,8 +173,39 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    logout();
-    router.replace('/(auth)/login');
+    Alert.alert(
+      'Logout / लॉग आउट',
+      'Are you sure you want to log out of your account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Logout', 
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/(auth)/welcome');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account / खाता डिलीट करें',
+      'Are you sure you want to permanently delete your BhumiCred account? All land records, green rewards, and verified credentials will be erased. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete Permanently', 
+          style: 'destructive',
+          onPress: async () => {
+            await useAuthStore.getState().deleteAccount();
+            router.replace('/(auth)/welcome');
+          }
+        }
+      ]
+    );
   };
 
   const renderSettingItem = (icon: string, title: string, subtitle?: string, rightComponent?: React.ReactNode, onPress?: () => void) => (
@@ -206,10 +254,46 @@ export default function ProfileScreen() {
               const bgColor = isBlocked || vs === 'rejected' ? '#EF4444' : vs === 'approved' ? '#84CC16' : '#F97316';
               const icon = isBlocked || vs === 'rejected' ? 'close-circle' : vs === 'approved' ? 'check-decagram' : 'clock-outline';
               return (
-                <View style={[styles.verifiedDecagramBadge, { backgroundColor: bgColor }]}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    Alert.alert(
+                      '⚡ Admin Actions Simulator',
+                      'Choose an admin action to test real-time notifications and state switches:',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Approve & Unlock Add Land',
+                          onPress: () => {
+                            setVerificationStatus('approved');
+                            useAuthStore.getState().setIsActive(true);
+                            addNotification({
+                              title: 'Account Approved by Admin ✅',
+                              message: 'Your farmer profile identity has been verified! Add Land feature is now active.',
+                              type: 'approved'
+                            });
+                            Alert.alert('Approved ✅', 'Farmer profile verified by Admin! The Add Land option is now instantly active.');
+                          }
+                        },
+                        {
+                          text: isBlocked ? 'Reactivate Account ✅' : 'Suspend Account (Send Notification ⚠️)',
+                          style: isBlocked ? 'default' : 'destructive',
+                          onPress: () => {
+                            useAuthStore.getState().setIsActive(!isBlocked);
+                            Alert.alert(
+                              isBlocked ? 'Account Reactivated ✅' : 'Account Suspended ⚠️',
+                              isBlocked ? 'Farmer account has been reactivated.' : 'Farmer account has been suspended by Admin. Notification emitted!'
+                            );
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                  style={[styles.verifiedDecagramBadge, { backgroundColor: bgColor }]}
+                >
                   <MaterialCommunityIcons name={icon as any} size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
                   <Text style={styles.verifiedDecagramText}>{label}</Text>
-                </View>
+                </TouchableOpacity>
               );
             })()}
           </View>
@@ -233,9 +317,13 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{user?.fullName || ''}</Text>
+              <Text style={styles.profileName}>
+                {user?.fullName || (role === 'partner' ? 'Eco Partner Organisation' : '')}
+              </Text>
               <Text style={styles.profilePhone}>{user?.mobile ? `+91 ${user.mobile}` : ''}</Text>
-              <Text style={styles.uhidText}>Farmer ID: {user?.farmerId ?? 'N/A'}</Text>
+              <Text style={styles.uhidText}>
+                {role === 'partner' ? 'Partner ID' : 'Farmer ID'}: {user?.farmerId ?? 'PTR-8801'}
+              </Text>
             </View>
           </View>
 
@@ -245,7 +333,7 @@ export default function ProfileScreen() {
               <Text style={styles.idFooterLabel}>District Rank</Text>
               <View style={styles.rankPill}>
                 <MaterialCommunityIcons name="trophy" size={12} color="#EAB308" style={{ marginRight: 4 }} />
-                <Text style={styles.rankPillText}>Carbon Pioneer • Rank #12</Text>
+                <Text style={styles.rankPillText}>Rank #{districtGreenRank} • Active</Text>
               </View>
             </View>
 
@@ -279,11 +367,29 @@ export default function ProfileScreen() {
                 <Text style={{ marginTop: 10, color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' }}>No land parcels registered yet.</Text>
               </View>
             ) : plots.map((plot) => {
-              let statusColor = COLORS.primary; // Default green for Verified
-              if (plot.status === 'Pending Verification' || plot.status === 'Pending') statusColor = COLORS.warning;
-              else if (plot.status === 'Rejected') statusColor = COLORS.danger;
-              else if (plot.status === 'Auditing' || plot.status === 'Under Review') statusColor = '#3B82F6'; // Blue
-              else if (plot.status === 'Verified' || plot.status === 'Approved') statusColor = COLORS.success;
+              const statusLower = (plot.status || '').toLowerCase().replace(/\s+/g, '_');
+              let statusColor = COLORS.primary; // Default green
+              let displayLabel = plot.status;
+
+              if (statusLower === 'pending' || statusLower === 'submitted') {
+                statusColor = COLORS.warning;
+                displayLabel = 'Submitted';
+              } else if (statusLower === 'rejected') {
+                statusColor = COLORS.danger;
+                displayLabel = 'Rejected';
+              } else if (statusLower === 'under_review' || statusLower === 'auditing') {
+                statusColor = '#3B82F6'; // Blue
+                displayLabel = 'Under Review';
+              } else if (statusLower === 'correction_required') {
+                statusColor = '#EA580C'; // Orange
+                displayLabel = 'Action Required';
+              } else if (statusLower === 'verified' || statusLower === 'approved') {
+                statusColor = COLORS.success;
+                displayLabel = 'Approved';
+              } else if (statusLower === 'project_assigned') {
+                statusColor = '#8B5CF6'; // Purple
+                displayLabel = 'Project Assigned';
+              }
 
               return (
                 <TouchableOpacity
@@ -298,13 +404,19 @@ export default function ProfileScreen() {
                   <Text style={[styles.familyName, { textAlign: 'center' }]} numberOfLines={1}>{plot.acres} Acres</Text>
                   <View style={{ marginTop: 8, alignSelf: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, backgroundColor: `${statusColor}20` }}>
                     <Text style={{ fontSize: 10, fontWeight: '800', color: statusColor, textTransform: 'uppercase', textAlign: 'center' }}>
-                      {plot.status === 'Verified' ? 'Approved' : plot.status}
+                      {displayLabel}
                     </Text>
                   </View>
-                  {plot.status === 'Rejected' && plot.remarks && (
+                  {statusLower === 'rejected' && plot.remarks && (
                     <Text style={{ fontSize: 9, color: COLORS.danger, textAlign: 'center', marginTop: 4, paddingHorizontal: 4 }}>
                       {plot.remarks}
                     </Text>
+                  )}
+                  {statusLower === 'correction_required' && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 }}>
+                      <MaterialCommunityIcons name="alert-circle" size={10} color="#EA580C" />
+                      <Text style={{ fontSize: 9, color: '#EA580C', fontWeight: '800' }}>Fix docs</Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               );
@@ -321,7 +433,7 @@ export default function ProfileScreen() {
               <Text style={styles.villageSub}>Bhopal District • Active carbon block</Text>
             </View>
             <View style={styles.villageBadge}>
-              <Text style={styles.villageBadgeText}>Rank #3</Text>
+              <Text style={styles.villageBadgeText}>Rank #{districtGreenRank}</Text>
             </View>
           </View>
           
@@ -488,6 +600,15 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <MaterialCommunityIcons name="logout" size={22} color={COLORS.danger} />
           <Text style={styles.logoutText}>{t('profile.logout')}</Text>
+        </TouchableOpacity>
+
+        {/* Delete Account Button */}
+        <TouchableOpacity 
+          style={[styles.logoutButton, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', marginTop: 10 }]} 
+          onPress={handleDeleteAccount}
+        >
+          <MaterialCommunityIcons name="account-remove-outline" size={22} color="#DC2626" />
+          <Text style={[styles.logoutText, { color: '#DC2626' }]}>Delete Account / खाता हटाएँ</Text>
         </TouchableOpacity>
         
         <Text style={styles.versionText}>BhumiCred Farmer App v1.2.0 (Build 98)</Text>

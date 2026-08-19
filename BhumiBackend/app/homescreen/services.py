@@ -64,15 +64,96 @@ class EcologicalService:
         active = enrollments[0] if enrollments else None
         eco_index = active.sustainability_score if active else farmer.sustainability_score
 
-        # Generate some slight variation or change percent based on active status, or keep it static if tracking historical is not yet implemented
-        change_percent = 5.2 if eco_index > 50 else -1.5
+        # Calculate real land acreage dynamically from land parcels if needed
+        total_acres = farmer.total_acreage or 0.0
+        if total_acres == 0.0:
+            parcels = await LandParcel.find(LandParcel.farmer_id == str(farmer.id)).to_list()
+            total_acres = sum(p.area_acres for p in parcels if p.area_acres)
+
+        # Compute real district green rank by comparing against other farmers in MongoDB
+        raw_district = farmer.district or (farmer.current_address.district if farmer.current_address else None)
+        if not raw_district:
+            parcel_with_district = await LandParcel.find_one(
+                LandParcel.farmer_id == str(farmer.id),
+                LandParcel.district != None,
+                LandParcel.is_deleted == False
+            )
+            if parcel_with_district and parcel_with_district.district:
+                raw_district = parcel_with_district.district
+
+        farmer_district = raw_district.strip() if raw_district else None
+
+        all_active_farmers = await Farmer.find(
+            Farmer.is_deleted == False,
+            Farmer.is_active == True
+        ).to_list()
+
+        if farmer_district:
+            candidate_farmers = [
+                f for f in all_active_farmers
+                if (f.district and f.district.strip().lower() == farmer_district.lower()) or
+                   (f.current_address and f.current_address.district and f.current_address.district.strip().lower() == farmer_district.lower())
+            ]
+            if len(candidate_farmers) <= 1:
+                candidate_farmers = all_active_farmers
+        else:
+            candidate_farmers = all_active_farmers
+
+        # Helper function to calculate real total trees and land acreage for any farmer from MongoDB
+        async def compute_farmer_tree_and_land(f: Farmer) -> tuple[int, float]:
+            f_parcels = await LandParcel.find(
+                LandParcel.farmer_id == str(f.id),
+                LandParcel.is_deleted == False
+            ).to_list()
+
+            f_trees = f.total_trees or 0
+            f_acres = f.total_acreage or 0.0
+
+            if f_parcels:
+                p_trees = sum(
+                    p.tree_stock_count or (sum(t.count for t in p.trees) if p.trees else 0)
+                    for p in f_parcels
+                )
+                p_acres = sum(p.area_acres for p in f_parcels if p.area_acres)
+                f_trees = max(f_trees, p_trees)
+                f_acres = max(f_acres, p_acres)
+
+            return f_trees, f_acres
+
+        # Compute current farmer's metrics
+        my_trees, my_acres = await compute_farmer_tree_and_land(farmer)
+        # Dynamic Green Score: (Trees * 10) + (Land Acres * 5) + Sustainability Score
+        my_score = (my_trees * 10) + (my_acres * 5) + (farmer.sustainability_score or 0)
+
+        higher_count = 0
+        for f in candidate_farmers:
+            if str(f.id) == str(farmer.id):
+                continue
+            f_trees, f_acres = await compute_farmer_tree_and_land(f)
+            f_score = (f_trees * 10) + (f_acres * 5) + (f.sustainability_score or 0)
+
+            if f_score > my_score:
+                higher_count += 1
+            elif f_score == my_score:
+                if f_trees > my_trees:
+                    higher_count += 1
+                elif f_trees == my_trees and f_acres > my_acres:
+                    higher_count += 1
+
+        district_rank = higher_count + 1
+
+        change_percent = round(min(15.0, (eco_index / 100.0) * 8.5), 1) if eco_index > 0 else 0.0
+
+        co2_captures = farmer.carbon_credits_generated or 0.0
+        if co2_captures == 0.0 and active:
+            co2_captures = active.estimated_carbon_impact or 0.0
 
         return EcologicalOverview(
             eco_index=eco_index,
             eco_index_change_percent=change_percent,
-            co2_captures=farmer.carbon_credits_generated,
-            district_green_rank=12,  # Hardcoded for now as rank requires complex aggregation
-            wallet_balance=farmer.wallet_balance,
+            co2_captures=co2_captures,
+            district_green_rank=district_rank,
+            wallet_balance=farmer.wallet_balance or 0.0,
         )
 
     async def get_environmental_pulse(self, farmer: Farmer) -> EnvironmentalPulse:

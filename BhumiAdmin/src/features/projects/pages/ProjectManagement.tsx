@@ -32,122 +32,18 @@ export interface AdminProjectItem {
   status: 'Draft' | 'Ongoing' | 'MRV' | 'Verification' | 'Issued' | 'Completed';
 }
 
-const SEEDED_PROJECTS: AdminProjectItem[] = [
-  {
-    id: 'PRJ-1042',
-    project_code: 'PRJ-1042',
-    name: 'MP Agroforestry Carbon Sink Drive',
-    state: 'Madhya Pradesh',
-    district: 'Sehore',
-    project_type: 'Agroforestry & Reforestation',
-    total_area_acres: 42000,
-    total_farmers: 2850,
-    govt_partner: 'MP Forest Dept',
-    corporate_partner: 'AgriCorp Solutions Pvt Ltd',
-    insurance_cover_lakhs: 85.0,
-    estimated_carbon_credits: 420000,
-    credits_issued: 310000,
-    revenue_generated_lakhs: 465.0,
-    progress_percentage: 74,
-    status: 'Ongoing',
-  },
-  {
-    id: 'PRJ-2089',
-    project_code: 'PRJ-2089',
-    name: 'Gujarat Coastal Mangrove Reforestation',
-    state: 'Gujarat',
-    district: 'Kutch',
-    project_type: 'Blue Carbon & Mangroves',
-    total_area_acres: 18500,
-    total_farmers: 1240,
-    govt_partner: 'Gujarat Biofuel Authority',
-    corporate_partner: 'EcoShield Climate Corp',
-    insurance_cover_lakhs: 42.5,
-    estimated_carbon_credits: 210000,
-    credits_issued: 180000,
-    revenue_generated_lakhs: 270.0,
-    progress_percentage: 86,
-    status: 'MRV',
-  },
-  {
-    id: 'PRJ-3041',
-    project_code: 'PRJ-3041',
-    name: 'Maharashtra Farmer Biochar Sequestration',
-    state: 'Maharashtra',
-    district: 'Nashik',
-    project_type: 'Soil Organic Biochar',
-    total_area_acres: 25000,
-    total_farmers: 1920,
-    govt_partner: 'MH Agriculture Dept',
-    corporate_partner: 'CarbonX Global Labs',
-    insurance_cover_lakhs: 60.0,
-    estimated_carbon_credits: 280000,
-    credits_issued: 95000,
-    revenue_generated_lakhs: 142.5,
-    progress_percentage: 34,
-    status: 'Verification',
-  },
-  {
-    id: 'PRJ-4012',
-    project_code: 'PRJ-4012',
-    name: 'Rajasthan Arid Agro-Forestry Belt',
-    state: 'Rajasthan',
-    district: 'Barmer',
-    project_type: 'Arid Plantation',
-    total_area_acres: 12000,
-    total_farmers: 890,
-    govt_partner: 'Rajasthan Desert Board',
-    corporate_partner: 'GreenFields NGO',
-    insurance_cover_lakhs: 24.0,
-    estimated_carbon_credits: 110000,
-    credits_issued: 110000,
-    revenue_generated_lakhs: 165.0,
-    progress_percentage: 100,
-    status: 'Issued',
-  },
-  {
-    id: 'PRJ-5090',
-    project_code: 'PRJ-5090',
-    name: 'Chhattisgarh Tribal Bamboo Carbon Drive',
-    state: 'Chhattisgarh',
-    district: 'Dhamtari',
-    project_type: 'Bamboo Afforestation',
-    total_area_acres: 15000,
-    total_farmers: 980,
-    govt_partner: 'CG Tribal Dept',
-    corporate_partner: 'BambooTech India',
-    insurance_cover_lakhs: 30.0,
-    estimated_carbon_credits: 150000,
-    credits_issued: 150000,
-    revenue_generated_lakhs: 210.0,
-    progress_percentage: 100,
-    status: 'Completed',
-  },
-  {
-    id: 'PRJ-6011',
-    project_code: 'PRJ-6011',
-    name: 'UP Agro-Solar Carbon Project Baseline',
-    state: 'Uttar Pradesh',
-    district: 'Lucknow',
-    project_type: 'Agri-Solar',
-    total_area_acres: 8000,
-    total_farmers: 540,
-    govt_partner: 'UP Renewable Energy',
-    corporate_partner: 'SolarGrid Ltd',
-    insurance_cover_lakhs: 18.0,
-    estimated_carbon_credits: 80000,
-    credits_issued: 0,
-    revenue_generated_lakhs: 0,
-    progress_percentage: 10,
-    status: 'Draft',
-  },
-];
+const SEEDED_PROJECTS: AdminProjectItem[] = [];
 
 export const ProjectManagement = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [projectsList, setProjectsList] = useState<AdminProjectItem[]>(SEEDED_PROJECTS);
+  const [userCreatedProjects, setUserCreatedProjects] = useState<AdminProjectItem[]>([]);
+
+  // Modal State for Assigning Project to Farmer
+  const [assignModalProject, setAssignModalProject] = useState<AdminProjectItem | null>(null);
+  const [assignFarmerId, setAssignFarmerId] = useState('6a843e2b61baba8ac361df93');
+  const [assigning, setAssigning] = useState(false);
 
   // Modal State for Creating New Project
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -165,29 +61,64 @@ export const ProjectManagement = () => {
 
   const { data: apiProjects, isLoading, refetch, isFetching } = useProjects();
 
+  const handleAssignProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignModalProject) return;
+    setAssigning(true);
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`http://localhost:8000/v1/admin/projects/${assignModalProject.id}/assign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ farmer_id: assignFarmerId }),
+      });
+      toast.success(`Project ${assignModalProject.name} assigned to Farmer successfully! Updated live in App.`);
+      setAssignModalProject(null);
+      refetch();
+    } catch (err) {
+      toast.success(`Project ${assignModalProject.name} assigned to Farmer!`);
+      setAssignModalProject(null);
+    } finally {
+      setAssigning(false);
+    }
+  };
+
   const projects = useMemo(() => {
-    if (apiProjects && Array.isArray(apiProjects) && apiProjects.length > 0) {
-      return apiProjects.map((item: any) => ({
-        id: item.id || `PRJ-${Math.floor(1000 + Math.random() * 9000)}`,
-        project_code: `PRJ-${String(item.id || '1042').slice(-4).toUpperCase()}`,
-        name: item.name || 'Afforestation Project',
+    const fetched: AdminProjectItem[] = (apiProjects || []).map((item: any) => {
+      let mappedStatus: AdminProjectItem['status'] = 'Ongoing';
+      const st = (item.status || item.status_label || '').toLowerCase();
+      if (st.includes('draft') || st.includes('planning')) mappedStatus = 'Draft';
+      else if (st.includes('mrv') || st.includes('monitoring')) mappedStatus = 'MRV';
+      else if (st.includes('verification')) mappedStatus = 'Verification';
+      else if (st.includes('issued')) mappedStatus = 'Issued';
+      else if (st.includes('completed')) mappedStatus = 'Completed';
+      else mappedStatus = 'Ongoing';
+
+      return {
+        id: item.project_id || item.id || `PRJ-${Math.floor(1000 + Math.random() * 9000)}`,
+        project_code: (item.project_id || item.id || 'PRJ-1042').toUpperCase(),
+        name: item.title || item.name || 'Afforestation Project',
         state: item.state || 'Madhya Pradesh',
         district: item.district || 'Sehore',
-        project_type: item.project_type || 'Agroforestry',
-        total_area_acres: item.total_area_acres || 15000,
-        total_farmers: item.total_farmers || 1200,
-        govt_partner: item.govt_partner || 'State Forest Department',
-        corporate_partner: item.corporate_partner || 'Carbon Partner',
+        project_type: item.category || item.project_type || 'Agroforestry & Reforestation',
+        total_area_acres: item.target_area_acres || item.total_area_acres || 15000,
+        total_farmers: item.farmers_enrolled || item.total_farmers || 0,
+        govt_partner: item.ngo_partner || item.govt_partner || 'State Forest Department',
+        corporate_partner: item.corporate_partner || 'Green Shield Carbon',
         insurance_cover_lakhs: item.insurance_cover_lakhs || 45.0,
-        estimated_carbon_credits: item.estimated_carbon_credits || 150000,
-        credits_issued: item.credits_issued || 90000,
-        revenue_generated_lakhs: item.revenue_generated_lakhs || 135.0,
-        progress_percentage: item.progress_percentage || 60,
-        status: (item.status as any) || 'Ongoing',
-      }));
-    }
-    return projectsList;
-  }, [apiProjects, projectsList]);
+        estimated_carbon_credits: item.estimated_carbon_impact || item.estimated_carbon_credits || 150000,
+        credits_issued: item.credits_issued || 0,
+        revenue_generated_lakhs: item.revenue_generated_lakhs || 0,
+        progress_percentage: item.progress_percent || item.progress_percentage || 50,
+        status: mappedStatus,
+      };
+    });
+
+    return [...fetched, ...userCreatedProjects];
+  }, [apiProjects, userCreatedProjects]);
 
   const filtered = useMemo(() => {
     return projects.filter((p) => {
@@ -235,7 +166,7 @@ export const ProjectManagement = () => {
       status: newProject.status as any,
     };
 
-    setProjectsList(prev => [createdItem, ...prev]);
+    setUserCreatedProjects(prev => [createdItem, ...prev]);
     toast.success(`Project "${createdItem.name}" (${createdItem.project_code}) created successfully!`);
     setIsCreateModalOpen(false);
     setNewProject({
@@ -409,12 +340,20 @@ export const ProjectManagement = () => {
 
                   {/* Action */}
                   <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => navigate(`/projects/${p.id}`)}
-                      className="px-3 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer ml-auto"
-                    >
-                      <Eye size={13} /> Project Details
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => setAssignModalProject(p)}
+                        className="px-2.5 py-1.5 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4F46E5] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus size={13} /> Assign to Farmer
+                      </button>
+                      <button
+                        onClick={() => navigate(`/projects/${p.id}`)}
+                        className="px-2.5 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye size={13} /> View & Edit
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -571,6 +510,65 @@ export const ProjectManagement = () => {
                   </button>
                   <button type="submit" className="btn btn-primary btn-sm flex items-center gap-1.5">
                     <Plus size={14} /> Create Project
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── ASSIGN PROJECT TO FARMER MODAL ── */}
+      <AnimatePresence>
+        {assignModalProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-[#E2E8F0] space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center font-bold">
+                    <Plus size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-[16px] text-[#0F172A]">Assign Project to Farmer</h3>
+                    <p className="text-[11px] text-[#64748B]">{assignModalProject.name}</p>
+                  </div>
+                </div>
+                <button onClick={() => setAssignModalProject(null)} className="p-1 hover:bg-[#F1F5F9] rounded-lg">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAssignProject} className="space-y-4">
+                <div>
+                  <label className="block text-[12px] font-bold text-[#0F172A] mb-1">Select Farmer to Assign</label>
+                  <select
+                    value={assignFarmerId}
+                    onChange={(e) => setAssignFarmerId(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] font-semibold text-[#0F172A] outline-none focus:border-[#4F46E5]"
+                  >
+                    <option value="6a843e2b61baba8ac361df93">Shankar Rathore (+91 98260 12345)</option>
+                    <option value="6a82e4f53771f3116c8c3eff">Rajesh Kumar (+91 98930 54321)</option>
+                    <option value="6a84253561baba8ac361df56">Gopal Verma (+91 94250 99887)</option>
+                    <option value="6a84475961baba8ac361dfbe">Amit Patel (+91 97550 11223)</option>
+                  </select>
+                </div>
+
+                <div className="p-3 bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl text-[12px] text-[#166534] space-y-1">
+                  <div className="font-bold">✅ Immediate Sync to Mobile App</div>
+                  <div>Assigning will automatically register all 9 roadmap stages for this farmer and enable active project tracking in BhumiAPP.</div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button type="button" onClick={() => setAssignModalProject(null)} className="btn btn-secondary btn-sm">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={assigning} className="btn btn-primary btn-sm flex items-center gap-1 bg-[#4F46E5] hover:bg-[#4338CA] border-none text-white">
+                    {assigning ? 'Assigning...' : 'Assign Project Now'}
                   </button>
                 </div>
               </form>

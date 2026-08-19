@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, 
-  FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView,
+  FlatList, KeyboardAvoidingView, Platform, ScrollView,
   ActivityIndicator, Keyboard
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, SHADOWS } from '../theme/theme';
 

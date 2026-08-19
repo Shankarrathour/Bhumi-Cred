@@ -1,5 +1,5 @@
 from app.repositories.farmer import FarmerRepository
-from app.repositories.vendor import VendorRepository
+
 from app.repositories.otp_session import OTPSessionRepository
 from app.repositories.refresh_token import RefreshTokenRepository
 from app.repositories.admin_user import AdminUserRepository
@@ -19,12 +19,6 @@ from app.repositories.audit_log import AuditLogRepository
 from app.repositories.gateway_request_log import GatewayRequestLogRepository
 from app.services.auth_service import AuthService
 from app.services.admin_auth_service import AdminAuthService
-from app.services.vendor_auth import VendorAuthService
-from app.services.farmer_profile_service import FarmerProfileService
-from app.services.admin_farmer_service import AdminFarmerService
-from app.services.admin_vendor_service import AdminVendorService
-from app.services.auth_service import AuthService
-from app.services.admin_auth_service import AdminAuthService
 from app.services.farmer_profile_service import FarmerProfileService
 from app.services.admin_farmer_service import AdminFarmerService
 from app.services.projects_service import ProjectsService
@@ -42,8 +36,7 @@ _cloudinary_service = CloudinaryService()
 from app.services.tree_registration_service import TreeRegistrationService
 from app.repositories.notification import NotificationRepository
 from app.services.notification_service import NotificationService
-from app.repositories.support_ticket import SupportTicketRepository
-from app.services.support_service import SupportService
+
 
 
 def get_auth_service() -> AuthService:
@@ -52,7 +45,6 @@ def get_auth_service() -> AuthService:
         otp_repo=OTPSessionRepository(),
         token_repo=RefreshTokenRepository(),
         audit_repo=AuditLogRepository(),
-        vendor_repo=VendorRepository(),
         notification_service=get_notification_service(),
     )
 
@@ -75,13 +67,6 @@ def get_farmer_profile_service() -> FarmerProfileService:
     )
 
 
-def get_vendor_auth_service() -> VendorAuthService:
-    return VendorAuthService(
-        vendor_repo=VendorRepository(),
-        cloudinary_svc=_cloudinary_service,
-        notification_service=get_notification_service(),
-    )
-
 
 def get_admin_farmer_service() -> AdminFarmerService:
     return AdminFarmerService(
@@ -92,11 +77,6 @@ def get_admin_farmer_service() -> AdminFarmerService:
         notification_service=get_notification_service(),
     )
 
-
-def get_admin_vendor_service() -> AdminVendorService:
-    return AdminVendorService(
-        vendor_repo=VendorRepository(),
-    )
 
 
 def get_admin_activity_log_service() -> AdminActivityLogService:
@@ -158,11 +138,7 @@ def get_notification_service() -> NotificationService:
 def get_cloudinary_service() -> CloudinaryService:
     return _cloudinary_service
 
-def get_support_service() -> SupportService:
-    return SupportService(
-        repo=SupportTicketRepository(),
-        notification_service=get_notification_service(),
-    )
+
 
 
 def get_vendor_product_service() -> VendorProductService:

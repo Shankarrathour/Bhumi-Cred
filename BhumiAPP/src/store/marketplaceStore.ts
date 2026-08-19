@@ -143,7 +143,7 @@ interface MarketplaceState {
   fetchWishlist: () => Promise<void>;
   fetchCart: () => Promise<void>;
   fetchOrders: () => Promise<void>;
-  fetchOrderDetails: (orderId: string) => Promise<void>;
+  fetchOrderDetails: (orderId: string, force?: boolean) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
   addToCart: (product: Product, quantity?: number) => Promise<void>;
   removeFromCart: (productId: string) => Promise<void>;
@@ -152,7 +152,7 @@ interface MarketplaceState {
   
   setCheckoutAddress: (address: CheckoutAddress) => void;
   prepareCheckout: (address: CheckoutAddress) => Promise<boolean>;
-  checkout: (vendorName: string) => Promise<string>;
+  checkout: (vendorName: string, paymentMethod?: string) => Promise<string>;
   
   acceleratedCheckoutItem: CartItem | null;
   setAcceleratedCheckoutItem: (item: CartItem | null) => void;
@@ -603,17 +603,14 @@ export const useMarketplaceStore = create<MarketplaceState>()(
       },
 
       clearCart: async () => {
-        const { isAuthenticated } = useAuthStore.getState();
-        if (!isAuthenticated) {
-          set({ cart: [], cartSummary: null });
-          return;
-        }
-
-        try {
-          await api.post('/cart/clear');
-          set({ cart: [], cartSummary: null });
-        } catch (err) {
-          console.warn('[marketplaceStore] clearCart failed:', err);
+        set({ cart: [], cartSummary: null });
+        const { isAuthenticated, accessToken } = useAuthStore.getState();
+        if (isAuthenticated && accessToken) {
+          try {
+            await api.post('/cart/clear');
+          } catch (err) {
+            console.warn('[marketplaceStore] clearCart backend sync notice:', err);
+          }
         }
       },
 
@@ -671,12 +668,12 @@ export const useMarketplaceStore = create<MarketplaceState>()(
         }
       },
 
-      fetchOrderDetails: async (orderId) => {
+      fetchOrderDetails: async (orderId, force = false) => {
         const { isAuthenticated } = useAuthStore.getState();
         if (!isAuthenticated) return;
         
         // Cache check
-        if (get().activeOrderDetails[orderId]) return;
+        if (!force && get().activeOrderDetails[orderId]) return;
 
         try {
           const { data } = await api.get(`/orders/${orderId}`);
@@ -734,7 +731,7 @@ export const useMarketplaceStore = create<MarketplaceState>()(
         }
       },
 
-      checkout: async (vendorName) => {
+      checkout: async (vendorName, paymentMethod = 'wallet') => {
         const { isAuthenticated } = useAuthStore.getState();
         const address = get().checkoutAddress;
         
@@ -773,7 +770,10 @@ export const useMarketplaceStore = create<MarketplaceState>()(
 
         set({ isLoading: true });
         try {
-          const { data } = await api.post('/orders', { delivery_address: address });
+          const { data } = await api.post('/orders', { 
+            delivery_address: address,
+            payment_method: paymentMethod
+          });
           
           // Clear cart immediately upon successful order creation
           set({ 

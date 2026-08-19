@@ -7,7 +7,6 @@ import {
   TouchableOpacity, 
   TextInput, 
   Dimensions, 
-  SafeAreaView, 
   Animated,
   Platform,
   StatusBar
@@ -16,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useDispatch } from 'react-redux';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
 import { mockTests, mockCategories } from '../../src/mock/mockData';

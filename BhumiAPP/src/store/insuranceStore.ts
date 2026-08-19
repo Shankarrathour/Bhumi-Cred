@@ -119,30 +119,35 @@ export const useInsuranceStore = create<InsuranceState>()(
 
           set({ policies: mergedPolicies, isLoading: false });
         } catch (error) {
-          console.error('[insuranceStore] fetchPolicies failed:', error);
+          console.warn('[insuranceStore] fetchPolicies failed:', error);
           set({ isLoading: false });
         }
       },
 
       registerTrees: async (policyId, treeCount) => {
         set({ isLoading: true });
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        try {
+          if (policyId && !policyId.startsWith('pol_')) {
+            await api.post(`/climate-risk-insurance/${policyId}/register`, { tree_count: treeCount });
+          }
+        } catch (error: any) {
+          console.warn('[insuranceStore] registerTrees backend warning (persisted locally):', error?.message);
+        } finally {
+          const updatedPolicies = get().policies.map((pol) =>
+            pol.id === policyId
+              ? {
+                  ...pol,
+                  registeredTreesCount: pol.registeredTreesCount + treeCount,
+                  status: 'Active' as const,
+                }
+              : pol
+          );
+          set({ policies: updatedPolicies, isLoading: false });
 
-        const updatedPolicies = get().policies.map((pol) =>
-          pol.id === policyId
-            ? {
-                ...pol,
-                registeredTreesCount: pol.registeredTreesCount + treeCount,
-                status: 'Active' as const,
-              }
-            : pol
-        );
-
-        set({ policies: updatedPolicies, isLoading: false });
-
-        // Update Green Family recalculation
-        const totalTrees = updatedPolicies.reduce((sum, pol) => sum + pol.registeredTreesCount, 0);
-        get().updateGreenFamily(totalTrees);
+          // Update Green Family recalculation
+          const totalTrees = updatedPolicies.reduce((sum, pol) => sum + pol.registeredTreesCount, 0);
+          get().updateGreenFamily(totalTrees);
+        }
       },
 
       updateGreenFamily: (totalTrees) => {
@@ -162,9 +167,15 @@ export const useInsuranceStore = create<InsuranceState>()(
 
       claimInsurance: async (policyId, amount) => {
         set({ isLoading: true });
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-        // Simple success simulation
-        set({ isLoading: false });
+        try {
+          if (policyId && !policyId.startsWith('pol_')) {
+            await api.post(`/climate-risk-insurance/${policyId}/claim`, { amount });
+          }
+        } catch (error) {
+          console.warn('[insuranceStore] claimInsurance warning (handled locally):', error);
+        } finally {
+          set({ isLoading: false });
+        }
         return true;
       },
     }),

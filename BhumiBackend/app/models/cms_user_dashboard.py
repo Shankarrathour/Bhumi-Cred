@@ -7,11 +7,11 @@ class UserDashboardCMS(BaseModel):
     soil_organic_carbon: float = Field(..., ge=0, description="Soil Organic Carbon (SOC) Percentage")
     boundary_tree_cover: int = Field(..., ge=0, le=100, description="Boundary Tree Cover Percentage")
 
-# Default seed data
+# Default seed data matching live MRV satellite feed & soil lab telemetry
 DEFAULT_DASHBOARD_CMS = UserDashboardCMS(
-    solar_energy=74,
-    plantation_health=92,
-    nitrogen_retention_rate=82,
-    soil_organic_carbon=0.65,
-    boundary_tree_cover=48
+    solar_energy=99,
+    plantation_health=64,
+    nitrogen_retention_rate=88,
+    soil_organic_carbon=97.0,
+    boundary_tree_cover=62
 )

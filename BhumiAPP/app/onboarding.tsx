@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isValidEmail, isNonEmptyStr, isValidAadhaar, isValidPAN, isValidDate, isOnlyLettersAndSpaces, sanitizeLettersOnly } from '../src/utils/validation';
 import AutocompleteDropdown from '../components/AutocompleteDropdown';
 import CustomCalendarModal from '../components/CustomCalendarModal';
-import { LOCATION_DATA, COUNTRIES_LIST } from '../src/data/locations';
+import { LOCATION_DATA, COUNTRIES_LIST, getTehsilsForDistrict, getVikasKhandsForDistrict, getGramPanchayatsForDistrict, getVillagesForDistrict } from '../src/data/locations';
 
 
 
@@ -49,6 +49,7 @@ export default function OnboardingScreen() {
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [fatherName, setFatherName] = useState(user?.fatherName || '');
   const [dob, setDob] = useState(user?.dob || '');
+  const [gender, setGender] = useState<string>(user?.gender || 'Male');
   const [email, setEmail] = useState(user?.email || '');
   
   const [stateName, setStateName] = useState(user?.state || '');
@@ -62,9 +63,10 @@ export default function OnboardingScreen() {
   const [tehsil, setTehsil] = useState(user?.tehsil || '');
   const [pincode, setPincode] = useState(user?.pincode || '');
 
-  const [identityType, setIdentityType] = useState<'Aadhaar' | 'PAN'>('Aadhaar');
-  const [identityNumber, setIdentityNumber] = useState('');
-  const [identityVerified, setIdentityVerified] = useState(false);
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [aadhaarVerified, setAadhaarVerified] = useState(false);
+  const [panNumber, setPanNumber] = useState('');
+  const [panVerified, setPanVerified] = useState(false);
 
   const [isCalendarVisible, setIsCalendarVisible] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -75,9 +77,10 @@ export default function OnboardingScreen() {
   const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   
-  const availableVikasKhands = React.useMemo(() => district ? [`${district} Block 1`, `${district} Block 2`, `${district} Block 3`] : [], [district]);
-  const availableGramPanchayats = React.useMemo(() => district ? [`${district} GP 1`, `${district} GP 2`, `${district} GP 3`] : [], [district]);
-  const availableVillages = React.useMemo(() => district ? [`${district} Village 1`, `${district} Village 2`, `${district} Village 3`] : [], [district]);
+  const availableVikasKhands = React.useMemo(() => getVikasKhandsForDistrict(district), [district]);
+  const availableGramPanchayats = React.useMemo(() => getGramPanchayatsForDistrict(district), [district]);
+  const availableVillages = React.useMemo(() => getVillagesForDistrict(district), [district]);
+  const availableTehsils = React.useMemo(() => getTehsilsForDistrict(district), [district]);
 
   useEffect(() => {
     if (country && LOCATION_DATA[country]) {
@@ -116,12 +119,16 @@ export default function OnboardingScreen() {
   const [previewData, setPreviewData] = useState<{key: string, uri: string} | null>(null);
 
   const [docStates, setDocStates] = useState<Record<string, DocStatus>>({
-    idProof: 'None',
+    aadhaarFront: 'None',
+    aadhaarBack: 'None',
+    panProof: 'None',
     farmerPhoto: user?.farmerPhoto ? 'Approved' : 'None',
   });
 
   const uploadAnims = useRef<Record<string, Animated.Value>>({
-    idProof: new Animated.Value(0),
+    aadhaarFront: new Animated.Value(0),
+    aadhaarBack: new Animated.Value(0),
+    panProof: new Animated.Value(0),
     farmerPhoto: new Animated.Value(0),
   }).current;
 
@@ -194,34 +201,32 @@ export default function OnboardingScreen() {
 
     try {
       const filename = uri.split('/').pop() || 'photo.jpg';
+      const fileExt = filename.split('.').pop()?.toLowerCase() || 'jpg';
+      let mimeType = 'image/jpeg';
+      if (fileExt === 'png') mimeType = 'image/png';
+      else if (fileExt === 'webp') mimeType = 'image/webp';
+      else if (fileExt === 'heic') mimeType = 'image/heic';
+      else if (fileExt === 'pdf') mimeType = 'application/pdf';
+
       const formData = new FormData();
-      formData.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
-
-      const accessToken = useAuthStore.getState().accessToken;
-      const uploadPath = key === 'farmerPhoto' ? '/farmer/profile/photo' : '/farmer/identity/document';
-      const uploadUrl = `${API_BASE_URL}${uploadPath}`;
-
-      if (key === 'idProof') {
-        const docType = identityType === 'Aadhaar' ? 'aadhaar' : 'pan';
-        formData.append('document_type', docType);
+      if (key === 'aadhaarFront' || key === 'aadhaarBack') {
+        formData.append('document_type', 'aadhaar');
+      } else if (key === 'panProof') {
+        formData.append('document_type', 'pan');
       }
 
-      console.log(`[onboarding] Native uploading via fetch to ${uploadUrl}...`);
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData,
+      formData.append('file', { uri, name: filename, type: mimeType } as any);
+
+      const uploadPath = key === 'farmerPhoto' ? '/farmer/profile/photo' : '/farmer/identity/document';
+
+      console.log(`[onboarding] Uploading via api client to ${uploadPath}...`);
+      const response = await api.post(uploadPath, formData, {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'multipart/form-data',
         },
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        console.log('[onboarding] Upload response error:', errText);
-        throw new Error(`Upload failed with status ${response.status}`);
-      }
-
-      const resData = await response.json();
+      const resData = response.data;
       console.log('[onboarding] Upload response:', resData);
 
       if (key === 'farmerPhoto') {
@@ -269,7 +274,7 @@ export default function OnboardingScreen() {
         setErrors(newErrors);
         return;
       }
-      updateOnboardingData({ fullName: fullName.trim(), fatherName: fatherName.trim(), dob, email });
+      updateOnboardingData({ fullName: fullName.trim(), fatherName: fatherName.trim(), dob, gender, email });
       setOnboardingStep(2);
     } 
     else if (currentStep === 2) {
@@ -320,10 +325,42 @@ export default function OnboardingScreen() {
     else if (currentStep === 3) {
       let hasError = false;
       const newErrors: Record<string, string> = {};
-      if (!identityVerified) { newErrors.identityVerified = 'Please verify ID'; hasError = true; }
-      if (docStates.farmerPhoto !== 'Approved') { newErrors.farmerPhoto = 'Photo required'; hasError = true; }
-      if (identityType === 'PAN' && docStates.idProof !== 'Approved') {
-        newErrors.idProof = 'PAN Photo upload is required / पैन की फोटो अपलोड करना आवश्यक है';
+
+      // 1. Aadhaar checks
+      if (!aadhaarNumber) {
+        newErrors.aadhaarNumber = 'Aadhaar Number required / आधार नंबर आवश्यक है'; hasError = true;
+      } else if (!isValidAadhaar(aadhaarNumber)) {
+        newErrors.aadhaarNumber = 'Aadhaar must contain exactly 12 digits'; hasError = true;
+      } else if (!aadhaarVerified) {
+        newErrors.aadhaarVerified = 'Please tap Verify to validate Aadhaar / आधार सत्यापित करें'; hasError = true;
+      }
+
+      if (docStates.aadhaarFront !== 'Approved') {
+        newErrors.aadhaarFront = 'Aadhaar Card (Front) photo required / आधार कार्ड (अगला भाग) की फोटो अपलोड करें';
+        hasError = true;
+      }
+      if (docStates.aadhaarBack !== 'Approved') {
+        newErrors.aadhaarBack = 'Aadhaar Card (Back) photo required / आधार कार्ड (पिछला भाग) की फोटो अपलोड करें';
+        hasError = true;
+      }
+
+      // 2. PAN Card checks
+      if (!panNumber) {
+        newErrors.panNumber = 'PAN Number required / पैन नंबर आवश्यक है'; hasError = true;
+      } else if (!isValidPAN(panNumber)) {
+        newErrors.panNumber = 'Valid 10-char PAN required (e.g. ABCDE1234F)'; hasError = true;
+      } else if (!panVerified) {
+        newErrors.panVerified = 'Please tap Verify to validate PAN / पैन सत्यापित करें'; hasError = true;
+      }
+
+      if (docStates.panProof !== 'Approved') {
+        newErrors.panProof = 'PAN Card photo upload required / पैन कार्ड की फोटो अपलोड करें';
+        hasError = true;
+      }
+
+      // 3. Farmer Photo check
+      if (docStates.farmerPhoto !== 'Approved') {
+        newErrors.farmerPhoto = 'Farmer photo upload required / किसान की फोटो अपलोड करें';
         hasError = true;
       }
       
@@ -335,7 +372,10 @@ export default function OnboardingScreen() {
         }
         return;
       }
-      updateOnboardingData({ identityType, identityNumber });
+      updateOnboardingData({ 
+        identityType: 'Aadhaar', 
+        identityNumber: aadhaarNumber
+      });
       completeOnboarding();
     }
   };
@@ -347,30 +387,38 @@ export default function OnboardingScreen() {
     }
   };
 
-  const verifyIdentityNumber = () => {
-    setErrors({});
-    const newErrors: Record<string, string> = {};
-    if (!identityNumber) {
-      newErrors.identityNumber = 'Please enter your Identity Number.';
-      setErrors(newErrors);
+  const verifyAadhaarNumber = () => {
+    setErrors(prev => ({ ...prev, aadhaarNumber: '', aadhaarVerified: '' }));
+    if (!aadhaarNumber) {
+      setErrors(prev => ({ ...prev, aadhaarNumber: 'Please enter 12-digit Aadhaar Number.' }));
       return;
     }
-    if (identityType === 'Aadhaar' && !isValidAadhaar(identityNumber)) {
-      newErrors.identityNumber = 'Aadhaar must contain exactly 12 digits.';
-      setErrors(newErrors);
+    if (!isValidAadhaar(aadhaarNumber)) {
+      setErrors(prev => ({ ...prev, aadhaarNumber: 'Aadhaar must contain exactly 12 digits.' }));
       return;
     }
-    if (identityType === 'PAN' && !isValidPAN(identityNumber)) {
-      newErrors.identityNumber = 'Enter a valid PAN number.';
-      setErrors(newErrors);
-      return;
-    }
-    
-    setIdentityVerified(true);
+    setAadhaarVerified(true);
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-    Alert.alert('Verified ✅', `${identityType} verified successfully.`);
+    Alert.alert('Verified ✅', 'Aadhaar Card verified successfully.');
+  };
+
+  const verifyPanNumber = () => {
+    setErrors(prev => ({ ...prev, panNumber: '', panVerified: '' }));
+    if (!panNumber) {
+      setErrors(prev => ({ ...prev, panNumber: 'Please enter 10-character PAN Number.' }));
+      return;
+    }
+    if (!isValidPAN(panNumber)) {
+      setErrors(prev => ({ ...prev, panNumber: 'Enter a valid 10-character PAN Number (e.g. ABCDE1234F).' }));
+      return;
+    }
+    setPanVerified(true);
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    Alert.alert('Verified ✅', 'PAN Card verified successfully.');
   };
 
   const renderDocCard = (card: DocCard) => {
@@ -502,6 +550,39 @@ export default function OnboardingScreen() {
               </TouchableOpacity>
               {errors.dob && <Text style={styles.errorText}>{errors.dob}</Text>}
             </View>
+            <View style={styles.formField}>
+              <Text style={styles.label}>Gender / लिंग *</Text>
+              <View style={{ flexDirection: 'row', marginTop: 4, flexWrap: 'wrap' }}>
+                {['Male', 'Female', 'Other', 'Prefer not to say'].map((g) => (
+                  <TouchableOpacity
+                    key={g}
+                    onPress={() => setGender(g)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      marginRight: 16,
+                      marginVertical: 4,
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons
+                      name={gender === g ? "radiobox-marked" : "radiobox-blank"}
+                      size={20}
+                      color={gender === g ? COLORS.primary : "#64748B"}
+                    />
+                    <Text style={{ marginLeft: 6, fontSize: 13, fontWeight: '600', color: COLORS.textDark }}>
+                      {g === 'Male' 
+                        ? 'Male / पुरुष' 
+                        : g === 'Female' 
+                          ? 'Female / महिला' 
+                          : g === 'Other' 
+                            ? 'Other / अन्य' 
+                            : 'Prefer not to say / कहना नहीं चाहते'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
             <View style={styles.formField} onLayout={(e) => fieldPositions.current['email'] = e.nativeEvent.layout.y}>
               <Text style={styles.label}>Email Address / ईमेल पता (Optional)</Text>
               <TextInput style={[styles.input, errors.email && styles.inputError]} placeholder="e.g. farmer@email.com" placeholderTextColor="#64748B" value={email} onChangeText={(val) => { setEmail(val); setErrors(prev => ({ ...prev, email: '' })); }} autoCapitalize="none" />
@@ -588,84 +669,105 @@ export default function OnboardingScreen() {
         {currentStep === 3 && (
           <View style={styles.stepCard}>
             <Text style={styles.heading}>Documents Mapping / दस्तावेज सत्यापन</Text>
-            <Text style={styles.subheading}>Verify your identity to secure government benefits and carbon payouts.</Text>
-            
-            <View style={styles.formField} onLayout={(e) => fieldPositions.current['identityVerified'] = e.nativeEvent.layout.y}>
-              <Text style={styles.label}>Select Identity Type / पहचान पत्र *</Text>
-              <View style={{ flexDirection: 'row', marginBottom: 12 }}>
-                <TouchableOpacity 
-                  style={[styles.radioBtn, identityType === 'Aadhaar' && styles.radioBtnActive]}
-                  onPress={() => {
-                    setIdentityType('Aadhaar');
-                    setIdentityVerified(false);
-                    setDocStates(prev => ({ ...prev, idProof: 'None' }));
-                    setErrors(prev => ({ ...prev, idProof: '', identityNumber: '', identityVerified: '' }));
-                  }}
-                >
-                  <Text style={[styles.radioText, identityType === 'Aadhaar' && styles.radioTextActive]}>Aadhaar Card</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.radioBtn, identityType === 'PAN' && styles.radioBtnActive, { marginLeft: 10 }]}
-                  onPress={() => {
-                    setIdentityType('PAN');
-                    setIdentityVerified(false);
-                    setDocStates(prev => ({ ...prev, idProof: 'None' }));
-                    setErrors(prev => ({ ...prev, idProof: '', identityNumber: '', identityVerified: '' }));
-                  }}
-                >
-                  <Text style={[styles.radioText, identityType === 'PAN' && styles.radioTextActive]}>PAN Card</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <Text style={styles.label}>{identityType} Number / {identityType} नंबर *</Text>
+            <Text style={styles.subheading}>All identity documents are mandatory to complete farmer registry verification.</Text>
+
+            {/* 1. Aadhaar Section */}
+            <View style={styles.formField} onLayout={(e) => fieldPositions.current['aadhaarNumber'] = e.nativeEvent.layout.y}>
+              <Text style={styles.label}>1. Aadhaar Card Number / आधार कार्ड नंबर *</Text>
               <View style={styles.idInputWrapper}>
                 <TextInput 
-                  style={[styles.input, { flex: 1, marginBottom: 0 }, errors.identityNumber && styles.inputError]} 
-                  placeholder={identityType === 'Aadhaar' ? "12-digit Aadhaar" : "10-char PAN"} 
+                  style={[styles.input, { flex: 1, marginBottom: 0 }, errors.aadhaarNumber && styles.inputError]} 
+                  placeholder="Enter 12-digit Aadhaar number" 
                   placeholderTextColor="#64748B"
-                  value={identityNumber} 
+                  value={aadhaarNumber} 
                   onChangeText={(val) => {
-                    const formattedVal = identityType === 'PAN'
-                      ? val.toUpperCase().replace(/[^A-Z0-9]/g, '')
-                      : val.replace(/[^0-9]/g, '');
-                    setIdentityNumber(formattedVal);
-                    setIdentityVerified(false);
-                    setErrors(prev => ({ ...prev, identityNumber: '' }));
+                    setAadhaarNumber(val.replace(/[^0-9]/g, ''));
+                    setAadhaarVerified(false);
+                    setErrors(prev => ({ ...prev, aadhaarNumber: '', aadhaarVerified: '' }));
                   }}
-                  maxLength={identityType === 'Aadhaar' ? 12 : 10}
-                  autoCapitalize={identityType === 'PAN' ? "characters" : "none"}
-                  keyboardType={identityType === 'Aadhaar' ? "numeric" : "default"}
+                  maxLength={12}
+                  keyboardType="numeric"
                 />
                 <TouchableOpacity 
-                  style={[styles.verifyBtn, identityVerified && styles.verifyBtnSuccess]}
-                  onPress={verifyIdentityNumber}
-                  disabled={identityVerified}
+                  style={[styles.verifyBtn, aadhaarVerified && styles.verifyBtnSuccess]}
+                  onPress={verifyAadhaarNumber}
+                  disabled={aadhaarVerified}
                 >
-                  <Text style={styles.verifyBtnText}>{identityVerified ? 'Verified' : 'Verify'}</Text>
+                  <Text style={styles.verifyBtnText}>{aadhaarVerified ? 'Verified' : 'Verify'}</Text>
                 </TouchableOpacity>
               </View>
-              {errors.identityNumber && <Text style={styles.errorText}>{errors.identityNumber}</Text>}
-              {errors.identityVerified && <Text style={styles.errorText}>{errors.identityVerified}</Text>}
-              {errors.farmerPhoto && <Text style={styles.errorText}>{errors.farmerPhoto}</Text>}
+              {errors.aadhaarNumber && <Text style={styles.errorText}>{errors.aadhaarNumber}</Text>}
+              {errors.aadhaarVerified && <Text style={styles.errorText}>{errors.aadhaarVerified}</Text>}
             </View>
 
-            <View onLayout={(e) => fieldPositions.current['idProof'] = e.nativeEvent.layout.y}>
+            <View onLayout={(e) => fieldPositions.current['aadhaarFront'] = e.nativeEvent.layout.y}>
               {renderDocCard({ 
-                key: 'idProof', 
-                title: identityType === 'PAN' ? 'PAN Photo / पैन की फोटो *' : `${identityType} Photo (Optional)`, 
-                subtitle: 'Upload physical copy image', 
+                key: 'aadhaarFront', 
+                title: 'Aadhaar Photo (Front) / आधार कार्ड (अगला भाग) *', 
+                subtitle: 'Upload clear image of front side showing photo & name', 
+                icon: 'card-account-details-outline' 
+              })}
+              {errors.aadhaarFront && <Text style={styles.errorText}>{errors.aadhaarFront}</Text>}
+            </View>
+
+            <View style={{ marginTop: 6 }} onLayout={(e) => fieldPositions.current['aadhaarBack'] = e.nativeEvent.layout.y}>
+              {renderDocCard({ 
+                key: 'aadhaarBack', 
+                title: 'Aadhaar Photo (Back) / आधार कार्ड (पिछला भाग) *', 
+                subtitle: 'Upload clear image of back side showing full address', 
+                icon: 'card-account-details-outline' 
+              })}
+              {errors.aadhaarBack && <Text style={styles.errorText}>{errors.aadhaarBack}</Text>}
+            </View>
+
+            {/* 2. PAN Card Section */}
+            <View style={[styles.formField, { marginTop: 14 }]} onLayout={(e) => fieldPositions.current['panNumber'] = e.nativeEvent.layout.y}>
+              <Text style={styles.label}>2. PAN Card Number / पैन कार्ड नंबर *</Text>
+              <View style={styles.idInputWrapper}>
+                <TextInput 
+                  style={[styles.input, { flex: 1, marginBottom: 0 }, errors.panNumber && styles.inputError]} 
+                  placeholder="Enter 10-character PAN number (e.g. ABCDE1234F)" 
+                  placeholderTextColor="#64748B"
+                  value={panNumber} 
+                  onChangeText={(val) => {
+                    setPanNumber(val.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+                    setPanVerified(false);
+                    setErrors(prev => ({ ...prev, panNumber: '', panVerified: '' }));
+                  }}
+                  maxLength={10}
+                  autoCapitalize="characters"
+                />
+                <TouchableOpacity 
+                  style={[styles.verifyBtn, panVerified && styles.verifyBtnSuccess]}
+                  onPress={verifyPanNumber}
+                  disabled={panVerified}
+                >
+                  <Text style={styles.verifyBtnText}>{panVerified ? 'Verified' : 'Verify'}</Text>
+                </TouchableOpacity>
+              </View>
+              {errors.panNumber && <Text style={styles.errorText}>{errors.panNumber}</Text>}
+              {errors.panVerified && <Text style={styles.errorText}>{errors.panVerified}</Text>}
+            </View>
+
+            <View onLayout={(e) => fieldPositions.current['panProof'] = e.nativeEvent.layout.y}>
+              {renderDocCard({ 
+                key: 'panProof', 
+                title: 'PAN Card Photo / पैन कार्ड की फोटो *', 
+                subtitle: 'Upload clear image of physical PAN Card', 
                 icon: 'credit-card-outline' 
               })}
-              {errors.idProof && <Text style={styles.errorText}>{errors.idProof}</Text>}
+              {errors.panProof && <Text style={styles.errorText}>{errors.panProof}</Text>}
             </View>
 
-            <View onLayout={(e) => fieldPositions.current['farmerPhoto'] = e.nativeEvent.layout.y}>
+            {/* 3. Farmer Photo Section */}
+            <View style={{ marginTop: 14 }} onLayout={(e) => fieldPositions.current['farmerPhoto'] = e.nativeEvent.layout.y}>
               {renderDocCard({ 
                 key: 'farmerPhoto', 
-                title: 'Farmer Photo / किसान की फोटो *', 
-                subtitle: 'Live capture or gallery picture', 
+                title: '3. Farmer Live Photo / किसान की फोटो *', 
+                subtitle: 'Live selfie capture or photo upload', 
                 icon: 'camera-outline' 
               })}
+              {errors.farmerPhoto && <Text style={styles.errorText}>{errors.farmerPhoto}</Text>}
             </View>
           </View>
         )}
@@ -754,7 +856,8 @@ export default function OnboardingScreen() {
         visible={isCalendarVisible} 
         onClose={() => setIsCalendarVisible(false)} 
         onSelectDate={setDob} 
-        initialDate={dob} 
+        initialDate={dob}
+        mode="dob"
       />
 
       <Modal visible={!!previewData} transparent={true} animationType="slide">
@@ -902,6 +1005,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textDark,
     marginBottom: 8,
+    minHeight: 34,
+    justifyContent: 'center',
   },
   input: {
     backgroundColor: '#F8FAFC',

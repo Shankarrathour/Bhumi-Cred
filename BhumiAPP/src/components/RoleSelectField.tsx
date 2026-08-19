@@ -3,18 +3,20 @@ import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../theme/theme';
 
-export type AuthRole = 'farmer' | 'vendor';
+import { AuthRole } from '../store/authStore';
+export type { AuthRole };
 
 interface RoleSelectFieldProps {
   value: AuthRole;
   onChange: (role: AuthRole) => void;
-  /** "Login" or "Register" — produces "Login as Farmer" / "Register as Vendor" */
+  /** "Login" or "Register" — produces "Login as Farmer" / "Register as Partner" */
   actionLabel: 'Login' | 'Register';
 }
 
 const ROLE_OPTIONS: { value: AuthRole; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
   { value: 'farmer', label: 'Farmer', icon: 'sprout-outline' },
-  { value: 'vendor', label: 'Vendor', icon: 'storefront-outline' },
+  { value: 'govt_body', label: 'Govt Body', icon: 'bank-outline' },
+  { value: 'partner', label: 'Partner', icon: 'handshake-outline' },
 ];
 
 /**

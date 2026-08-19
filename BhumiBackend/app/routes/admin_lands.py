@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 
 from app.dependencies.auth import CurrentAdmin
 from app.repositories.land_parcel import LandParcelRepository
@@ -32,10 +33,10 @@ async def list_lands(
 ) -> PaginatedResponse[AdminLandParcelResponse]:
     return await svc.list_lands(page=page, limit=limit, status=status)
 
-from pydantic import BaseModel
 class UpdateLandStatusRequest(BaseModel):
     status: str
     remarks: Optional[str] = None
+    correction_fields: Optional[list[str]] = None
 
 @router.put(
     "/{land_id}/status",
@@ -48,7 +49,7 @@ async def update_land_status(
     current_admin: CurrentAdmin,
     svc: AdminLandService = Depends(get_admin_land_service)
 ) -> AdminLandParcelResponse:
-    return await svc.update_land_status(land_id, payload.status, payload.remarks)
+    return await svc.update_land_status(land_id, payload.status, payload.remarks, payload.correction_fields)
 
 class CreateLandParcelRequest(BaseModel):
     farmer_id: str

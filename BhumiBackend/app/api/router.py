@@ -7,16 +7,13 @@ from app.routes.projects import router as projects_router
 from app.routes.admin_projects import router as admin_projects_router
 from app.routes.admin_sales import router as admin_sales_router
 from app.routes.wallet import router as wallet_router
-from app.routes.wallet import router as wallet_router
 from app.routes.admin_wallet import router as admin_wallet_router
 from app.homescreen.routes import router as homescreen_router
 from app.routes.registration import router as registration_router
 from app.routes.admin_lands import router as admin_lands_router
 from app.routes.farmer_green_family import router as farmer_green_family_router
 from app.routes.admin_green_family import router as admin_green_family_router
-from app.routes.vendor_auth import router as vendor_auth_router
-from app.routes.vendor_orders import router as vendor_orders_router
-from app.routes.admin_vendors import router as admin_vendors_router
+
 from app.routes.marketplace import router as marketplace_router
 from app.routes.tree_registration import router as tree_registration_router
 from app.routes.admin_tree_registrations import router as admin_tree_registrations_router
@@ -45,7 +42,6 @@ api_router.include_router(wallet_router)
 api_router.include_router(admin_lands_router)
 
 # ── Phase 3.2: Wallet & Withdrawals ──────────────────────────────────────────
-api_router.include_router(wallet_router)
 api_router.include_router(admin_wallet_router)
 # ── Phase 4: Homescreen & Ecological Dashboard ───────────────────────────────
 api_router.include_router(locations_router)
@@ -58,10 +54,10 @@ api_router.include_router(registration_router)
 api_router.include_router(farmer_green_family_router)
 api_router.include_router(admin_green_family_router)
 
-# ── Phase 6: Vendor Marketplace ──────────────────────────────────────────────
-api_router.include_router(vendor_auth_router)
-api_router.include_router(vendor_orders_router)
-api_router.include_router(admin_vendors_router)
+# ── Phase 6: Vendor Marketplace ───────────────────────────────────────
+from app.routes.admin_orders import router as admin_orders_router
+
+api_router.include_router(admin_orders_router)
 
 # ── Phase 6: General ─────────────────────────────────────────────────────────
 api_router.include_router(marketplace_router)
@@ -94,17 +90,7 @@ api_router.include_router(checkout_router)
 from app.routes.order import router as order_router
 api_router.include_router(order_router)
 
-# ── Phase 11: Vendor Products ──────────────────────────────────────────────────
-from app.routes.vendor_product import router as vendor_product_router
-api_router.include_router(vendor_product_router)
 
-# ── Phase 12: Vendor Orders ────────────────────────────────────────────────────
-from app.routes.vendor_order import router as vendor_order_router
-api_router.include_router(vendor_order_router)
-
-# ── Phase 13: Vendor Dashboard ────────────────────────────────────────────────
-from app.routes.vendor_dashboard import router as vendor_dashboard_router
-api_router.include_router(vendor_dashboard_router)
 
 # ── Phase 14: Admin Product Approval ──────────────────────────────────────────
 from app.routes.admin_product import router as admin_product_router
@@ -114,9 +100,6 @@ api_router.include_router(admin_product_router)
 from app.routes.admin_dashboard import router as admin_dashboard_router
 api_router.include_router(admin_dashboard_router)
 
-# ── Phase 16: Vendor Authentication ───────────────────────────────────────────
-from app.routes.vendor_auth import router as vendor_auth_router
-api_router.include_router(vendor_auth_router)
 
 # -- Phase 17: Agri Financial Hub -----------------------------------------------
 from app.routes.agri import router as agri_router
@@ -146,13 +129,6 @@ api_router.include_router(admin_notifications_router)
 # ── Admin Activity Logs ───────────────────────────────────────────────────────
 api_router.include_router(admin_activity_logs_router)
 
-# ── Vendor Help & Support / Admin Support Desk ────────────────────────────────
-from app.routes.vendor_notifications import router as vendor_notifications_router
-from app.routes.vendor_support import router as vendor_support_router
-from app.routes.admin_support import router as admin_support_router
-api_router.include_router(vendor_notifications_router)
-api_router.include_router(vendor_support_router)
-api_router.include_router(admin_support_router)
 
 # ── CMS User Dashboard ────────────────────────────────────────────────────────
 from app.routes.cms_user_dashboard import router as cms_user_dashboard_router
@@ -169,5 +145,22 @@ api_router.include_router(uploads_router)
 from app.routes.admin_settings import router as admin_settings_router
 api_router.include_router(admin_settings_router)
 
-# Phase 5: Notifications
-api_router.include_router(notifications_router)
+# ── Module 20: Support Tickets (Farmer/Vendor) ────────────────────────────────
+from app.routes.vendor_support import router as vendor_support_router
+api_router.include_router(vendor_support_router)
+
+# ── Module 21: Soil Testing & Reports ─────────────────────────────────────────
+from app.routes.soil_testing import router as soil_testing_router
+api_router.include_router(soil_testing_router)
+
+# ── Module 22: Admin MRV Operations Center ───────────────────────────────────
+from app.routes.admin_mrv import router as admin_mrv_router
+api_router.include_router(admin_mrv_router)
+
+# ── Module 23: Referrals & Rewards ───────────────────────────────────────────
+from app.routes.referrals import router as referrals_router
+api_router.include_router(referrals_router)
+
+# ── Module 24: Farmer Eco Badges & Cabinet ────────────────────────────────────
+from app.routes.farmer_badges import router as farmer_badges_router
+api_router.include_router(farmer_badges_router)

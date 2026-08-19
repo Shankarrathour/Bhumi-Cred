@@ -3,10 +3,9 @@ import { motion } from 'framer-motion';
 import {
   BarChart3, Download, TrendingUp, Users, Package, AlertCircle, Loader2,
   FileSpreadsheet, FileText, CheckCircle, RefreshCw, DollarSign, Building2,
-  Handshake, ShieldCheck, ShoppingBag, Wallet, Share2, Trees, Sparkles
+  Handshake, ShieldCheck, ShoppingBag, Wallet, Share2, Trees
 } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
-import { KpiCard } from '../../../components/ui/KpiCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { useAdminDashboard } from '../api/useReports';
 import { downloadPDFDocument, downloadCSVDocument } from '../../../utils/pdfExporter';
@@ -131,10 +130,10 @@ const SEEDED_REPORTS: ReportItem[] = [
 
 export const ReportsDashboard = () => {
   const [selectedCategory, setSelectedCategory] = useState<(typeof REPORT_CATEGORIES)[number]>('Farmer Report');
-  const [search, setSearch] = useState('');
+  const [search] = useState('');
 
   // Connect backend live endpoint /admin/dashboard
-  const { data: apiData, isLoading, refetch, isFetching } = useAdminDashboard();
+  const { data: apiData, refetch, isFetching } = useAdminDashboard();
 
   // Merge live API metrics into report items if available
   const reportsList = useMemo(() => {

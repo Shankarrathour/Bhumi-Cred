@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Trees, Building2, Handshake, ShieldCheck, DollarSign,
@@ -10,6 +10,8 @@ import { KpiCard } from '../../../components/ui/KpiCard';
 import { GISMapViewer } from '../../../components/ui/GISMapViewer';
 import { LatLngExpression } from 'leaflet';
 import { downloadPDFDocument, downloadCSVDocument } from '../../../utils/pdfExporter';
+import { useProjects } from '../api/useProjects';
+import adminApi from '../../../api/apiClient';
 import toast from 'react-hot-toast';
 
 export const ProjectDetails = () => {
@@ -21,35 +23,91 @@ export const ProjectDetails = () => {
     'Overview' | 'Timeline' | 'Farmers' | 'Govt' | 'Partner' | 'MRV' | 'GIS' | 'Carbon' | 'Revenue' | 'Reports'
   >('Overview');
 
-  const [projectStatus, setProjectStatus] = useState<'Draft' | 'Ongoing' | 'MRV' | 'Verification' | 'Issued' | 'Completed'>('Ongoing');
+  const [projectEnrollments, setProjectEnrollments] = useState<any[]>([]);
+  const [isSoilModalOpen, setIsSoilModalOpen] = useState(false);
+
+  useEffect(() => {
+    adminApi.get('/admin/projects/enrollments')
+      .then(res => {
+        if (Array.isArray(res.data?.data)) {
+          setProjectEnrollments(res.data.data);
+        }
+      })
+      .catch(err => console.warn('Failed to fetch enrollments for project details:', err));
+  }, []);
+
+  const { data: apiProjects } = useProjects();
+  const matchedApi = useMemo(() => {
+    if (!id || !apiProjects) return null;
+    return apiProjects.find((p: any) => p.project_id === id || p.id === id);
+  }, [id, apiProjects]);
 
   const safeId = id || 'PRJ-1042';
 
-  const project = {
-    id: safeId,
-    code: safeId.startsWith('PRJ-') ? safeId : `PRJ-${safeId.slice(-4).toUpperCase()}`,
-    name: 'MP Agroforestry Carbon Sink Drive',
-    state: 'Madhya Pradesh',
-    district: 'Sehore',
-    projectType: 'Agroforestry & Soil Reforestation',
-    totalAcres: 42000,
-    enrolledFarmers: 2850,
-    activeTrees: 425000,
-    govtNodal: 'MP Forest Development Board',
-    corporatePartner: 'AgriCorp Solutions Pvt Ltd',
-    mrvPartner: 'CarbonX Sentinel Drone Labs',
-    insurancePartner: 'EcoShield Tree Insurance Ltd',
-    insuranceCoverLakhs: 85.0,
-    estimatedCredits: 420000,
-    creditsIssued: 310000,
-    creditsAvailable: 30000,
-    creditsSold: 280000,
-    creditPriceUsd: 18.5,
-    revenueGeneratedLakhs: 465.0,
-    farmerPayoutLakhs: 325.5,
-    progressPercentage: 74,
-    coordinates: { lat: 23.0225, lng: 77.0124 },
-  };
+  const project = useMemo(() => {
+    if (matchedApi) {
+      const acres = matchedApi.target_area_acres || 15000;
+      const farmers = matchedApi.farmers_enrolled || 1200;
+      const trees = farmers * 150;
+      const credits = matchedApi.estimated_carbon_impact || 150000;
+
+      return {
+        id: matchedApi.project_id || matchedApi.id,
+        code: (matchedApi.project_id || matchedApi.id).toUpperCase(),
+        name: matchedApi.title || matchedApi.name || 'Afforestation Project',
+        state: matchedApi.state || 'Madhya Pradesh',
+        district: matchedApi.district || 'Sehore',
+        projectType: matchedApi.category || 'Agroforestry & Soil Reforestation',
+        totalAcres: acres,
+        enrolledFarmers: farmers,
+        activeTrees: trees,
+        govtNodal: matchedApi.ngo_partner || 'State Forest Board',
+        corporatePartner: 'Green Shield Climate Corp',
+        mrvPartner: 'CarbonX Sentinel Drone Labs',
+        insurancePartner: 'EcoShield Tree Insurance Ltd',
+        insuranceCoverLakhs: Math.round(acres * 0.002 * 10) / 10,
+        estimatedCredits: credits,
+        creditsIssued: Math.round(credits * 0.7),
+        creditsAvailable: Math.round(credits * 0.1),
+        creditsSold: Math.round(credits * 0.6),
+        creditPriceUsd: 18.5,
+        revenueGeneratedLakhs: Math.round((credits * 0.6 * 1500) / 100000),
+        farmerPayoutLakhs: Math.round((credits * 0.6 * 1500 * 0.7) / 100000),
+        progressPercentage: 74,
+        coordinates: { lat: 23.0225, lng: 77.0124 },
+        status: matchedApi.status || 'Ongoing',
+      };
+    }
+
+    return {
+      id: safeId,
+      code: safeId.startsWith('PRJ-') ? safeId : `PRJ-${safeId.slice(-4).toUpperCase()}`,
+      name: 'MP Agroforestry Carbon Sink Drive',
+      state: 'Madhya Pradesh',
+      district: 'Sehore',
+      projectType: 'Agroforestry & Soil Reforestation',
+      totalAcres: 42000,
+      enrolledFarmers: 2850,
+      activeTrees: 425000,
+      govtNodal: 'MP Forest Development Board',
+      corporatePartner: 'AgriCorp Solutions Pvt Ltd',
+      mrvPartner: 'CarbonX Sentinel Drone Labs',
+      insurancePartner: 'EcoShield Tree Insurance Ltd',
+      insuranceCoverLakhs: 85.0,
+      estimatedCredits: 420000,
+      creditsIssued: 310000,
+      creditsAvailable: 30000,
+      creditsSold: 280000,
+      creditPriceUsd: 18.5,
+      revenueGeneratedLakhs: 465.0,
+      farmerPayoutLakhs: 325.5,
+      progressPercentage: 74,
+      coordinates: { lat: 23.0225, lng: 77.0124 },
+      status: 'Ongoing',
+    };
+  }, [matchedApi, safeId]);
+
+  const [projectStatus, setProjectStatus] = useState<'Draft' | 'Ongoing' | 'MRV' | 'Verification' | 'Issued' | 'Completed'>(project.status as any);
 
   const center: LatLngExpression = [project.coordinates.lat, project.coordinates.lng];
   const projectPolygon: LatLngExpression[] = [
@@ -144,6 +202,88 @@ export const ProjectDetails = () => {
               <KpiCard title="PLANTED TREES" value={project.activeTrees.toLocaleString()} icon={Trees} iconBg="#F5F3FF" iconColor="#8B5CF6" />
               <KpiCard title="TOTAL REVENUE" value={`₹${project.revenueGeneratedLakhs} L`} icon={DollarSign} iconBg="#FEF2F2" iconColor="#EF4444" />
             </div>
+
+            {/* GREEN SUSTAINABILITY MISSION CARD (Parity with Mobile App UI) */}
+            <div className="rounded-2xl p-6 bg-gradient-to-br from-[#064E3B] via-[#047857] to-[#065F46] text-white shadow-xl space-y-5 border border-[#10B981]/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                    <Trees size={24} className="text-[#34D399]" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6EE7B7]">YOU ARE ACTIVELY PARTICIPATING IN THIS MISSION</span>
+                    <h2 className="text-[20px] font-black tracking-tight">{project.name}</h2>
+                  </div>
+                </div>
+                <span className="px-3 py-1 bg-[#10B981]/20 border border-[#34D399]/40 text-[#6EE7B7] text-[11px] font-mono font-bold rounded-lg uppercase tracking-wider">
+                  MISSION ACTIVE ✅
+                </span>
+              </div>
+
+              <p className="text-[13px] text-[#E6F4EA] leading-relaxed max-w-3xl">
+                This project focuses on restoring degraded land through large-scale tree plantation. Native tree species will be planted to improve biodiversity, capture atmospheric carbon, reduce soil erosion, and generate verified carbon credits while supporting local communities.
+              </p>
+
+              {/* Sub-Card Enrolled Parameters */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-black/20 backdrop-blur-md rounded-xl border border-white/10 text-[12.5px]">
+                <div className="flex items-center gap-2 font-semibold">
+                  <CheckCircle size={16} className="text-[#34D399]" />
+                  <span>Land Parcel: <strong className="text-white">188.1 Acres Registered</strong></span>
+                </div>
+                <div className="flex items-center gap-2 font-semibold">
+                  <CheckCircle size={16} className="text-[#34D399]" />
+                  <span>Enrolled Trees: <strong className="text-white">0 saplings monitored</strong></span>
+                </div>
+                <div className="flex items-center gap-2 font-semibold">
+                  <ShieldCheck size={16} className="text-[#34D399]" />
+                  <span>Verification Team: <strong className="text-white">Bhopal East Agronomy Unit</strong></span>
+                </div>
+              </div>
+
+              {/* Key Indicators Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-white/10 text-[12px]">
+                <div>
+                  <span className="text-[#A7F3D0] text-[10px] uppercase font-bold tracking-wider">ASSIGNED DATE</span>
+                  <div className="font-bold text-[14px] text-white mt-0.5 font-mono">2026-08-18</div>
+                </div>
+                <div>
+                  <span className="text-[#A7F3D0] text-[10px] uppercase font-bold tracking-wider">CURRENT STAGE</span>
+                  <div className="font-bold text-[14px] text-[#6EE7B7] mt-0.5">Stage 2: MRV Scheduled</div>
+                </div>
+                <div>
+                  <span className="text-[#A7F3D0] text-[10px] uppercase font-bold tracking-wider">EST. CARBON YIELD</span>
+                  <div className="font-bold text-[14px] text-[#FDE047] mt-0.5 font-mono">0.0 CO₂e</div>
+                </div>
+                <div>
+                  <span className="text-[#A7F3D0] text-[10px] uppercase font-bold tracking-wider">SUPPORTING NGO</span>
+                  <div className="font-bold text-[14px] text-white mt-0.5">Green Earth Foundation</div>
+                </div>
+              </div>
+
+              {/* Badges & Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-3 py-1 bg-[#10B981]/20 border border-[#34D399]/40 text-[#6EE7B7] text-[11px] font-bold rounded-lg flex items-center gap-1">
+                    <CheckCircle size={12} /> Land Verified
+                  </span>
+                  <span className="px-3 py-1 bg-[#10B981]/20 border border-[#34D399]/40 text-[#6EE7B7] text-[11px] font-bold rounded-lg flex items-center gap-1">
+                    <CheckCircle size={12} /> Trees Protected
+                  </span>
+                  <span className="px-3 py-1 bg-[#10B981]/20 border border-[#34D399]/40 text-[#6EE7B7] text-[11px] font-bold rounded-lg flex items-center gap-1">
+                    <CheckCircle size={12} /> Insurance Active
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate('/mrv?tab=telemetry')}
+                    className="px-4 py-2 bg-[#047857] hover:bg-[#065F46] text-white font-bold text-[12px] rounded-xl transition-all border border-[#34D399]/50 flex items-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    Soil Testing 🧪
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -178,21 +318,30 @@ export const ProjectDetails = () => {
         {/* 3. FARMERS TAB */}
         {activeTab === 'Farmers' && (
           <div className="space-y-4">
-            <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3">Enrolled Farmers List</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {[
-                { name: 'Ramesh Patel', id: 'FARM-MP-8091', area: '14.5 Acres', village: 'Sehore Khas' },
-                { name: 'Sita Devi', id: 'FARM-MP-8092', area: '8.2 Acres', village: 'Depalpur' },
-              ].map((f, i) => (
-                <div key={i} className="p-3 bg-[#FAFCFF] border border-[#F1F5F9] rounded-xl flex justify-between">
-                  <div>
-                    <span className="font-bold text-[#0F172A]">{f.name}</span>
-                    <span className="text-[11px] text-[#64748B] block">{f.id} • {f.village}</span>
+            <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3">
+              Enrolled Farmers List ({projectEnrollments.length})
+            </h3>
+            {projectEnrollments.length === 0 ? (
+              <div className="py-12 text-center text-[#94A3B8] text-[13px]">
+                No farmers enrolled in this project yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {projectEnrollments.map((f: any, i: number) => (
+                  <div key={i} className="p-3 bg-[#FAFCFF] border border-[#F1F5F9] rounded-xl flex justify-between items-center">
+                    <div>
+                      <span className="font-bold text-[#0F172A] block">{f.farmer_name || 'Shankar Rathore'}</span>
+                      <span className="text-[11px] text-[#64748B] block font-mono">
+                        {f.farmer_id || 'FAR-000085'} • {f.village || 'Indore'}
+                      </span>
+                    </div>
+                    <span className="font-bold text-[#16A34A] text-[13px] bg-[#F0FDF4] px-2.5 py-1 rounded-lg border border-[#DCFCE7]">
+                      {f.land_area_acres || f.registered_trees ? `${f.land_area_acres || (f.registered_trees * 0.08).toFixed(1)} Acres` : '10.0 Acres'}
+                    </span>
                   </div>
-                  <span className="font-bold text-[#16A34A]">{f.area}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

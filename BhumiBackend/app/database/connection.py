@@ -63,7 +63,6 @@ async def connect_db() -> None:
     from app.models.invoice import Invoice
     from app.models.audit_schedule import AuditSchedule
     from app.models.green_family import GreenFamilyCover
-    from app.models.vendor import Vendor
     from app.models.product import Product
     from app.models.category import Category
     from app.models.wishlist import Wishlist
@@ -108,10 +107,23 @@ async def connect_db() -> None:
     from app.models.gateway_request_log import GatewayRequestLog
     from app.models.tree_registration import TreeRegistration
     from app.models.notification import Notification
-    from app.models.support_ticket import SupportTicket
     from app.models.tree_plan import TreePlan
+    from app.models.soil_test import SoilTestBooking
     from app.models.counter import Counter
     from app.models.climate_risk_insurance import ClimateRiskInsuranceCard
+    from app.models.support_ticket import SupportTicket
+    from app.models.govt import (
+        GovtOrganization, Department, AuthorizedPerson, GovtScheme, SchemeApplication, SubsidyDisbursement
+    )
+    from app.models.partner import (
+        Partner, PartnerAgreement, CommissionStructure, PartnerJurisdiction, PartnerStaff,
+        GISApiLog, InsuranceMasterPlan, CarbonOfftakeContract, VendorOrder, PartnerComplianceAudit,
+        PartnerPerformance, PartnerRevenue, PartnerRating
+    )
+    from app.models.tree_insurance import (
+        TreeInsurancePolicy, TreeInsuranceClaim, InsuranceCompany, InsuranceSurveyor, ClaimSettlement,
+        PolicyPremium, PolicyRenewal, InsuranceSpeciesRate, InsuranceSatelliteAudit, InsuranceReinsuranceAllocation, ClaimHistory
+    )
 
     # Rebuild Pydantic forward references for models using Link
     AdminUser.model_rebuild()
@@ -135,9 +147,19 @@ async def connect_db() -> None:
 
             _client = AsyncIOMotorClient(
                 settings.MONGODB_URI,
+                # ── Connection pool keepalive settings ─────────────────────
+                # maxIdleTimeMS: close idle sockets after 5 min so they are
+                # recycled before MongoDB Atlas drops them at ~10 min idle.
+                maxIdleTimeMS=300_000,
+                # heartbeatFrequencyMS: driver pings the server every 30 s
+                # to detect stale connections before a real request hits one.
+                heartbeatFrequencyMS=30_000,
+                # minPoolSize: keep at least 1 socket alive at all times.
+                minPoolSize=1,
+                # ── Timeout settings ──────────────────────────────────────
                 serverSelectionTimeoutMS=10000,
                 connectTimeoutMS=10000,
-                socketTimeoutMS=20000,
+                socketTimeoutMS=30000,
                 retryWrites=True,
                 **tls_kwargs,
             )
@@ -175,7 +197,6 @@ async def connect_db() -> None:
                     Invoice,
                     AuditSchedule,
                     GreenFamilyCover,
-                    Vendor,
                     Product,
                     Category,
                     Wishlist,
@@ -198,6 +219,7 @@ async def connect_db() -> None:
                     FinancialAuditLog,
                     EscrowAccount,
                     TaxDeductionCertificate,
+                    SoilTestBooking,
 
                     WalletWithdrawal,
                     FinancialSettlement,
@@ -217,10 +239,40 @@ async def connect_db() -> None:
                     GatewayRequestLog,
                     TreeRegistration,
                     Notification,
-                    SupportTicket,
                     TreePlan,
                     Counter,
                     ClimateRiskInsuranceCard,
+                    SupportTicket,
+                    GovtOrganization,
+                    Department,
+                    AuthorizedPerson,
+                    GovtScheme,
+                    SchemeApplication,
+                    SubsidyDisbursement,
+                    Partner,
+                    PartnerAgreement,
+                    CommissionStructure,
+                    PartnerJurisdiction,
+                    PartnerStaff,
+                    GISApiLog,
+                    InsuranceMasterPlan,
+                    CarbonOfftakeContract,
+                    VendorOrder,
+                    PartnerComplianceAudit,
+                    PartnerPerformance,
+                    PartnerRevenue,
+                    PartnerRating,
+                    TreeInsurancePolicy,
+                    TreeInsuranceClaim,
+                    InsuranceCompany,
+                    InsuranceSurveyor,
+                    ClaimSettlement,
+                    PolicyPremium,
+                    PolicyRenewal,
+                    InsuranceSpeciesRate,
+                    InsuranceSatelliteAudit,
+                    InsuranceReinsuranceAllocation,
+                    ClaimHistory,
                 ],
                 allow_index_dropping=True,
             )
@@ -257,3 +309,35 @@ def get_db():
     if _client is None:
         raise RuntimeError("Database not initialised. Call connect_db() first.")
     return _client[settings.DATABASE_NAME]
+
+
+async def ping_db() -> bool:
+    """Ping MongoDB to verify the connection is alive.
+    Returns True on success, False if the ping fails.
+    Used by the background keepalive task in main.py.
+    """
+    global _client
+    if _client is None:
+        return False
+    try:
+        await _client.admin.command("ping")
+        return True
+    except Exception as exc:
+        logger.warning("MongoDB ping failed: %s — will attempt reconnect.", exc)
+        return False
+
+
+async def reconnect_db() -> None:
+    """Fully tear down and re-establish the MongoDB connection.
+    Called automatically by the keepalive task when a ping fails.
+    """
+    global _client
+    logger.warning("Reconnecting to MongoDB Atlas...")
+    if _client is not None:
+        try:
+            _client.close()
+        except Exception:
+            pass
+        _client = None
+    await connect_db()
+    logger.info("MongoDB reconnect complete.")

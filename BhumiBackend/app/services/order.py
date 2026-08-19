@@ -96,6 +96,7 @@ class OrderService:
             delivery_charge=checkout_summary.delivery_charge,
             final_total=checkout_summary.final_total,
             delivery_address=address_snapshot,
+            payment_method=request_data.payment_method,
             status=OrderStatus.PENDING,
             status_history=[
                 OrderStatusHistory(
@@ -122,6 +123,59 @@ class OrderService:
                     error_code="STOCK_UNAVAILABLE",
                     detail=str(e)
                 )
+
+        # Deduct wallet balance if payment_method is wallet, but record platform transactions for ALL methods
+        from app.services.wallet_service import WalletService
+        from app.repositories.wallet import (
+            WalletRepository,
+            WalletTransactionRepository,
+            WalletBankAccountRepository,
+            WithdrawalRequestRepository,
+        )
+        from app.repositories.farmer import FarmerRepository
+        from app.models.wallet import TransactionType, TransactionStatus, WalletTransaction
+        from datetime import datetime, timezone
+
+        wallet_repo = WalletRepository()
+        tx_repo = WalletTransactionRepository()
+        bank_repo = WalletBankAccountRepository()
+        withdrawal_repo = WithdrawalRequestRepository()
+        farmer_repo = FarmerRepository()
+        wallet_svc = WalletService(wallet_repo, tx_repo, bank_repo, withdrawal_repo, farmer_repo)
+
+        wallet = await wallet_svc._get_or_create_wallet(farmer_id)
+
+        if request_data.payment_method == "wallet":
+            if wallet.balance < checkout_summary.final_total:
+                raise AppException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    error_code="INSUFFICIENT_WALLET_BALANCE",
+                    detail=f"Insufficient balance in Eco Wallet. Required: ₹{checkout_summary.final_total}, Available: ₹{wallet.balance}"
+                )
+
+            wallet.balance -= checkout_summary.final_total
+            wallet.updated_at = datetime.now(timezone.utc)
+            await wallet.save()
+
+            # Sync denormalised balance on Farmer document
+            farmer = await Farmer.get(PydanticObjectId(farmer_id))
+            if farmer:
+                farmer.wallet_balance = wallet.balance
+                await farmer.save()
+
+        # Create completed debit transaction for ledger history for all payment methods
+        tx = WalletTransaction(
+            farmer_id=farmer_id,
+            wallet_id=str(wallet.id),
+            amount=checkout_summary.final_total,
+            type=TransactionType.DEBIT,
+            status=TransactionStatus.COMPLETED,
+            description=f"Marketplace Purchase ({request_data.payment_method.upper()}) - Order #{order_number}",
+            reference_id=str(order.id),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+        await tx_repo.create(tx)
 
         await self.order_repo.create(order)
         await self.checkout_service.cart_repo.clear_cart(farmer_id)
@@ -182,6 +236,7 @@ class OrderService:
             id=str(order.id),
             order_number=order.order_number,
             status=order.status,
+            status_history=[h.model_dump() for h in order.status_history] if order.status_history else [],
             items=[
                 OrderItemResponse(
                     product_id=str(i.product_id),

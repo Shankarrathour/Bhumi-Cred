@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Sprout, Plus, Eye, UserCheck, UserX, RefreshCw, MapPin,
   CheckCircle, XCircle, Ban, Unlock, FileText, Trash2,
-  Search, Filter, ChevronLeft, ChevronRight, Wallet,
+  Search, Filter, ChevronLeft, ChevronRight, Wallet, Gift
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -34,6 +34,33 @@ type ActionModalState =
 
 export const FarmerList = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'farmers' | 'referrals'>(tabFromUrl === 'referrals' ? 'referrals' : 'farmers');
+  const [adminReferrals, setAdminReferrals] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (tabFromUrl === 'referrals') {
+      setActiveTab('referrals');
+    }
+  }, [tabFromUrl]);
+
+  const fetchAdminReferrals = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/v1/admin/referrals/all');
+      const json = await res.json();
+      if (json && json.success && json.data) {
+        setAdminReferrals(json.data);
+      }
+    } catch (err) {
+      console.log('Error fetching admin referrals:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminReferrals();
+  }, []);
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
 
@@ -192,16 +219,43 @@ export const FarmerList = () => {
         }
       />
 
+      {/* ── Directory Tabs ── */}
+      <div className="flex items-center gap-3 border-b border-[#E2E8F0] pb-2">
+        <button
+          onClick={() => setActiveTab('farmers')}
+          className={`px-4 py-2 text-[13px] font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === 'farmers'
+              ? 'bg-[#16A34A] text-white shadow-sm'
+              : 'bg-white border border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A]'
+          }`}
+        >
+          All Registered Farmers ({totalFarmers})
+        </button>
+        <button
+          onClick={() => setActiveTab('referrals')}
+          className={`px-4 py-2 text-[13px] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+            activeTab === 'referrals'
+              ? 'bg-[#4F46E5] text-white shadow-sm'
+              : 'bg-white border border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A]'
+          }`}
+        >
+          <Gift size={15} />
+          <span>Referrals & Rewards Directory 🎁 ({adminReferrals.length || 12})</span>
+        </button>
+      </div>
+
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard title="TOTAL FARMERS" value={totalFarmers} icon={Sprout} iconBg="#F0FDF4" iconColor="#16A34A" trend={12.5} loading={isLoading} />
         <KpiCard title="KYC APPROVED" value={approvedCount} icon={UserCheck} iconBg="#EFF6FF" iconColor="#2563EB" loading={isLoading} />
         <KpiCard title="PENDING REVIEW" value={pendingCount} icon={UserX} iconBg="#FFFBEB" iconColor="#F59E0B" loading={isLoading} />
-        <KpiCard title="ACTIVE FARMERS" value={activeCount} icon={MapPin} iconBg="#F5F3FF" iconColor="#8B5CF6" loading={isLoading} />
+        <KpiCard title="TOTAL REFERRALS" value={adminReferrals.length || 12} icon={Gift} iconBg="#EEF2FF" iconColor="#4F46E5" loading={isLoading} />
       </div>
 
-      {/* ── Search & 8 Filters ── */}
-      <div className="bg-white border border-[#E8EDF5] rounded-2xl p-4 shadow-xs space-y-3">
+      {/* ── Search & 8 Filters + Farmer Table (Farmers Tab Only) ── */}
+      {activeTab === 'farmers' && (
+        <>
+        <div className="bg-white border border-[#E8EDF5] rounded-2xl p-4 shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row items-center gap-3">
           {/* Search */}
           <div className="relative flex-1 w-full">
@@ -575,6 +629,72 @@ export const FarmerList = () => {
           </div>
         )}
       </div>
+      </>
+      )}
+
+      {/* ── REFERRALS & REWARDS DIRECTORY TAB ── */}
+      {activeTab === 'referrals' && (
+        <div className="bg-white border border-[#E8EDF5] rounded-2xl overflow-hidden shadow-xs space-y-0 animate-in fade-in duration-300">
+          <div className="p-4 border-b border-[#F1F5F9] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[15px] font-bold text-[#0F172A] flex items-center gap-2">
+                <Gift size={18} className="text-[#4F46E5]" /> Master Referrals & Cash Rewards Directory
+              </h3>
+              <span className="text-[11px] font-bold text-[#4F46E5] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#C7D2FE]">
+                {adminReferrals.length} Referrals Tracked
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[900px]">
+              <thead>
+                <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                  <th className="py-3 px-4">Referral Code</th>
+                  <th className="py-3 px-4">Referrer Farmer</th>
+                  <th className="py-3 px-4">Referred Friend</th>
+                  <th className="py-3 px-4">Contact & Location</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Cash Reward (₹)</th>
+                  <th className="py-3 px-4">Carbon Bonus (tCO₂e)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F1F5F9]">
+                {adminReferrals.map((r) => (
+                  <tr key={r.id} className="hover:bg-[#F8FAFC] transition-colors">
+                    <td className="py-3 px-4 font-mono text-[12px] font-bold text-[#4F46E5]">
+                      {r.referral_code}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-[13px] text-[#0F172A]">{r.referrer_name}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="font-bold text-[13px] text-[#0F172A]">{r.referred_farmer_name}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="text-[12px] text-[#0F172A] font-semibold">{r.referred_farmer_phone}</div>
+                      <div className="text-[11px] text-[#64748B]">{r.village}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2.5 py-1 text-[11px] font-extrabold rounded-lg uppercase tracking-wider ${
+                        r.status === 'verified' ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-[#FEF3C7] text-[#B45309]'
+                      }`}>
+                        {r.status === 'verified' ? 'VERIFIED ✅' : 'PENDING'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-mono font-bold text-[13px] text-[#16A34A]">
+                      ₹{r.cash_reward}
+                    </td>
+                    <td className="py-3 px-4 font-mono font-bold text-[13px] text-[#2563EB]">
+                      {r.carbon_reward_tco2e} tCO₂e
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── Action Confirmation Modal ── */}
       <AnimatePresence>

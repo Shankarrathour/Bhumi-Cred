@@ -16,7 +16,6 @@ export default function SplashScreen() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
-  const vendor = useAuthStore((state) => state.vendor);
   const _hasHydrated = useAuthStore((state) => state._hasHydrated);
 
   // Logo animations
@@ -125,19 +124,7 @@ export default function SplashScreen() {
       // Don't navigate until AsyncStorage hydration is complete
       if (!_hasHydrated) return;
 
-      if (role === 'vendor' && vendor) {
-        if (!vendor.name) {
-          router.replace('/(vendor_auth)/register-wizard'); // Resume incomplete wizard
-        } else if (vendor.status === 'Active') {
-          router.replace('/(vendor_tabs)');
-        } else if (vendor.status === 'Rejected') {
-          router.replace('/(vendor_auth)/rejected');
-        } else if (vendor.status === 'Suspended') {
-          router.replace('/(vendor_auth)/suspended');
-        } else {
-          router.replace('/(vendor_auth)/pending');
-        }
-      } else if (isAuthenticated) {
+      if (isAuthenticated) {
         router.replace('/(tabs)');
       } else if (user && user.verificationStatus !== 'unverified') {
         router.replace('/onboarding'); // Onboarding step verification pending
@@ -147,7 +134,7 @@ export default function SplashScreen() {
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, [isAuthenticated, user, role, vendor, _hasHydrated]);
+  }, [isAuthenticated, user, role, _hasHydrated]);
 
   return (
     <View style={styles.container}>

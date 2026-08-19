@@ -1,14 +1,11 @@
 import axios from 'axios';
-import { store } from '../store/store';
-import { logout } from '../store/slices/authSlice';
 
 // ── Base URL — reads from env in production, falls back to localhost ─────────
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'https://zenvora-bhumi.onrender.com/v1';
-  // import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/v1';
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/v1';
 
-let _accessToken: string | null = localStorage.getItem('admin_access_token');
-let _refreshToken: string | null = localStorage.getItem('admin_refresh_token');
+let _accessToken: string | null = localStorage.getItem('admin_access_token') || localStorage.getItem('token');
+let _refreshToken: string | null = localStorage.getItem('admin_refresh_token') || localStorage.getItem('refreshToken');
 let _onRefresh: ((newAccess: string, newRefresh: string) => void) | null = null;
 let _onUnauthorized: (() => void) | null = null;
 
@@ -42,12 +39,10 @@ const adminApi = axios.create({
 });
 
 adminApi.interceptors.request.use((config) => {
-  if (_accessToken) {
-    config.headers = {
-      ...config.headers,
-      Authorization: `Bearer ${_accessToken}`
-    } as any;
-    config.headers.Authorization = `Bearer ${_accessToken}`;
+  const token = _accessToken || localStorage.getItem('admin_access_token') || localStorage.getItem('token');
+  if (token) {
+    config.headers = config.headers || {};
+    (config.headers as any).Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -80,19 +75,6 @@ adminApi.interceptors.response.use(
           data.detail = 'An unexpected error occurred. Please try again.';
         }
       }
-    }
-
-    if (error.response?.status === 401) {
-      localStorage.removeItem('admin_access_token');
-      localStorage.removeItem('admin_refresh_token');
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
-      
-      // Dispatch Redux logout action to update state in memory and trigger redirect to login
-      store.dispatch(logout());
-      
-      _onUnauthorized?.();
     }
 
     if (is401WithRefreshToken) {
@@ -137,10 +119,6 @@ adminApi.interceptors.response.use(
       } catch (err) {
         console.warn(`[AdminAPI] Token refresh failed. User will be logged out.`, err);
         setAdminTokens(null, null);
-        
-        // Dispatch Redux logout action
-        store.dispatch(logout());
-        
         _onUnauthorized?.();
         _refreshQueue.forEach((cb) => cb.reject(err));
         _refreshQueue = [];

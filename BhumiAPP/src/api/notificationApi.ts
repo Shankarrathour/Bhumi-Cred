@@ -22,11 +22,13 @@ export const markNotificationAsReadAPI = async (id: string): Promise<Notificatio
 };
 
 export const fetchVendorNotificationsAPI = async (limit: number = 50): Promise<NotificationResponse[]> => {
-  const response = await api.get('/vendor/notifications', { params: { limit } });
+  // Vendor notifications share the same backend endpoint as farmer notifications
+  const response = await api.get('/notifications', { params: { limit } });
   return response.data.data;
 };
 
 export const markVendorNotificationAsReadAPI = async (id: string): Promise<NotificationResponse> => {
-  const response = await api.patch(`/vendor/notifications/${id}/read`);
+  // Vendor notifications share the same backend endpoint as farmer notifications
+  const response = await api.patch(`/notifications/${id}/read`);
   return response.data.data;
 };

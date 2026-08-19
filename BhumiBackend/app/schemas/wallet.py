@@ -86,9 +86,9 @@ class BankAccountResponse(BaseModel):
     account_number: str          # masked form stored and returned
     ifsc_code: str
     account_holder_name: str
-    is_active: bool
-    is_primary: bool
-    created_at: datetime
+    is_active: bool = True
+    is_primary: bool = False
+    created_at: Optional[datetime] = None
 
 
 # ── Farmer: transactions ──────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ class TransactionResponse(BaseModel):
     status: TransactionStatus
     description: str
     reference_id: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 
 # ── Farmer: wallet ────────────────────────────────────────────────────────────
@@ -113,8 +113,8 @@ class WalletResponse(BaseModel):
     total_withdrawn: float
     bank_account: Optional[BankAccountResponse] = None       # primary account (backward compat)
     bank_accounts: list[BankAccountResponse] = []             # all accounts (up to 3)
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 # ── Farmer: withdrawal ────────────────────────────────────────────────────────
@@ -155,8 +155,8 @@ class WithdrawalRequestResponse(BaseModel):
     upi_id: Optional[str] = None
     rejection_reason: Optional[str] = None
     payout_reference: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 # ── Admin: wallet overview ────────────────────────────────────────────────────

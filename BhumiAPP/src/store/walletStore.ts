@@ -105,9 +105,9 @@ export const useWalletStore = create<WalletState>()(
             amount: tx.amount,
             type: tx.type as 'credit' | 'debit',
             status:
-              tx.status === 'completed'
+              (tx.status === 'completed' || tx.status === 'approved')
                 ? 'Completed'
-                : tx.status === 'rejected'
+                : (tx.status === 'rejected' || tx.status === 'failed')
                   ? 'Failed'
                   : 'Pending',
           }));
@@ -292,7 +292,7 @@ export const useWalletStore = create<WalletState>()(
           set({ isLoading: false });
           return false;
         } catch (error) {
-          console.error('[walletStore] sellCarbonCredits error', error);
+          console.warn('[walletStore] sellCarbonCredits error', error);
           set({ isLoading: false });
           return false;
         }

@@ -13,11 +13,14 @@ import {
   Modal,
   StatusBar,
   TextInput,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useLandStore } from '../../src/store/landStore';
+import TrackingModal from '../../src/components/TrackingModal';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
@@ -177,15 +180,15 @@ const buildRoadmapSteps = (
   const treesCount = contribution?.trees_registered ?? 0;
 
   const definitions: Array<Omit<RoadmapStep, 'completed' | 'log'>> = [
-    { order: 1, key: 'project_assigned', title: 'Project Assigned', desc: 'Ecosystem assignment details.' },
-    { order: 2, key: 'land_registered', title: 'Land Register', desc: 'Secure digital land Khasra boundaries successfully locked.' },
-    { order: 3, key: 'inspection_completed', title: 'Inspection Completed', desc: 'MRV field inspector baseline visit schedules verified.' },
-    { order: 4, key: 'soil_verified', title: 'Soil Verification', desc: 'Baseline Soil Organic Carbon (SOC) core laboratory checks mapped.' },
-    { order: 5, key: 'trees_registered', title: 'Trees Registered', desc: `${treesCount} trees registered for monitoring.` },
-    { order: 6, key: 'insurance_activated', title: 'Insurance Activated', desc: insuranceProtection ? `${insuranceProtection.policy_name} protection status synced.` : 'Green Shield protection status synced.' },
-    { order: 7, key: 'mrv_monitoring_started', title: 'MRV Monitoring Started', desc: 'Continuous Sentinel satellite NDVI vegetation scans active.' },
-    { order: 8, key: 'carbon_estimation_running', title: 'Carbon Estimation Running', desc: 'Annual humic carbon accumulation calculation models active.' },
-    { order: 9, key: 'reward_eligible', title: 'Sustainability Rewards Eligible', desc: 'Direct DBT eco-reward credits queued.' },
+    { order: 1, key: 'project_assigned', title: 'Project Assigned', desc: 'Enrollment initiated and project dashboard generated.' },
+    { order: 2, key: 'land_registered', title: 'MRV Scheduled', desc: 'Remote sensing satellite scans and audit windows locked.' },
+    { order: 3, key: 'inspection_completed', title: 'Soil Testing', desc: 'Core soil NPK baseline sample checks scheduled.' },
+    { order: 4, key: 'soil_verified', title: 'Inspection', desc: 'On-site field verification by assigned inspector completed.' },
+    { order: 5, key: 'trees_registered', title: 'GIS Mapping', desc: 'Dynamic boundary geofencing synced in global ecological registry.' },
+    { order: 6, key: 'insurance_activated', title: 'MRV Progress', desc: 'Active remote canopy monitoring and tree shield insurance active.' },
+    { order: 7, key: 'mrv_monitoring_started', title: 'Carbon Calculation', desc: 'Live remote biomass calculation models active.' },
+    { order: 8, key: 'carbon_estimation_running', title: 'Registry', desc: 'Environmental credits registered under verification standard.' },
+    { order: 9, key: 'reward_eligible', title: 'Credits Issued', desc: 'Carbon credit rewards minted and deposited in Eco-Wallet.' },
   ];
 
   if (!active) {
@@ -298,6 +301,11 @@ export default function ProjectsScreen() {
   const authUser = useAuthStore((state) => state.user);
 
   // App States
+  const [activeTab, setActiveTab] = useState<'projects' | 'lands'>('projects');
+  const [selectedPlot, setSelectedPlot] = useState<any>(null);
+  const [trackingModalVisible, setTrackingModalVisible] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<string>('All');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProject, setSelectedProject] = useState<RichProject | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -312,6 +320,9 @@ export default function ProjectsScreen() {
   const [projectsHub, setProjectsHub] = useState<ApiProjectsHub | null>(null);
   const [apiProjects, setApiProjects] = useState<RichProject[]>([]);
 
+  const plots = useLandStore((state) => state.plots);
+  const fetchPlots = useLandStore((state) => state.fetchPlots);
+
   const fetchProjectsData = React.useCallback(async () => {
     setIsLoading(true);
     try {
@@ -324,16 +335,21 @@ export default function ProjectsScreen() {
       setProjectsHub(hubData);
       setApiProjects(listData.map((project) => mapApiProjectToRichProject(project)));
 
+      // Fetch lands as well
+      await fetchPlots();
+
       // Sync latest profile (wallet & carbon credits) from the backend
       useAuthStore.getState().fetchProfile().catch(() => {});
     } catch (error) {
       console.warn('[Projects] Failed to load real projects data', error);
       setProjectsHub(null);
       setApiProjects([]);
+      // Fallback local plots fetch
+      fetchPlots().catch(() => {});
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [fetchPlots]);
 
   useEffect(() => {
     fetchProjectsData();
@@ -341,7 +357,14 @@ export default function ProjectsScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
+      // Fetch immediately when screen gains focus
       fetchProjectsData();
+      // Auto-poll every 30 seconds while Projects screen is open
+      // This ensures admin project assignment reflects quickly without manual pull-to-refresh
+      const interval = setInterval(() => {
+        fetchProjectsData();
+      }, 30000);
+      return () => clearInterval(interval);
     }, [fetchProjectsData]),
   );
 
@@ -458,13 +481,47 @@ export default function ProjectsScreen() {
         </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />
-        }
-      >
+      {/* Segmented Tab Switcher */}
+      <View style={styles.tabSwitcherContainer}>
+        <TouchableOpacity
+          style={[styles.switcherTab, activeTab === 'projects' && styles.switcherTabActive]}
+          onPress={() => setActiveTab('projects')}
+        >
+          <MaterialCommunityIcons
+            name={activeTab === 'projects' ? 'chart-areaspline-variant' : 'chart-areaspline'}
+            size={18}
+            color={activeTab === 'projects' ? '#FFFFFF' : COLORS.textSecondary}
+            style={{ marginRight: 6 }}
+          />
+          <Text style={[styles.switcherTabText, activeTab === 'projects' && styles.switcherTabTextActive]}>
+            My Projects
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.switcherTab, activeTab === 'lands' && styles.switcherTabActive]}
+          onPress={() => setActiveTab('lands')}
+        >
+          <MaterialCommunityIcons
+            name={activeTab === 'lands' ? 'image-filter-hdr' : 'image-filter-hdr-outline'}
+            size={18}
+            color={activeTab === 'lands' ? '#FFFFFF' : COLORS.textSecondary}
+            style={{ marginRight: 6 }}
+          />
+          <Text style={[styles.switcherTabText, activeTab === 'lands' && styles.switcherTabTextActive]}>
+            My Lands
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'projects' ? (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />
+          }
+        >
         {/* ================================================= */}
         {/* SECTION 1: YOUR ACTIVE SUSTAINABILITY PROJECT */}
         {/* ================================================= */}
@@ -493,26 +550,22 @@ export default function ProjectsScreen() {
             <View style={styles.connectionChecklist}>
               <View style={styles.checkItem}>
                 <MaterialCommunityIcons name="check-circle" size={16} color="#84CC16" style={{ marginRight: 8 }} />
-                <Text style={styles.checkText}>Your {totalApprovedLandAcres.toFixed(1)} Acre Land Is Registered</Text>
+                <Text style={styles.checkText}>Land Parcel: {totalApprovedLandAcres.toFixed(1)} Acres Registered</Text>
               </View>
               <View style={styles.checkItem}>
                 <MaterialCommunityIcons name="check-circle" size={16} color="#84CC16" style={{ marginRight: 8 }} />
-                <Text style={styles.checkText}>{displayRegisteredTrees} Trees Added To Sustainability Monitoring</Text>
+                <Text style={styles.checkText}>Enrolled Trees: {displayRegisteredTrees} saplings monitored</Text>
               </View>
               <View style={styles.checkItem}>
-                <MaterialCommunityIcons name="check-circle" size={16} color="#84CC16" style={{ marginRight: 8 }} />
-                <Text style={styles.checkText}>{projectsHub?.active_project?.insurance_active ? 'Green Family Insurance Active' : 'Insurance Verification Pending'}</Text>
-              </View>
-              <View style={styles.checkItem}>
-                <MaterialCommunityIcons name="check-circle" size={16} color="#84CC16" style={{ marginRight: 8 }} />
-                <Text style={styles.checkText}>MRV Verification In Progress ({activeProj.mrvVerificationProgress || 0}%)</Text>
+                <MaterialCommunityIcons name="account-group" size={16} color="#84CC16" style={{ marginRight: 8 }} />
+                <Text style={styles.checkText}>Verification Team: Bhopal East Agronomy Unit</Text>
               </View>
             </View>
 
             {/* Dynamic statistics */}
             <View style={styles.activeMetaGrid}>
               <View style={styles.activeMetaItem}>
-                <Text style={styles.activeMetaLabel}>JOINED DATE</Text>
+                <Text style={styles.activeMetaLabel}>ASSIGNED DATE</Text>
                 <Text style={styles.activeMetaValue}>{activeProj.startDate}</Text>
               </View>
               <View style={styles.activeMetaItem}>
@@ -520,11 +573,11 @@ export default function ProjectsScreen() {
                 <Text style={[styles.activeMetaValue, { color: '#84CC16' }]}>{getCurrentStageLabel(activeProj.roadmapSteps)}</Text>
               </View>
               <View style={styles.activeMetaItem}>
-                <Text style={styles.activeMetaLabel}>DISTRICT / STATE</Text>
-                <Text style={styles.activeMetaValue}>{activeProj.district}, {activeProj.state}</Text>
+                <Text style={styles.activeMetaLabel}>EST. CARBON YIELD</Text>
+                <Text style={[styles.activeMetaValue, { color: '#F59E0B' }]}>{totalCredits.toFixed(1)} CO₂e</Text>
               </View>
               <View style={styles.activeMetaItem}>
-                <Text style={styles.activeMetaLabel}>NGO PARTNER</Text>
+                <Text style={styles.activeMetaLabel}>SUPPORTING NGO</Text>
                 <Text style={styles.activeMetaValue}>{activeProj.supportedBy.ngo}</Text>
               </View>
             </View>
@@ -542,17 +595,27 @@ export default function ProjectsScreen() {
 
           <View style={styles.activeCardDivider} />
 
-          <TouchableOpacity
-            style={styles.activeViewDetailsBtn}
-            onPress={() => {
-              setSelectedProject(activeProj);
-              setActiveTimelineNode(getFirstPendingStepOrder(activeProj.roadmapSteps));
-              setIsDetailOpen(true);
-            }}
-          >
-            <Text style={styles.activeViewDetailsBtnText}>View Detailed Project Info</Text>
-            <MaterialCommunityIcons name="arrow-right" size={14} color="#84CC16" style={{ marginLeft: 4 }} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              style={[styles.activeViewDetailsBtn, { flex: 1.2 }]}
+              onPress={() => {
+                setSelectedProject(activeProj);
+                setActiveTimelineNode(getFirstPendingStepOrder(activeProj.roadmapSteps));
+                setIsDetailOpen(true);
+              }}
+            >
+              <Text style={styles.activeViewDetailsBtnText}>View Project Info</Text>
+              <MaterialCommunityIcons name="arrow-right" size={14} color="#84CC16" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.activeViewDetailsBtn, { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.12)', borderColor: 'rgba(255,255,255,0.2)' }]}
+              onPress={() => router.push('/soil-testing' as any)}
+            >
+              <Text style={[styles.activeViewDetailsBtnText, { color: '#FFFFFF' }]}>Soil Testing</Text>
+              <MaterialCommunityIcons name="test-tube" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
+            </TouchableOpacity>
+          </View>
         </LinearGradient>
         ) : (
           <View style={styles.emptyStateCard}>
@@ -819,6 +882,183 @@ export default function ProjectsScreen() {
         )}
         <View style={{ height: 40 }} />
       </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />
+          }
+        >
+          {/* Lands tab content */}
+          <View style={styles.landsTabHeaderRow}>
+            <Text style={styles.sectionHeading}>Registered Land Parcels</Text>
+            <TouchableOpacity
+              style={styles.addLandTabBtn}
+              onPress={() => DeviceEventEmitter.emit('openGlobalScheduler')}
+            >
+              <MaterialCommunityIcons name="map-marker-plus" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.addLandTabBtnText}>Add Land</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Filters Chips Shelf */}
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            contentContainerStyle={styles.filterChipsRow as any}
+          >
+            {['All', 'Pending', 'Under Review', 'Approved', 'Rejected'].map((filterItem) => {
+              const isActive = selectedFilter === filterItem;
+              return (
+                <TouchableOpacity
+                  key={filterItem}
+                  style={[styles.filterChip, isActive && styles.filterChipActive] as any}
+                  onPress={() => setSelectedFilter(filterItem)}
+                >
+                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive] as any}>
+                    {filterItem}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {plots.length === 0 ? (
+            <View style={styles.emptyLandsCard}>
+              <MaterialCommunityIcons name="image-filter-hdr" size={60} color={COLORS.border} />
+              <Text style={styles.emptyLandsTitle}>No land parcels registered yet</Text>
+              <Text style={styles.emptyLandsDesc}>
+                Register your agricultural land to enroll in carbon capture programs and claim carbon payouts.
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyLandsBtn}
+                onPress={() => DeviceEventEmitter.emit('openGlobalScheduler')}
+              >
+                <Text style={styles.emptyLandsBtnText}>Register Your First Plot</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.landsGrid}>
+              {(() => {
+                const filteredPlots = plots.filter((plot) => {
+                  if (selectedFilter === 'All') return true;
+                  const s = (plot.status || '').toLowerCase();
+                  if (selectedFilter === 'Pending') return s === 'pending' || s === 'submitted';
+                  if (selectedFilter === 'Under Review') return s === 'under_review' || s === 'auditing';
+                  if (selectedFilter === 'Approved') return s === 'approved' || s === 'verified' || s === 'project_assigned';
+                  if (selectedFilter === 'Rejected') return s === 'rejected' || s === 'correction_required';
+                  return true;
+                });
+
+                if (filteredPlots.length === 0) {
+                  return (
+                    <View style={{ flex: 1, padding: 30, alignItems: 'center', justifyContent: 'center', width: width - 32 }}>
+                      <MaterialCommunityIcons name="filter-remove-outline" size={32} color={COLORS.textSecondary} />
+                      <Text style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: '700', marginTop: 10 }}>
+                        No lands match the selected filter.
+                      </Text>
+                    </View>
+                  );
+                }
+
+                return filteredPlots.map((plot) => {
+                  const statusLower = (plot.status || '').toLowerCase().replace(/\s+/g, '_');
+                  let statusColor = COLORS.primary;
+                  let displayLabel = plot.status;
+
+                  if (statusLower === 'pending' || statusLower === 'submitted') {
+                    statusColor = COLORS.warning;
+                    displayLabel = 'Submitted';
+                  } else if (statusLower === 'rejected') {
+                    statusColor = COLORS.danger;
+                    displayLabel = 'Rejected';
+                  } else if (statusLower === 'under_review' || statusLower === 'auditing') {
+                    statusColor = '#3B82F6';
+                    displayLabel = 'Under Review';
+                  } else if (statusLower === 'correction_required') {
+                    statusColor = '#EA580C';
+                    displayLabel = 'Correction Req.';
+                  } else if (statusLower === 'verified' || statusLower === 'approved') {
+                    statusColor = COLORS.success;
+                    displayLabel = 'Approved';
+                  } else if (statusLower === 'project_assigned') {
+                    statusColor = '#8B5CF6';
+                    displayLabel = 'Project Assigned';
+                  }
+
+                  const isApproved = statusLower === 'approved' || statusLower === 'verified' || statusLower === 'project_assigned';
+                  const totalTreeCount = plot.trees ? plot.trees.reduce((acc, t) => acc + (t.count || 0), 0) : 0;
+
+                  return (
+                    <TouchableOpacity
+                      key={plot.id}
+                      style={styles.landCard}
+                      onPress={() => {
+                        setSelectedPlot(plot);
+                        setTrackingModalVisible(true);
+                      }}
+                    >
+                      <View style={styles.landCardHeader}>
+                        <View style={styles.landCardIconWrapper}>
+                          <MaterialCommunityIcons name="image-filter-hdr" size={22} color={COLORS.primary} />
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          {isApproved && (
+                            <MaterialCommunityIcons name="shield-check" size={14} color={COLORS.success} />
+                          )}
+                          <View style={[styles.landStatusBadge, { backgroundColor: `${statusColor}15` }]}>
+                            <Text style={[styles.landStatusText, { color: statusColor, fontSize: 9, fontWeight: '800' }]}>
+                              {displayLabel}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <Text style={styles.landCardTitle} numberOfLines={1}>{plot.name || `${plot.acres} Acres Farm`}</Text>
+                      <Text style={styles.landCardKhasra}>Khasra: {plot.khasraNumber || 'N/A'} • {plot.acres} Acres</Text>
+                      <Text style={styles.landCardLocation} numberOfLines={1}>
+                        {plot.village || 'Unknown'}, {plot.district || 'Unknown'}
+                      </Text>
+
+                      <View style={styles.dottedDivider} />
+                      <Text style={styles.cropTreeSummaryText as any} numberOfLines={1}>
+                        🌾 {plot.cropType || 'Crop: Pending'} • 🌳 {totalTreeCount} Trees
+                      </Text>
+
+                      <View style={styles.landCardFooter}>
+                        <Text style={styles.trackProgressText}>Track Verification</Text>
+                        <MaterialCommunityIcons name="chevron-right" size={14} color={COLORS.primary} />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
+            </View>
+          )}
+
+          {/* Verification Process Help Card */}
+          <View style={styles.verificationGuideCard}>
+            <View style={styles.guideHeader}>
+              <MaterialCommunityIcons name="information" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.guideTitle}>Verification Guide</Text>
+            </View>
+            <Text style={styles.guideDesc}>
+              Every land parcel goes through a standard 3-step compliance process: GIS Geofencing, Physical Soil Baseline audit, and final Admin verification. Ensure documents are clear to avoid delay.
+            </Text>
+          </View>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      )}
+
+      {selectedPlot && (
+        <TrackingModal
+          visible={trackingModalVisible}
+          onClose={() => setTrackingModalVisible(false)}
+          plotId={selectedPlot.id}
+          status={selectedPlot.status}
+        />
+      )}
 
       {/* ================================================= */}
       {/* 6. HIGH-FIDELITY PROJECTS DETAIL SLIDE MODAL */}
@@ -2307,5 +2547,222 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '900',
+  },
+  tabSwitcherContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 4,
+    marginHorizontal: 16,
+    marginVertical: 12,
+  },
+  switcherTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  switcherTabActive: {
+    backgroundColor: COLORS.primary,
+    ...SHADOWS.small,
+  },
+  switcherTabText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  switcherTabTextActive: {
+    color: '#FFFFFF',
+  },
+  landsTabHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 4,
+  },
+  addLandTabBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    ...SHADOWS.small,
+  },
+  addLandTabBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  emptyLandsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
+  },
+  emptyLandsTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.textDark,
+    marginTop: 12,
+  },
+  emptyLandsDesc: {
+    fontSize: 11.5,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 17,
+    paddingHorizontal: 16,
+  },
+  emptyLandsBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 16,
+  },
+  emptyLandsBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  landsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 20,
+  },
+  landCard: {
+    width: (width - 44) / 2, // 2 columns minus gap and margins
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    padding: 12,
+    ...SHADOWS.small,
+  },
+  landCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  landCardIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  landStatusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  landStatusText: {
+    fontSize: 9,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  landCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  landCardKhasra: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  landCardLocation: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 4,
+  },
+  landCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
+    marginTop: 10,
+    paddingTop: 8,
+  },
+  trackProgressText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  verificationGuideCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginTop: 8,
+  },
+  guideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  guideTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.textDark,
+  },
+  guideDesc: {
+    fontSize: 10.5,
+    color: COLORS.textSecondary,
+    lineHeight: 15,
+  },
+  filterChipsRow: {
+    paddingHorizontal: 4,
+    gap: 8,
+    marginBottom: 14,
+    flexDirection: 'row',
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginRight: 6,
+  },
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  cropTreeSummaryText: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    marginVertical: 4,
+  },
+  dottedDivider: {
+    height: 1,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderStyle: 'dashed',
+    marginVertical: 6,
   },
 });

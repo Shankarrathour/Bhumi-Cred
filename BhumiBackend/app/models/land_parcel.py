@@ -16,9 +16,14 @@ class OwnershipType(str, Enum):
 
 class LandVerificationStatus(str, Enum):
     PENDING = "pending"
+    SUBMITTED = "submitted"
+    UNDER_REVIEW = "under_review"
+    CORRECTION_REQUIRED = "correction_required"
+    APPROVED = "approved"
     VERIFIED = "verified"
     REJECTED = "rejected"
     AUDITING = "auditing"
+    PROJECT_ASSIGNED = "project_assigned"
 
 
 class GeoCoords(BaseModel):
@@ -36,12 +41,23 @@ class GeoJSONPolygon(BaseModel):
     coordinates: List[List[List[float]]] = Field(..., description="Outer ring of [longitude, latitude] pairs")
 
 
+class TreeItem(BaseModel):
+    species: str
+    count: int
+    age_bracket: str
+    location_on_parcel: str
+    photo_uri: Optional[str] = None
+
+
 class LandParcel(Document):
-    farmer_id: Optional[Union[PydanticObjectId, str]] = None
+    farmer_id: str
+    name: Optional[str] = None
     khasra_number: Optional[str] = Field(None, description="Khasra / Survey Number e.g. 142/2")
     survey_number: Optional[str] = None
     area_acres: float = Field(..., gt=0)
+    area_unit: Optional[str] = "Acre"
     ownership_type: OwnershipType = OwnershipType.OWN
+    plantation_date: Optional[str] = None
     is_irrigated: bool = False
     
     # Identity & Land Titling
@@ -66,18 +82,21 @@ class LandParcel(Document):
     coordinates: Optional[GeoCoords] = None
     
     # Agricultural & Ecological Data
+    land_type: Optional[str] = None
     crop_type: Optional[str] = "Agroforestry"
     soil_type: Optional[str] = "Black Cotton Soil"
     soil_organic_carbon: float = Field(default=0.0, ge=0.0)
     tree_stock_count: Optional[int] = Field(default=0, ge=0)
     plantation_area_acres: Optional[float] = Field(default=0.0, ge=0.0)
     agroforestry_species: Optional[str] = None
+    trees: List["TreeItem"] = Field(default_factory=list)
     
     # Documents & Verification
     land_document_url: Optional[str] = None
     land_photo_urls: List[str] = Field(default_factory=list)
     verification_status: LandVerificationStatus = LandVerificationStatus.PENDING
     verification_remarks: Optional[str] = None
+    correction_fields: Optional[List[str]] = None
     verified_by_id: Optional[PydanticObjectId] = None
     verified_at: Optional[datetime] = None
     

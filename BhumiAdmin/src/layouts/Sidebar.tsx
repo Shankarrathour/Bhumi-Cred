@@ -4,9 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Globe2, LayoutDashboard, Sprout, Building2, Map,
   FileText, ShieldCheck, CreditCard, ShoppingBag, Wallet,
-  KeyRound, ClipboardList, Settings, LogOut, X, Gift,
-  Users, CheckSquare, FileCheck, BarChart3, Bell, LifeBuoy, Monitor, Activity,
-  Cpu, Layers, DollarSign, Plane, ArrowLeftRight, BookOpen, FolderKanban, LineChart
+  KeyRound, ClipboardList, Settings, LogOut, X,
+  Users, BarChart3, Bell, LifeBuoy, Monitor, Activity,
+  Cpu, Layers, DollarSign, Plane, ArrowLeftRight, BookOpen, FolderKanban, LineChart, FlaskConical, Gift
 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../store/slices/authSlice';
@@ -49,11 +49,13 @@ const NAV_GROUPS: NavGroupType[] = [
     label: 'CORE OPERATIONS',
     items: [
       { id: 'farmers', label: 'Farmers', icon: Sprout, path: '/farmers' },
+      { id: 'referrals', label: 'Referrals & Rewards 🎁', icon: Gift, path: '/farmers?tab=referrals' },
       { id: 'govt', label: 'Govt Bodies', icon: Building2, path: '/govt' },
       { id: 'govt-schemes', label: 'Tenders & Schemes', icon: BookOpen, path: '/govt-schemes' },
       { id: 'csr-management', label: 'CSR Management', icon: FolderKanban, path: '/csr-management' },
       { id: 'partners', label: 'Partners', icon: Users, path: '/partners' },
       { id: 'projects', label: 'Projects', icon: FileText, path: '/projects' },
+      { id: 'soil-testing', label: 'Soil & Testing', icon: FlaskConical, path: '/mrv' },
       { id: 'mrv', label: 'MRV Center', icon: Activity, path: '/mrv' },
       { id: 'drone', label: 'Drone Survey', icon: Plane, path: '/drone' },
       { id: 'gis', label: 'GIS & Land', icon: Map, path: '/land' },
@@ -91,7 +93,7 @@ const NAV_GROUPS: NavGroupType[] = [
 
 export const Sidebar: React.FC = () => {
   const { hasRole } = useAuth();
-  const { collapsed, mobileOpen, closeMobile, isMobile } = useSidebar();
+  const { collapsed, closeMobile, isMobile } = useSidebar();
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector((s: RootState) => s.auth.user);

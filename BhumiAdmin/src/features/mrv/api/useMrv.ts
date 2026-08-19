@@ -24,6 +24,43 @@ export interface AdminProject {
   updated_at: string;
 }
 
+export interface MrvMetrics {
+  active_mrv: number;
+  pending_survey: number;
+  pending_reports: number;
+  verification_pending: number;
+  verified_sites: number;
+}
+
+export interface MrvScheduleItem {
+  id: string;
+  farmer: string;
+  project: string;
+  visitDate: string;
+  inspector: string;
+  status: string;
+}
+
+export interface MrvSoilTelemetryItem {
+  id: string;
+  project: string;
+  organicCarbon: number;
+  moisture: number;
+  ph: number;
+  nitrogen: number;
+  phosphorus: number;
+  potassium: number;
+}
+
+export interface MrvQueueItem {
+  id: string;
+  project: string;
+  reportDate: string;
+  inspector: string;
+  status: string;
+  observation: string;
+}
+
 export const useAdminProjects = (includeInactive = false) =>
   useQuery<AdminProject[]>({
     queryKey: ['admin-projects', includeInactive],
@@ -31,7 +68,42 @@ export const useAdminProjects = (includeInactive = false) =>
       const res = await apiClient.get('/admin/projects', {
         params: { include_inactive: includeInactive },
       });
-      // Backend returns SuccessResponse<list[AdminProjectResponse]>: { message, data }
       return res.data?.data ?? res.data;
+    },
+  });
+
+export const useMrvMetrics = () =>
+  useQuery<MrvMetrics>({
+    queryKey: ['admin-mrv-metrics'],
+    queryFn: async () => {
+      const res = await apiClient.get('/admin/mrv/metrics');
+      return res.data?.data ?? res.data;
+    },
+  });
+
+export const useMrvSchedules = () =>
+  useQuery<MrvScheduleItem[]>({
+    queryKey: ['admin-mrv-schedules'],
+    queryFn: async () => {
+      const res = await apiClient.get('/admin/mrv/schedules');
+      return res.data?.data ?? [];
+    },
+  });
+
+export const useMrvTelemetry = () =>
+  useQuery<MrvSoilTelemetryItem[]>({
+    queryKey: ['admin-mrv-telemetry'],
+    queryFn: async () => {
+      const res = await apiClient.get('/admin/mrv/telemetry');
+      return res.data?.data ?? [];
+    },
+  });
+
+export const useMrvQueue = () =>
+  useQuery<MrvQueueItem[]>({
+    queryKey: ['admin-mrv-queue'],
+    queryFn: async () => {
+      const res = await apiClient.get('/admin/mrv/queue');
+      return res.data?.data ?? [];
     },
   });

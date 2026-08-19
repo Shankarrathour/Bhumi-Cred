@@ -102,6 +102,7 @@ class FarmerDocuments(BaseModel):
 class Farmer(Document):
     mobile: str = Field(..., pattern=r"^[6-9]\d{9}$", description="10-digit Indian Mobile")
     farmer_id: Optional[str] = Field(default=None, description="Public Unique ID (e.g. FAR-000145)")
+    role: str = Field(default="farmer")
     full_name: Optional[str] = None
     father_name: Optional[str] = None
     dob: Optional[datetime] = None

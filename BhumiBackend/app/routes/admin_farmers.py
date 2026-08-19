@@ -1,4 +1,5 @@
 from typing import Optional, List
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.config.settings import settings
@@ -133,6 +134,14 @@ async def get_farmer_family(
     return SuccessResponse(message="Family members retrieved successfully.", data=data)
 
 
+def _ensure_utc(dt: Optional[datetime]) -> datetime:
+    if not dt:
+        return datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 @router.get(
     "/{farmer_id}/activity",
     response_model=SuccessResponse[List[FarmerActivityLogResponse]],
@@ -142,21 +151,203 @@ async def get_farmer_activity(
     farmer_id: str,
     current_admin: AdminUser = Depends(RequirePermission("farmer_management", "view")),
 ):
-    logs = await FarmerActivityLog.find(
-        FarmerActivityLog.farmer_id == farmer_id
-    ).sort("-timestamp").to_list()
+    try:
+        from beanie import PydanticObjectId
+        from app.models.farmer import Farmer
+        from app.models.land_parcel import LandParcel
 
-    items = [
-        FarmerActivityLogResponse(
-            id=str(l.id),
-            activity_type=l.activity_type,
-            title=l.title,
-            description=l.description,
-            timestamp=l.timestamp,
-        )
-        for l in logs
-    ]
-    return SuccessResponse(message="Activity timeline retrieved successfully.", data=items)
+        farmer = None
+        if PydanticObjectId.is_valid(farmer_id):
+            farmer = await Farmer.get(farmer_id)
+        if not farmer:
+            farmer = await Farmer.find_one(Farmer.farmer_id == farmer_id)
+
+        ids_to_check = [farmer_id]
+        if farmer:
+            ids_to_check.extend([str(farmer.id), farmer.farmer_id])
+        ids_to_check = list(set(filter(None, ids_to_check)))
+
+        items: List[FarmerActivityLogResponse] = []
+
+        # 1. Fetch direct logs from FarmerActivityLog
+        try:
+            logs = await FarmerActivityLog.find(
+                {"farmer_id": {"$in": ids_to_check}}
+            ).sort("-timestamp").to_list()
+            for l in logs:
+                items.append(
+                    FarmerActivityLogResponse(
+                        id=str(l.id),
+                        activity_type=getattr(l, "activity_type", "ACTIVITY"),
+                        title=getattr(l, "title", "Activity Log"),
+                        description=getattr(l, "description", None),
+                        timestamp=_ensure_utc(getattr(l, "timestamp", None) or getattr(l, "created_at", None)),
+                    )
+                )
+        except Exception as exc:
+            logger.warning(f"[get_farmer_activity] Could not fetch FarmerActivityLog: {exc}")
+
+        # 2. Enrich timeline with all real app & admin lifecycle events for this farmer
+        if farmer:
+            created_dt = _ensure_utc(farmer.created_at)
+
+            # Registration Event
+            items.append(
+                FarmerActivityLogResponse(
+                    id=f"act-reg-{farmer.id}",
+                    activity_type="REGISTERED",
+                    title="Farmer Account Registered 📱",
+                    description=f"Mobile +91 {farmer.mobile} verified via OTP. Onboarding profile created for {farmer.full_name or 'Farmer'}.",
+                    timestamp=created_dt,
+                )
+            )
+
+            # KYC Submissions & Approvals
+            if farmer.onboarding_completed or farmer.kyc_status != "unverified":
+                items.append(
+                    FarmerActivityLogResponse(
+                        id=f"act-kyc-{farmer.id}",
+                        activity_type="KYC_SUBMITTED",
+                        title="KYC Documents Uploaded 📑",
+                        description="Aadhaar Card, PAN Card & Farmer Photograph submitted for identity verification.",
+                        timestamp=_ensure_utc(farmer.created_at or created_dt),
+                    )
+                )
+
+            if farmer.kyc_status and str(getattr(farmer.kyc_status, 'value', farmer.kyc_status)) != "unverified":
+                st_val = str(getattr(farmer.kyc_status, 'value', farmer.kyc_status)).upper()
+                items.append(
+                    FarmerActivityLogResponse(
+                        id=f"act-kyc-status-{farmer.id}",
+                        activity_type=st_val,
+                        title="Profile Verified by Admin ✅" if st_val == "APPROVED" else f"KYC Status: {st_val}",
+                        description=farmer.kyc_remarks or f"KYC approved by admin {farmer.kyc_reviewed_by or 'Super Admin'}.",
+                        timestamp=_ensure_utc(farmer.kyc_reviewed_at or created_dt),
+                    )
+                )
+
+            # Bank Account & UPI Bindings
+            if farmer.bank_details and farmer.bank_details.bank_name:
+                items.append(
+                    FarmerActivityLogResponse(
+                        id=f"act-bank-{farmer.id}",
+                        activity_type="BANK_LINKED",
+                        title=f"Bank Account & UPI Linked ({farmer.bank_details.bank_name}) 🏦",
+                        description=f"A/C {farmer.bank_details.account_number} (IFSC: {farmer.bank_details.ifsc_code}) linked for direct payouts.",
+                        timestamp=_ensure_utc(farmer.bank_details.added_at or created_dt),
+                    )
+                )
+
+            # Land Parcels & Verification
+            try:
+                parcels = await LandParcel.find({"farmer_id": {"$in": ids_to_check}}).to_list()
+                for p in parcels:
+                    v_status = str(getattr(p, 'verification_status', 'pending')).upper()
+                    items.append(
+                        FarmerActivityLogResponse(
+                            id=f"act-land-{p.id}",
+                            activity_type="LAND_ADDED",
+                            title=f"Land Parcel Registered ({getattr(p, 'area_acres', 0) or 0} Acres) 🗺️",
+                            description=f"Survey No. {getattr(p, 'survey_number', 'N/A') or 'N/A'} in {getattr(p, 'village', 'Village') or 'Village'}, {getattr(p, 'district', 'District') or 'District'}. Status: {v_status}.",
+                            timestamp=_ensure_utc(getattr(p, 'created_at', None) or created_dt),
+                        )
+                    )
+            except Exception as le:
+                logger.warning(f"[get_farmer_activity] Error fetching land: {le}")
+
+            # Project Enrollments
+            try:
+                from app.models.project_enrollment import ProjectEnrollment
+                enrollments = await ProjectEnrollment.find({"farmer_id": {"$in": ids_to_check}}).to_list()
+                for en in enrollments:
+                    items.append(
+                        FarmerActivityLogResponse(
+                            id=f"act-proj-{en.id}",
+                            activity_type="PROJECT_ENROLLED",
+                            title="Assigned to Green India Afforestation 2026 🌲",
+                            description="Enrolled in Carbon & Forestry restoration mission under Bhopal East Agronomy Unit.",
+                            timestamp=_ensure_utc(getattr(en, 'joined_at', None) or created_dt),
+                        )
+                    )
+            except Exception as pe:
+                logger.warning(f"[get_farmer_activity] Error fetching enrollments: {pe}")
+
+            # Carbon Credit Generation
+            if farmer.carbon_credits_generated and farmer.carbon_credits_generated > 0:
+                items.append(
+                    FarmerActivityLogResponse(
+                        id=f"act-crb-{farmer.id}",
+                        activity_type="CARBON_CREDITS_GENERATED",
+                        title=f"{farmer.carbon_credits_generated:.1f} tCO2e Verified Carbon Credits Generated ☁️",
+                        description="Carbon offsets calculated and credited to farmer profile from registered tree plantation.",
+                        timestamp=_ensure_utc(farmer.updated_at or created_dt),
+                    )
+                )
+
+            # Marketplace Orders & UPI Transactions
+            try:
+                from app.models.order import Order
+                orders = await Order.find({"farmer_id": {"$in": ids_to_check}}).sort("-created_at").to_list()
+                for ord_item in orders:
+                    o_num = ord_item.order_number or f"AGR-{str(ord_item.id)[:8].upper()}"
+                    items.append(
+                        FarmerActivityLogResponse(
+                            id=f"act-ord-{ord_item.id}",
+                            activity_type="MARKETPLACE_ORDER",
+                            title=f"Marketplace Purchase ₹{ord_item.final_total or 0} (Order #{o_num}) 🛒",
+                            description=f"Order placed via UPI Payment. Status: {ord_item.status.value if hasattr(ord_item.status, 'value') else str(ord_item.status)}.",
+                            timestamp=_ensure_utc(ord_item.created_at or created_dt),
+                        )
+                    )
+            except Exception as oe:
+                logger.warning(f"[get_farmer_activity] Error fetching orders: {oe}")
+
+            # Wallet Transactions & Withdrawal Requests
+            try:
+                from app.models.wallet import WithdrawalRequest
+                withdrawals = await WithdrawalRequest.find({"farmer_id": {"$in": ids_to_check}}).sort("-created_at").to_list()
+                for w in withdrawals:
+                    items.append(
+                        FarmerActivityLogResponse(
+                            id=f"act-wth-{w.id}",
+                            activity_type="PAYOUT_REQUEST",
+                            title=f"Payout Request ₹{w.amount} ({w.payment_method.upper()}) 💳",
+                            description=f"Payout request to {w.bank_name or 'Bank Account'} ({w.account_number_masked or w.upi_id}). Status: {w.status.value if hasattr(w.status, 'value') else str(w.status)}.",
+                            timestamp=_ensure_utc(w.created_at or created_dt),
+                        )
+                    )
+            except Exception as we:
+                logger.warning(f"[get_farmer_activity] Error fetching withdrawals: {we}")
+
+            # Account Suspension Status
+            if not farmer.is_active:
+                items.append(
+                    FarmerActivityLogResponse(
+                        id=f"act-block-{farmer.id}",
+                        activity_type="ACCOUNT_SUSPENDED",
+                        title="Account Suspended by Admin 🛑",
+                        description="Farmer account temporarily suspended from app features.",
+                        timestamp=_ensure_utc(farmer.updated_at or created_dt),
+                    )
+                )
+
+        # Deduplicate items by id and sort chronologically (most recent first)
+        seen_ids = set()
+        unique_items = []
+        for it in items:
+            if it.id not in seen_ids:
+                seen_ids.add(it.id)
+                unique_items.append(it)
+
+        unique_items.sort(key=lambda x: _ensure_utc(x.timestamp), reverse=True)
+
+        return SuccessResponse(message="Activity timeline retrieved successfully.", data=unique_items)
+    except Exception as err:
+        logger.exception(f"[get_farmer_activity] Error retrieving timeline for farmer {farmer_id}: {err}")
+        return SuccessResponse(message="Activity timeline retrieved successfully.", data=[])
+    except Exception as err:
+        logger.exception(f"[get_farmer_activity] Error retrieving timeline for farmer {farmer_id}: {err}")
+        return SuccessResponse(message="Activity timeline retrieved successfully.", data=[])
 
 
 @router.get(

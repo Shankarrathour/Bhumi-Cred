@@ -15,6 +15,7 @@ export interface AdminDashboardStats {
   pending_withdrawals?: number;
   total_revenue?: number;
   today_revenue?: number;
+
   total_carbon_credits?: number;
   total_marketplace_orders?: number;
   total_wallet_balance?: number;

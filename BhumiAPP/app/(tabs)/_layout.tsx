@@ -4,7 +4,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../../src/theme/theme';
 import AppSafeArea from '../../src/components/AppSafeArea';
 
+import { useAuthStore } from '../../src/store/authStore';
+
 export default function TabsLayout() {
+  const role = useAuthStore((state) => state.role);
+  const isPartner = role === 'partner';
+
   return (
     <AppSafeArea edges={['bottom']}>
     <Tabs screenOptions={{
@@ -45,10 +50,24 @@ export default function TabsLayout() {
       <Tabs.Screen 
         name="projects" 
         options={{
-          title: 'Projects',
+          title: 'Assets',
           tabBarIcon: ({ color, size, focused }) => (
             <MaterialCommunityIcons 
-              name={focused ? "chart-areaspline-variant" : "chart-areaspline"} 
+              name={focused ? "image-filter-hdr" : "image-filter-hdr-outline"} 
+              size={size + 2} 
+              color={color} 
+            />
+          ),
+        }} 
+      />
+      <Tabs.Screen 
+        name="farmers" 
+        options={{
+          title: 'Farmers',
+          href: isPartner ? undefined : null,
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons 
+              name={focused ? "account-group" : "account-group-outline"} 
               size={size + 2} 
               color={color} 
             />
@@ -59,6 +78,7 @@ export default function TabsLayout() {
         name="marketplace" 
         options={{
           title: 'Marketplace',
+          href: isPartner ? null : undefined,
           tabBarIcon: ({ color, size, focused }) => (
             <MaterialCommunityIcons 
               name={focused ? "storefront" : "storefront-outline"} 

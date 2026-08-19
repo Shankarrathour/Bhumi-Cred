@@ -97,6 +97,7 @@ def _land() -> LandSummaryResponse:
         total_area_acres=5.0,
         irrigated_area_acres=5.0,
         non_irrigated_area_acres=0.0,
+        total_parcels=1,
     )
 
 

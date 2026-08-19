@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Platform, Dimensions, Alert, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Platform, Dimensions, Alert, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,9 +10,10 @@ import { useWalletStore } from '../../src/store/walletStore';
 import { useLandStore } from '../../src/store/landStore';
 import { useAuthStore } from '../../src/store/authStore';
 import api from '../../src/api/apiClient';
-import { isFarmerVerified } from '../../src/utils/verificationGuard';
 
 const { width, height } = Dimensions.get('window');
+
+type FlowStep = 'checkout' | 'processing' | 'failed' | 'receipt' | 'submitted';
 
 export default function PremiumPaymentScreen() {
   const router = useRouter();
@@ -29,610 +29,584 @@ export default function PremiumPaymentScreen() {
   const coverage = parseFloat(params.coverage as string || '3000');
   const policyId = params.policyId as string || 'pol_ecolife';
   const policyName = params.policyName as string || 'Eco Life';
-  const photosData = params.photosData as string | undefined;
-  const treeListData = params.treeListData as string | undefined;
-  const geoCoordsData = params.geoCoordsData as string | undefined;
-  const plantationConfiguration = params.plantationType as string | undefined;
+  const plotName = params.plotName as string || 'My Farm Plot';
 
   // Zustand Store
   const registerTrees = useInsuranceStore((state) => state.registerTrees);
   const walletBalance = useWalletStore((state) => state.balance);
   const plots = useLandStore((state) => state.plots);
   const authUser = useAuthStore((state) => state.user);
-  
-  const paramsAcres = params.acres ? parseFloat(params.acres as string) : 0;
-  const storeAcres = plots.reduce((sum, p) => sum + (parseFloat(p.acres as any) || 0), 0);
-  const totalAcres = paramsAcres > 0 ? paramsAcres : (storeAcres > 0 ? storeAcres : 1);
-  const hasLandPremium = !!params.landPremium;
-  const carbonProfileFee = hasLandPremium ? parseFloat((totalAcres * 119).toFixed(2)) : 0;
 
-  // States
+  // States for dynamic wizard flow
+  const [currentFlow, setCurrentFlow] = useState<FlowStep>('checkout');
   const [showOptionsSheet, setShowOptionsSheet] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState<'upi' | 'wallet' | 'bank' | 'credit_card' | 'debit_card'>('upi');
-  const [activeFlow, setActiveFlow] = useState<'none' | 'card_details' | 'card_otp' | 'upi_pin' | 'bank_login' | 'bank_otp' | 'wallet_confirm'>('none');
+  const [selectedMethod, setSelectedMethod] = useState<'upi' | 'wallet' | 'card' | 'netbanking'>('upi');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('');
+  
+  // Checkout Accordion & Promo code states
+  const [isBreakdownExpanded, setIsBreakdownExpanded] = useState(true);
+  const [promoCode, setPromoCode] = useState('');
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [appliedPromo, setAppliedPromo] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
-  // Form States for Flows
+  // Payment Form States
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [cardName, setCardName] = useState('');
-  const [otpValue, setOtpValue] = useState('');
-  const [upiPin, setUpiPin] = useState('');
-  const [bankId, setBankId] = useState('');
-  const [bankPwd, setBankPwd] = useState('');
+  const [upiId, setUpiId] = useState('');
+  const [selectedBank, setSelectedBank] = useState('SBI');
+
+  // Generated application refs
+  const [txnId, setTxnId] = useState('');
+  const [appId, setAppId] = useState('');
+  const [policyRef, setPolicyRef] = useState('');
 
   // Calculate invoice breakdowns
-  const basePrice = mode === 'land_only' ? 0 : premium;
+  const landRegFee = 99; // Standard land registration fee
+  const baseInsurancePremium = mode === 'land_only' ? 0 : premium;
   const mrvAuditFee = mode === 'land_only' ? 0 : Math.round(premium * 0.2);
   const soilNPKFee = mode === 'land_only' ? 0 : Math.round(premium * 0.1);
   const registryFee = mode === 'land_only' ? 0 : Math.round(premium * 0.1);
-  const totalPrice = carbonProfileFee + basePrice + mrvAuditFee + soilNPKFee + registryFee;
+  
+  const subTotal = landRegFee + baseInsurancePremium + mrvAuditFee + soilNPKFee + registryFee;
+  const finalTotal = Math.max(0, subTotal - discountAmount);
 
-  const handleSuccessfulPayment = async () => {
-    setIsProcessing(true);
-    
-    try {
-      if (selectedMethod === 'wallet') {
-        useWalletStore.setState({ balance: walletBalance - totalPrice });
-      }
-
-      const actualCount = mode === 'single' ? 1 : treeCountVal;
-      
-      const payload = {
-        tree_name: treeName || 'Unknown Tree',
-        tree_species: species || 'Unknown Species',
-        tree_count: actualCount,
-        tree_age: parseInt(params.age as string) || 1,
-        plantation_year: new Date().getFullYear(),
-        latitude: 22.9782,
-        longitude: 78.6591,
-        village: authUser?.village || 'Budhni Village',
-        district: authUser?.district || 'Bhopal Rural',
-        state: authUser?.state || 'MP',
-        photos: []
-      };
-
-      let treeId = null;
-      if (mode === 'single') {
-        const res = await api.post('/tree/register', payload);
-        treeId = res.data?.data?.id;
-      }
-
-      if (treeId && photosData && mode === 'single') {
-        try {
-          const parsedPhotos = JSON.parse(photosData);
-          const formData = new FormData();
-          for (const key of Object.keys(parsedPhotos)) {
-            const uri = parsedPhotos[key];
-            if (uri && typeof uri === 'string') {
-              const filename = uri.split('/').pop() || `${key}.jpg`;
-              const match = /\.(\w+)$/.exec(filename);
-              const type = match ? `image/${match[1]}` : 'image/jpeg';
-              formData.append('photos', {
-                uri,
-                name: filename,
-                type,
-              } as any);
-            }
-          }
-          await api.post(`/tree/${treeId}/photos`, formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-          });
-        } catch (e) {
-          console.error("Failed to upload photos", e);
-        }
-      }
-
-      if (mode === 'family') {
-        try {
-          const parsedTreeList = treeListData ? JSON.parse(treeListData) : [];
-          const parsedGeoCoords = geoCoordsData ? JSON.parse(geoCoordsData) : null;
-
-          const treesDetails = [];
-          for (const tree of parsedTreeList) {
-            let photo_url: string | undefined;
-            if (tree.photoUri) {
-              try {
-                const filename = tree.photoUri.split('/').pop() || `tree_${tree.id}.jpg`;
-                const match = /\.(\w+)$/.exec(filename);
-                const type = match ? `image/${match[1]}` : 'image/jpeg';
-                const photoFormData = new FormData();
-                photoFormData.append('file', { uri: tree.photoUri, name: filename, type } as any);
-                const uploadRes = await api.post('/uploads/image?folder=green-family', photoFormData, {
-                  headers: { 'Content-Type': 'multipart/form-data' },
-                });
-                photo_url = uploadRes.data?.image_url;
-              } catch (e) {
-                console.error('Failed to upload tree photo', e);
-              }
-            }
-            treesDetails.push({
-              species: tree.species,
-              age: tree.age,
-              health: tree.health,
-              hasPhoto: !!tree.hasPhoto,
-              photo_url: photo_url || null,
-            });
-          }
-
-          await api.post('/farmer/green-family', {
-            cluster_size: actualCount,
-            plantation_configuration: plantationConfiguration || '',
-            geo_coords: parsedGeoCoords,
-            trees_details: treesDetails,
-            plan_id: policyId,
-            plan_name: policyName,
-            premium_amount: premium,
-            cover_amount: coverage * actualCount,
-          });
-        } catch (e) {
-          console.error('Failed to create green family cover', e);
-        }
-      }
-
-      // Sync trees count in Zustand store
-      if (mode !== 'land_only') {
-        await registerTrees(policyId, actualCount);
-      }
-
-      setIsProcessing(false);
-      setShowSuccess(true);
-    } catch (err) {
-      setIsProcessing(false);
-      Alert.alert('Registration Failed', 'Could not sync tree registration with the server. Please try again.');
+  // Apply promo helper
+  const handleApplyPromo = () => {
+    if (promoCode.trim().toUpperCase() === 'BHUMI10') {
+      const discount = Math.round(subTotal * 0.1);
+      setDiscountAmount(discount);
+      setAppliedPromo('BHUMI10');
+      Alert.alert('Promo Applied', 'BhumiCred Promo Code BHUMI10 applied successfully! Saved 10% on combined fees.');
+    } else {
+      Alert.alert('Invalid Code', 'Please enter a valid promo code (Try: BHUMI10).');
     }
   };
 
-  const startFlow = (method: 'upi' | 'wallet' | 'bank' | 'credit_card' | 'debit_card') => {
-    if (method === 'wallet' && walletBalance < totalPrice) {
-      Alert.alert('Insufficient Balance', 'Your Eco Wallet carbon credits balance is too low. Please choose another method.');
+  const handleStartPaymentSimulation = () => {
+    if (!termsAccepted) {
+      Alert.alert('Consent Required', 'Please accept the payment terms & conditions to proceed.');
       return;
     }
-    setSelectedMethod(method);
+    setShowOptionsSheet(true);
+  };
+
+  // Run payment processor simulator (F28)
+  const runPaymentProcessor = async () => {
     setShowOptionsSheet(false);
+    setCurrentFlow('processing');
+    setProcessingStatus('Contacting secure gateway...');
+    
+    // Step-by-step loading state
     setTimeout(() => {
-      if (method === 'credit_card' || method === 'debit_card') setActiveFlow('card_details');
-      else if (method === 'upi') setActiveFlow('upi_pin');
-      else if (method === 'bank') setActiveFlow('bank_login');
-      else if (method === 'wallet') setActiveFlow('wallet_confirm');
-    }, 400); // Wait for bottom sheet to close
+      setProcessingStatus('Verifying transaction token...');
+    }, 1000);
+
+    setTimeout(async () => {
+      // Simulate Success/Failure
+      // If Card CVV is '999' or UPI PIN/ID contains '9999', it fails
+      const shouldFail = cardCvv === '999' || upiId.includes('9999') || Math.random() < 0.15;
+
+      if (shouldFail) {
+        setCurrentFlow('failed');
+      } else {
+        // Generate references
+        const newTxn = `TXN-${Math.floor(100000 + Math.random() * 900000)}`;
+        const newApp = `LND-APP-SEH-${Math.floor(1000 + Math.random() * 9000)}`;
+        const newPol = mode !== 'land_only' ? `POL-Shield-${Math.floor(100000 + Math.random() * 900000)}` : '';
+        
+        setTxnId(newTxn);
+        setAppId(newApp);
+        setPolicyRef(newPol);
+
+        // Deduct from wallet if wallet is selected
+        if (selectedMethod === 'wallet') {
+          useWalletStore.setState({ balance: walletBalance - finalTotal });
+        }
+
+        // Add payment transaction to wallet store transactions list so it appears in Mobile App Wallet History
+        const methodLabel = selectedMethod === 'upi' ? 'UPI' : selectedMethod === 'card' ? 'Card' : selectedMethod === 'netbanking' ? 'Net Banking' : 'Wallet';
+        const txnRecord = {
+          id: newTxn,
+          date: new Date().toISOString().split('T')[0],
+          description: mode === 'land_only' ? `Land Parcel Registration Fee - ${plotName}` : `Insurance & Land Fee - ${plotName}`,
+          amount: finalTotal,
+          type: 'debit' as const,
+          status: 'Completed' as const,
+        };
+        const existingTxns = useWalletStore.getState().transactions;
+        useWalletStore.setState({
+          transactions: [txnRecord, ...existingTxns.filter(t => t.id !== newTxn)]
+        });
+
+        // Register trees with store if applicable
+        if (mode !== 'land_only') {
+          await registerTrees(policyId, mode === 'single' ? 1 : treeCountVal);
+        }
+
+        setCurrentFlow('receipt');
+      }
+    }, 2500);
   };
 
-  const handleViewCertificate = () => {
-    setShowSuccess(false);
-    
-    if (mode === 'land_only') {
-      router.replace('/(tabs)' as any);
-      return;
-    }
-
-    // Route to certificate PDF
-    router.replace({
-      pathname: '/insurance/certificate' as any,
-      params: {
-        mode,
-        policyName,
-        treeName: mode === 'single' ? treeName : `${treeCountVal} Group Cluster`,
-        species: mode === 'single' ? species : 'Agroforestry Group',
-        count: mode === 'single' ? '1' : treeCountVal.toString(),
-        cover: (coverage * (mode === 'single' ? 1 : treeCountVal)).toString(),
-        premium: totalPrice.toString(),
-      }
-    });
+  // Receipt actions (F29)
+  const handleDownloadReceipt = () => {
+    Alert.alert(
+      'Receipt Downloaded',
+      `Transaction receipt for reference ${txnId} has been saved to your device and shared with +91 ${authUser?.mobile || '9826011902'}.`
+    );
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F4FDF9" />
+    <View style={styles.container as any}>
+      <StatusBar barStyle="dark-content" />
       
-      {/* Header */}
-      <View style={styles.navBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} disabled={isProcessing}>
-          <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.primary} />
-        </TouchableOpacity>
-        <Text style={styles.navTitle}>Secure Payment Portal</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollArea} showsVerticalScrollIndicator={false}>
-        
-        {/* Professional BhumiCred Invoice */}
-        <View style={styles.invoiceCard}>
-          
-          {/* Logo & Header */}
-          <View style={styles.invoiceHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <MaterialCommunityIcons name="leaf" size={22} color={COLORS.accent} />
-              <Text style={styles.invoiceBrand}>BhumiCred</Text>
-            </View>
-            <View style={styles.invoiceBadge}>
-              <Text style={styles.invoiceBadgeText}>MOCK INVOICE</Text>
-            </View>
+      {/* 1. CHECKOUT VIEW (F27) */}
+      {currentFlow === 'checkout' && (
+        <View style={{ flex: 1 }}>
+          {/* Header */}
+          <View style={[styles.header, { paddingTop: insets.top > 0 ? insets.top + 10 : 35 }] as any}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn as any}>
+              <MaterialCommunityIcons name="arrow-left" size={24} color="#1E293B" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle as any}>Combined Invoice</Text>
+            <View style={{ width: 40 }} />
           </View>
 
-          {/* Dotted Divider */}
-          <View style={styles.dottedDivider} />
-
-          {/* Farmer Credentials details */}
-          <View style={styles.metaSection}>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Invoice To:</Text>
-              <Text style={styles.metaValue}>{authUser?.fullName || ''}{authUser?.mobile ? ` (ID: BC-FM-${authUser.mobile.slice(-4)})` : ''}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Mobile No:</Text>
-              <Text style={styles.metaValue}>{authUser?.mobile ? `+91 ${authUser.mobile}` : ''}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Plantation:</Text>
-              <Text style={styles.metaValue}>{mode === 'single' ? `${treeName} (${species})` : `${treeCountVal} Trees Cluster`}</Text>
-            </View>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Policy Cover:</Text>
-              <Text style={styles.metaValue}>{policyName}</Text>
-            </View>
-          </View>
-
-          <View style={styles.dottedDivider} />
-
-          {/* Billing Breakdown Table */}
-          <Text style={styles.tableTitle}>Billing Breakdown / बिल विवरण</Text>
-          
-          {carbonProfileFee > 0 && (
-            <View style={styles.tableRow}>
-              <Text style={styles.tableColName}>Carbon Profile Test</Text>
-              <Text style={styles.tableColVal}>₹{carbonProfileFee}</Text>
-            </View>
-          )}
-
-          {mode !== 'land_only' && (
-            <>
-              <Text style={[styles.tableTitle, { marginTop: 16 }]}>Selected Policy/Plan / चयनित योजना</Text>
-              <View style={styles.tableRow}>
-                <Text style={styles.tableColName}>{policyName} (Base Cover)</Text>
-                <Text style={styles.tableColVal}>₹{basePrice}</Text>
+          <ScrollView contentContainerStyle={styles.scrollContent as any} showsVerticalScrollIndicator={false}>
+            {/* Invoice Meta Card */}
+            <View style={styles.invoiceCard as any}>
+              <View style={styles.invoiceHeader as any}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <MaterialCommunityIcons name="leaf" size={22} color={COLORS.accent} />
+                  <Text style={styles.invoiceBrand as any}>BhumiCred</Text>
+                </View>
+                <View style={styles.invoiceBadge as any}>
+                  <Text style={styles.invoiceBadgeText as any}>OFFICIAL INVOICE</Text>
+                </View>
               </View>
-              
-              <Text style={[styles.tableTitle, { marginTop: 16 }]}>Billing Breakdown / बिल विवरण</Text>
-              <View style={styles.tableRow}>
-                <Text style={styles.tableColName}>MRV Drone Audit Scan</Text>
-                <Text style={styles.tableColVal}>₹{mrvAuditFee}</Text>
-              </View>
-              <View style={styles.tableRow}>
-                <Text style={styles.tableColName}>NPK Soil Baseline Profile</Text>
-                <Text style={styles.tableColVal}>₹{soilNPKFee}</Text>
-              </View>
-              <View style={styles.tableRow}>
-                <Text style={styles.tableColName}>Ecosystem Registry Sync</Text>
-                <Text style={styles.tableColVal}>₹{registryFee}</Text>
-              </View>
-            </>
-          )}
 
-          <View style={styles.solidDivider} />
+              <View style={styles.dottedDivider as any} />
 
-          {/* Grand Total */}
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>TOTAL AMOUNT DUE:</Text>
-            <Text style={styles.totalVal}>₹{totalPrice}</Text>
-          </View>
-        </View>
+              <View style={styles.metaSection as any}>
+                <View style={styles.metaRow as any}>
+                  <Text style={styles.metaLabel as any}>Invoice To:</Text>
+                  <Text style={styles.metaValue as any}>{authUser?.fullName || 'Ramesh Patel'}</Text>
+                </View>
+                <View style={styles.metaRow as any}>
+                  <Text style={styles.metaLabel as any}>Land Plot:</Text>
+                  <Text style={styles.metaValue as any}>{plotName}</Text>
+                </View>
+                {mode !== 'land_only' && (
+                  <View style={styles.metaRow as any}>
+                    <Text style={styles.metaLabel as any}>Insurance Cover:</Text>
+                    <Text style={styles.metaValue as any}>{policyName}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
 
-        {/* Checkout Button */}
-        <TouchableOpacity
-          style={styles.payBtn}
-          activeOpacity={0.9}
-          onPress={() => {
-            if (mode !== 'land_only' && !isFarmerVerified()) return;
-            setShowOptionsSheet(true);
-          }}
-          disabled={isProcessing}
-        >
-          <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.payGrad}>
-            {isProcessing ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
+            {/* Accordion Invoice Breakdown */}
+            <View style={styles.sectionCard as any}>
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => setIsBreakdownExpanded(!isBreakdownExpanded)}
+                style={styles.accordionHeader as any}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <MaterialCommunityIcons name="receipt" size={20} color={COLORS.primary} style={{ marginRight: 8 }} />
+                  <Text style={styles.sectionTitle as any}>Billing Details / बिल विवरण</Text>
+                </View>
+                <MaterialCommunityIcons 
+                  name={isBreakdownExpanded ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="#64748B" 
+                />
+              </TouchableOpacity>
+
+              {isBreakdownExpanded && (
+                <View style={styles.breakdownContainer as any}>
+                  <View style={styles.breakdownRow as any}>
+                    <Text style={styles.breakdownLabel as any}>Land Registration Fee / भू-पंजीकरण शुल्क</Text>
+                    <Text style={styles.breakdownValue as any}>₹{landRegFee}</Text>
+                  </View>
+
+                  {mode !== 'land_only' && (
+                    <>
+                      <View style={styles.breakdownRow as any}>
+                        <Text style={styles.breakdownLabel as any}>Tree Insurance Premium / बीमा प्रीमियम</Text>
+                        <Text style={styles.breakdownValue as any}>₹{baseInsurancePremium}</Text>
+                      </View>
+                      <View style={styles.breakdownRow as any}>
+                        <Text style={styles.breakdownLabel as any}>MRV Drone Audit Scan (20%)</Text>
+                        <Text style={styles.breakdownValue as any}>₹{mrvAuditFee}</Text>
+                      </View>
+                      <View style={styles.breakdownRow as any}>
+                        <Text style={styles.breakdownLabel as any}>NPK Soil Baseline Profile (10%)</Text>
+                        <Text style={styles.breakdownValue as any}>₹{soilNPKFee}</Text>
+                      </View>
+                      <View style={styles.breakdownRow as any}>
+                        <Text style={styles.breakdownLabel as any}>Ecosystem Registry Sync (10%)</Text>
+                        <Text style={styles.breakdownValue as any}>₹{registryFee}</Text>
+                      </View>
+                    </>
+                  )}
+
+                  {discountAmount > 0 && (
+                    <View style={styles.breakdownRow as any}>
+                      <Text style={[styles.breakdownLabel, { color: COLORS.success }] as any}>
+                        Referral Discount Applied ({appliedPromo})
+                      </Text>
+                      <Text style={[styles.breakdownValue, { color: COLORS.success }] as any}>-₹{discountAmount}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <View style={styles.divider as any} />
+
+              <View style={styles.totalRow as any}>
+                <Text style={styles.totalLabel as any}>Total Amount Payable / कुल देय राशि:</Text>
+                <Text style={styles.totalValue as any}>₹{finalTotal.toLocaleString('en-IN')}</Text>
+              </View>
+            </View>
+
+            {/* Promo Code adjustment */}
+            <View style={styles.sectionCard as any}>
+              <Text style={styles.promoTitle as any}>Have a Referral Code / Promo Code?</Text>
+              <View style={styles.promoInputRow as any}>
+                <TextInput
+                  placeholder="Enter Code (e.g., BHUMI10)"
+                  value={promoCode}
+                  onChangeText={setPromoCode}
+                  autoCapitalize="characters"
+                  style={styles.promoInput as any}
+                  placeholderTextColor="#94A3B8"
+                />
+                <TouchableOpacity onPress={handleApplyPromo} style={styles.promoApplyBtn as any}>
+                  <Text style={styles.promoApplyText as any}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Terms and Consent Checkbox */}
+            <View style={styles.sectionCard as any}>
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => setTermsAccepted(!termsAccepted)}
+                style={styles.termsAckRow as any}
+              >
+                <View style={[styles.checkbox, termsAccepted && styles.checkboxActive] as any}>
+                  {termsAccepted && <MaterialCommunityIcons name="check" size={16} color="#FFFFFF" />}
+                </View>
+                <Text style={styles.termsText as any}>
+                  I consent to the combined land boundary verification fees and authorize physical/satellite canopy checks.
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Proceed Button */}
+            <TouchableOpacity 
+              style={[styles.payBtn, !termsAccepted && { opacity: 0.6 }] as any} 
+              onPress={handleStartPaymentSimulation}
+              disabled={!termsAccepted}
+            >
+              <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.payBtnGrad as any}>
                 <MaterialCommunityIcons name="lock-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.payText}>Authorize Premium Payout • ₹{totalPrice}</Text>
-              </>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-        
-        <View style={{ height: 40 }} />
-      </ScrollView>
+                <Text style={styles.payBtnLabel as any}>Pay Combined Invoice • ₹{finalTotal}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
 
-      {/* 1. Payment Options Bottom Sheet */}
-      <Modal visible={showOptionsSheet} transparent={true} animationType="slide">
-        <View style={styles.modalBackdrop}>
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowOptionsSheet(false)} />
-          <View style={styles.bottomSheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Select Checkout Option / भुगतान विधि</Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              
-              <TouchableOpacity style={styles.optionRow} onPress={() => startFlow('upi')}>
-                <View style={styles.methodIconBox}><MaterialCommunityIcons name="lightning-bolt" size={20} color="#84CC16" /></View>
-                <View style={styles.optionTexts}>
-                  <Text style={styles.methodTitle}>Instant UPI</Text>
-                  <Text style={styles.methodSub}>GPay, PhonePe, Paytm</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.optionRow} onPress={() => startFlow('credit_card')}>
-                <View style={[styles.methodIconBox, { backgroundColor: '#F3E8FF' }]}><MaterialCommunityIcons name="credit-card" size={20} color="#9333EA" /></View>
-                <View style={styles.optionTexts}>
-                  <Text style={styles.methodTitle}>Credit Card</Text>
-                  <Text style={styles.methodSub}>Visa, MasterCard, Amex, RuPay</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.optionRow} onPress={() => startFlow('debit_card')}>
-                <View style={[styles.methodIconBox, { backgroundColor: '#E0E7FF' }]}><MaterialCommunityIcons name="credit-card-outline" size={20} color="#4F46E5" /></View>
-                <View style={styles.optionTexts}>
-                  <Text style={styles.methodTitle}>Debit Card</Text>
-                  <Text style={styles.methodSub}>All major debit cards supported</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.optionRow} onPress={() => startFlow('bank')}>
-                <View style={[styles.methodIconBox, { backgroundColor: '#F1F5F9' }]}><MaterialCommunityIcons name="bank" size={20} color={COLORS.textSecondary} /></View>
-                <View style={styles.optionTexts}>
-                  <Text style={styles.methodTitle}>NetBanking</Text>
-                  <Text style={styles.methodSub}>Direct bank transfer</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.optionRow} onPress={() => startFlow('wallet')}>
-                <View style={[styles.methodIconBox, { backgroundColor: '#E0F2F1' }]}><MaterialCommunityIcons name="wallet-outline" size={20} color={COLORS.primary} /></View>
-                <View style={styles.optionTexts}>
-                  <Text style={styles.methodTitle}>Eco Carbon Wallet</Text>
-                  <Text style={styles.methodSub}>Balance: ₹{walletBalance}</Text>
-                </View>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-
-            </ScrollView>
-          </View>
+            <View style={{ height: 40 }} />
+          </ScrollView>
         </View>
-      </Modal>
+      )}
 
-      {/* 2. Simulated Flows Modal */}
-      <Modal visible={activeFlow !== 'none'} transparent={true} animationType="fade">
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalBackdropCentered}>
-          <View style={styles.flowCard}>
-            
-            <View style={styles.flowHeader}>
-              <TouchableOpacity onPress={() => setActiveFlow('none')}>
-                <MaterialCommunityIcons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <Text style={styles.flowTitle}>
-                {activeFlow === 'upi_pin' ? 'UPI PIN' : 
-                 activeFlow === 'card_details' ? 'Card Details' :
-                 activeFlow === 'card_otp' ? 'Bank OTP' :
-                 activeFlow === 'bank_login' ? 'NetBanking Login' :
-                 activeFlow === 'bank_otp' ? 'Authorize Payment' :
-                 'Confirm Payment'}
-              </Text>
-              <View style={{ width: 24 }} />
-            </View>
+      {/* 2. PAYMENT PROCESSING VIEW (F28) */}
+      {currentFlow === 'processing' && (
+        <View style={styles.loaderBackdrop as any}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loaderStatus as any}>{processingStatus}</Text>
+          <Text style={styles.loaderSub as any}>Please do not close the app or go back.</Text>
+        </View>
+      )}
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-              
-              {/* --- UPI FLOW --- */}
-              {activeFlow === 'upi_pin' && (
-                <View style={styles.flowBody}>
-                  <Text style={styles.flowSubCenter}>Enter your 4 or 6 digit UPI PIN for {selectedMethod}</Text>
-                  <TextInput
-                    style={styles.otpInput}
-                    placeholder="* * * *"
-                    secureTextEntry
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    value={upiPin}
-                    onChangeText={setUpiPin}
-                    autoFocus
-                  />
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, { marginTop: 30 }]} 
-                    onPress={() => {
-                      if (upiPin.length >= 4) {
-                        setActiveFlow('none');
-                        handleSuccessfulPayment();
-                      }
-                    }}
-                  >
-                    <Text style={styles.actionBtnText}>SUBMIT</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* --- CARD DETAILS FLOW --- */}
-              {activeFlow === 'card_details' && (
-                <View style={styles.flowBody}>
-                  <Text style={styles.inputLabel}>Card Number</Text>
-                  <TextInput style={styles.textInput} placeholder="0000 0000 0000 0000" keyboardType="number-pad" maxLength={19} value={cardNumber} onChangeText={setCardNumber} />
-                  
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <View style={{ flex: 1, marginRight: 10 }}>
-                      <Text style={styles.inputLabel}>Expiry</Text>
-                      <TextInput style={styles.textInput} placeholder="MM/YY" maxLength={5} value={cardExpiry} onChangeText={setCardExpiry} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.inputLabel}>CVV</Text>
-                      <TextInput style={styles.textInput} placeholder="123" keyboardType="number-pad" maxLength={4} secureTextEntry value={cardCvv} onChangeText={setCardCvv} />
-                    </View>
-                  </View>
-
-                  <Text style={styles.inputLabel}>Name on Card</Text>
-                  <TextInput style={styles.textInput} placeholder="Name on card" value={cardName} onChangeText={setCardName} />
-
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, { marginTop: 20 }]} 
-                    onPress={() => setActiveFlow('card_otp')}
-                  >
-                    <Text style={styles.actionBtnText}>PROCEED SECURELY</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* --- CARD OTP FLOW --- */}
-              {activeFlow === 'card_otp' && (
-                <View style={styles.flowBody}>
-                  <Text style={styles.flowSubCenter}>Enter the OTP sent to your registered mobile number for card ending in {cardNumber.slice(-4) || 'XXXX'}</Text>
-                  <TextInput
-                    style={styles.otpInput}
-                    placeholder="000000"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    value={otpValue}
-                    onChangeText={setOtpValue}
-                    autoFocus
-                  />
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, { marginTop: 30 }]} 
-                    onPress={() => {
-                      if (otpValue.length >= 4) {
-                        setActiveFlow('none');
-                        handleSuccessfulPayment();
-                      }
-                    }}
-                  >
-                    <Text style={styles.actionBtnText}>VERIFY & PAY</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* --- NETBANKING FLOW --- */}
-              {activeFlow === 'bank_login' && (
-                <View style={styles.flowBody}>
-                  <Text style={styles.inputLabel}>Customer ID / User ID</Text>
-                  <TextInput style={styles.textInput} placeholder="Enter your ID" value={bankId} onChangeText={setBankId} autoFocus />
-                  
-                  <Text style={styles.inputLabel}>Password</Text>
-                  <TextInput style={styles.textInput} placeholder="Enter password" secureTextEntry value={bankPwd} onChangeText={setBankPwd} />
-
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, { marginTop: 20 }]} 
-                    onPress={() => setActiveFlow('bank_otp')}
-                  >
-                    <Text style={styles.actionBtnText}>LOGIN</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {activeFlow === 'bank_otp' && (
-                <View style={styles.flowBody}>
-                  <Text style={styles.flowSubCenter}>Enter the authorization OTP from your bank</Text>
-                  <TextInput
-                    style={styles.otpInput}
-                    placeholder="000000"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    value={otpValue}
-                    onChangeText={setOtpValue}
-                    autoFocus
-                  />
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, { marginTop: 30 }]} 
-                    onPress={() => {
-                      if (otpValue.length >= 4) {
-                        setActiveFlow('none');
-                        handleSuccessfulPayment();
-                      }
-                    }}
-                  >
-                    <Text style={styles.actionBtnText}>AUTHORIZE PAYMENT</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* --- WALLET FLOW --- */}
-              {activeFlow === 'wallet_confirm' && (
-                <View style={styles.flowBody}>
-                  <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                    <MaterialCommunityIcons name="wallet" size={48} color={COLORS.primary} />
-                    <Text style={{ fontSize: 16, marginTop: 10, fontWeight: 'bold' }}>Eco Carbon Wallet</Text>
-                  </View>
-                  <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Current Balance:</Text>
-                    <Text style={styles.receiptVal}>₹{walletBalance}</Text>
-                  </View>
-                  <View style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>Amount to Deduct:</Text>
-                    <Text style={[styles.receiptVal, { color: '#EF4444' }]}>- ₹{totalPrice}</Text>
-                  </View>
-                  <View style={[styles.receiptRow, { marginTop: 10, borderTopWidth: 1, borderColor: '#E2E8F0', paddingTop: 10 }]}>
-                    <Text style={[styles.receiptLabel, { fontWeight: 'bold' }]}>Remaining Balance:</Text>
-                    <Text style={[styles.receiptVal, { fontWeight: 'bold' }]}>₹{walletBalance - totalPrice}</Text>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, { marginTop: 30 }]} 
-                    onPress={() => {
-                      setActiveFlow('none');
-                      handleSuccessfulPayment();
-                    }}
-                  >
-                    <Text style={styles.actionBtnText}>CONFIRM DEDUCTION</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-            </ScrollView>
+      {/* 3. PAYMENT FAILED VIEW (F28) */}
+      {currentFlow === 'failed' && (
+        <View style={styles.failedBackdrop as any}>
+          <View style={styles.statusCircleFailed as any}>
+            <MaterialCommunityIcons name="close" size={44} color="#FFFFFF" />
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          <Text style={styles.failedTitle as any}>Payment Declined / भुगतान विफल</Text>
+          <Text style={styles.failedDesc as any}>
+            The transaction was declined by the bank due to invalid details or network timeout. Please retry.
+          </Text>
 
-      {/* Success Modal Check Sheet overlay */}
-      {showSuccess && (
-        <View style={styles.successBackdrop}>
-          <View style={styles.successSheet}>
-            <View style={styles.stampCircle}>
-              <MaterialCommunityIcons name="shield-check" size={54} color={COLORS.success} />
+          <TouchableOpacity 
+            style={styles.retryBtn as any} 
+            onPress={() => {
+              setCardCvv(''); // Clear CVV so they can retry
+              setCurrentFlow('checkout');
+              setShowOptionsSheet(true); // Open selector again
+            }}
+          >
+            <Text style={styles.retryBtnText as any}>Retry Payment / पुन: प्रयास करें</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.returnBtn as any}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.returnBtnText as any}>Return to Summary / वापस जाएं</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* 4. PAYMENT SUCCESS RECEIPT VIEW (F29) */}
+      {currentFlow === 'receipt' && (
+        <View style={styles.receiptContainer as any}>
+          <View style={styles.receiptCard as any}>
+            <View style={styles.statusCircleSuccess as any}>
+              <MaterialCommunityIcons name="check" size={32} color="#FFFFFF" />
             </View>
-            <Text style={styles.successTitle}>{mode === 'land_only' ? 'Land Registration Fee Paid!' : 'Policy Activated Successfully!'} 🎉</Text>
-            <Text style={styles.successDesc}>
-              {mode === 'land_only' ? 'Your land registration process is now complete. The land is pending verification by our admins.' : 'Congratulations! Your tree asset is now secured under the BhumiShield climate canopy.'} We have queued our orbital MRV spectrometer baseline scans.
+            <Text style={styles.receiptTitle as any}>Payment Successful! 🎉</Text>
+            <Text style={styles.receiptDesc as any}>
+              Invoice amount paid and synced with the climate canopy ledger.
             </Text>
 
-            <View style={styles.receiptSummary}>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Assigned Policy ID:</Text>
-                <Text style={styles.receiptVal}>BS-{Math.floor(100000 + Math.random() * 900000)}</Text>
+            <View style={styles.receiptTable as any}>
+              <View style={styles.receiptRow as any}>
+                <Text style={styles.receiptLabel as any}>Payment ID:</Text>
+                <Text style={styles.receiptVal as any}>{txnId}</Text>
               </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Insured Saplings:</Text>
-                <Text style={styles.receiptVal}>{mode === 'single' ? '1 Tree' : `${treeCountVal} Trees`}</Text>
+              <View style={styles.receiptRow as any}>
+                <Text style={styles.receiptLabel as any}>Amount Paid:</Text>
+                <Text style={[styles.receiptVal, { color: COLORS.primary, fontWeight: '800' }] as any}>
+                  ₹{finalTotal.toLocaleString('en-IN')}
+                </Text>
               </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Total Cover Value:</Text>
-                <Text style={[styles.receiptVal, { color: COLORS.primary }]}>₹{coverage * (mode === 'single' ? 1 : treeCountVal)}</Text>
+              <View style={styles.receiptRow as any}>
+                <Text style={styles.receiptLabel as any}>Date/Time:</Text>
+                <Text style={styles.receiptVal as any}>
+                  {new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </Text>
               </View>
+              <View style={styles.receiptRow as any}>
+                <Text style={styles.receiptLabel as any}>Application Ref:</Text>
+                <Text style={styles.receiptVal as any}>{appId}</Text>
+              </View>
+              {policyRef !== '' && (
+                <View style={styles.receiptRow as any}>
+                  <Text style={styles.receiptLabel as any}>Policy Ref:</Text>
+                  <Text style={styles.receiptVal as any}>{policyRef}</Text>
+                </View>
+              )}
             </View>
 
+            <TouchableOpacity style={styles.downloadBtn as any} onPress={handleDownloadReceipt}>
+              <MaterialCommunityIcons name="share-variant-outline" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.downloadText as any}>Download & Share Receipt</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity 
-              style={styles.certificateBtn} 
-              activeOpacity={0.85}
-              onPress={handleViewCertificate}
+              style={styles.continueBtn as any}
+              onPress={() => setCurrentFlow('submitted')}
             >
-              <LinearGradient colors={[COLORS.accent, '#A3E635']} style={styles.certGrad}>
-                <MaterialCommunityIcons name="certificate" size={18} color={COLORS.primaryDark} style={{ marginRight: 6 }} />
-                <Text style={styles.certText}>View Digital Insurance Certificate</Text>
+              <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.continueBtnGrad as any}>
+                <Text style={styles.continueBtnLabel as any}>Continue</Text>
+                <MaterialCommunityIcons name="arrow-right" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
               </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
       )}
+
+      {/* 5. APPLICATION SUBMITTED VIEW (F30) */}
+      {currentFlow === 'submitted' && (
+        <View style={styles.submittedContainer as any}>
+          <View style={styles.submittedCard as any}>
+            <View style={styles.plantIllustration as any}>
+              <MaterialCommunityIcons name="sprout" size={64} color={COLORS.primary} />
+            </View>
+            
+            <Text style={styles.submittedTitle as any}>Application Submitted!</Text>
+            <Text style={styles.submittedDesc as any}>
+              Your land and tree assets have been successfully queued for GIS review and environmental verification.
+            </Text>
+
+            <View style={styles.detailGrid as any}>
+              <View style={styles.detailGridRow as any}>
+                <Text style={styles.detailGridLabel as any}>Application ID:</Text>
+                <Text style={styles.detailGridValue as any}>{appId}</Text>
+              </View>
+              <View style={styles.detailGridRow as any}>
+                <Text style={styles.detailGridLabel as any}>Plot Name/Area:</Text>
+                <Text style={styles.detailGridValue as any}>{plotName}</Text>
+              </View>
+              <View style={styles.detailGridRow as any}>
+                <Text style={styles.detailGridLabel as any}>Payment Status:</Text>
+                <Text style={[styles.detailGridValue, { color: COLORS.success, fontWeight: '800' }] as any}>Paid ✅</Text>
+              </View>
+              <View style={styles.detailGridRow as any}>
+                <Text style={styles.detailGridLabel as any}>Insurance Status:</Text>
+                <Text style={styles.detailGridValue as any}>
+                  {mode !== 'land_only' ? `Active (${policyName})` : 'Not Selected'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Timeline Next Step Card */}
+            <View style={styles.nextStepCard as any}>
+              <MaterialCommunityIcons name="security" size={20} color="#0E7490" style={{ marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.nextStepTitle as any}>Next Step: Admin Verification</Text>
+                <Text style={styles.nextStepSub as any}>
+                  Auditor will check geofence polygons against registry records in 24-48 hours.
+                </Text>
+              </View>
+            </View>
+
+            {/* CTAs */}
+            <TouchableOpacity 
+              style={styles.trackBtn as any}
+              onPress={() => router.replace(`/tracking/${appId}` as any)}
+            >
+              <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.trackBtnGrad as any}>
+                <MaterialCommunityIcons name="map-marker-radius" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.trackBtnLabel as any}>Track Application</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.homeBtn as any}
+              onPress={() => router.replace('/(tabs)' as any)}
+            >
+              <Text style={styles.homeBtnLabel as any}>Go to Home</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* UPI / Card Selector Bottom Sheet Drawer */}
+      <Modal visible={showOptionsSheet} transparent={true} animationType="slide">
+        <View style={styles.sheetBackdrop as any}>
+          <View style={styles.sheetContent as any}>
+            <View style={styles.sheetHeader as any}>
+              <Text style={styles.sheetTitle as any}>Select Payment Method</Text>
+              <TouchableOpacity onPress={() => setShowOptionsSheet(false)} style={styles.sheetCloseBtn as any}>
+                <MaterialCommunityIcons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 20 }}>
+              <TouchableOpacity 
+                style={[styles.methodCard, selectedMethod === 'upi' && styles.methodCardActive] as any}
+                onPress={() => setSelectedMethod('upi')}
+              >
+                <MaterialCommunityIcons name="flash-outline" size={22} color={selectedMethod === 'upi' ? COLORS.primary : '#475569'} />
+                <Text style={styles.methodLabel as any}>UPI (Google Pay / PhonePe)</Text>
+              </TouchableOpacity>
+
+              {selectedMethod === 'upi' && (
+                <View style={styles.methodForm as any}>
+                  <TextInput
+                    placeholder="Enter UPI ID (e.g. name@okhdfcbank)"
+                    value={upiId}
+                    onChangeText={setUpiId}
+                    style={styles.formInput as any}
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              )}
+
+              <TouchableOpacity 
+                style={[styles.methodCard, selectedMethod === 'card' && styles.methodCardActive] as any}
+                onPress={() => setSelectedMethod('card')}
+              >
+                <MaterialCommunityIcons name="credit-card-outline" size={22} color={selectedMethod === 'card' ? COLORS.primary : '#475569'} />
+                <Text style={styles.methodLabel as any}>Credit or Debit Card</Text>
+              </TouchableOpacity>
+
+              {selectedMethod === 'card' && (
+                <View style={styles.methodForm as any}>
+                  <TextInput
+                    placeholder="Cardholder Name"
+                    value={cardName}
+                    onChangeText={setCardName}
+                    style={styles.formInput as any}
+                    placeholderTextColor="#94A3B8"
+                  />
+                  <TextInput
+                    placeholder="Card Number"
+                    value={cardNumber}
+                    onChangeText={setCardNumber}
+                    keyboardType="numeric"
+                    style={styles.formInput as any}
+                    placeholderTextColor="#94A3B8"
+                  />
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TextInput
+                      placeholder="MM/YY"
+                      value={cardExpiry}
+                      onChangeText={setCardExpiry}
+                      style={[styles.formInput, { flex: 1 }] as any}
+                      placeholderTextColor="#94A3B8"
+                    />
+                    <TextInput
+                      placeholder="CVV"
+                      value={cardCvv}
+                      onChangeText={setCardCvv}
+                      keyboardType="numeric"
+                      secureTextEntry
+                      maxLength={3}
+                      style={[styles.formInput, { flex: 1 }] as any}
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  <Text style={{ fontSize: 10, color: '#64748B', marginTop: 4 }}>
+                    Tip: Enter CVV '999' to simulate a bank payment decline.
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity 
+                style={[styles.methodCard, selectedMethod === 'netbanking' && styles.methodCardActive] as any}
+                onPress={() => setSelectedMethod('netbanking')}
+              >
+                <MaterialCommunityIcons name="bank-outline" size={22} color={selectedMethod === 'netbanking' ? COLORS.primary : '#475569'} />
+                <Text style={styles.methodLabel as any}>Net Banking</Text>
+              </TouchableOpacity>
+
+              {selectedMethod === 'netbanking' && (
+                <View style={styles.methodForm as any}>
+                  <TextInput
+                    placeholder="Bank Name (e.g. SBI, HDFC)"
+                    value={selectedBank}
+                    onChangeText={setSelectedBank}
+                    style={styles.formInput as any}
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              )}
+
+              <TouchableOpacity 
+                style={[styles.methodCard, selectedMethod === 'wallet' && styles.methodCardActive] as any}
+                onPress={() => setSelectedMethod('wallet')}
+              >
+                <MaterialCommunityIcons name="wallet-outline" size={22} color={selectedMethod === 'wallet' ? COLORS.primary : '#475569'} />
+                <Text style={styles.methodLabel as any}>Eco Credits Wallet (Bal: ₹{walletBalance})</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.sheetPayBtn as any} onPress={runPaymentProcessor}>
+                <Text style={styles.sheetPayText as any}>Confirm & Pay ₹{finalTotal}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -640,38 +614,43 @@ export default function PremiumPaymentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4FDF9',
+    backgroundColor: '#F8FAFC',
   },
-  navBar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: 56,
+    paddingBottom: 14,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderColor: '#E2E8F0',
   },
   backBtn: {
-    padding: 6,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  navTitle: {
+  headerTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: COLORS.primaryDark,
+    color: '#0F172A',
   },
-  scrollArea: {
-    padding: 20,
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
   invoiceCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    ...SHADOWS.soft,
-    marginBottom: 20,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.small,
   },
   invoiceHeader: {
     flexDirection: 'row',
@@ -680,9 +659,9 @@ const styles = StyleSheet.create({
   },
   invoiceBrand: {
     fontSize: 16,
-    fontWeight: '900',
+    fontWeight: '800',
     color: COLORS.primary,
-    marginLeft: 4,
+    marginLeft: 6,
   },
   invoiceBadge: {
     backgroundColor: '#ECFDF5',
@@ -691,8 +670,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   invoiceBadgeText: {
-    fontSize: 8,
-    fontWeight: '900',
+    fontSize: 9,
+    fontWeight: '800',
     color: COLORS.primary,
   },
   dottedDivider: {
@@ -703,339 +682,527 @@ const styles = StyleSheet.create({
     marginVertical: 14,
   },
   metaSection: {
-    marginBottom: 6,
+    gap: 8,
   },
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
   },
   metaLabel: {
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    fontWeight: '700',
-  },
-  metaValue: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.textDark,
-  },
-  tableTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  tableColName: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
+    fontSize: 12,
+    color: '#64748B',
     fontWeight: '600',
   },
-  tableColVal: {
+  metaValue: {
     fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.textDark,
+    fontWeight: '700',
+    color: '#1E293B',
   },
-  solidDivider: {
-    height: 1.5,
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.small,
+  },
+  accordionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  breakdownContainer: {
+    marginTop: 12,
+    gap: 8,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  breakdownLabel: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  breakdownValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  divider: {
+    height: 1,
     backgroundColor: '#E2E8F0',
-    marginVertical: 10,
+    marginVertical: 12,
   },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
   },
   totalLabel: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
-  },
-  totalVal: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: COLORS.primary,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    color: COLORS.primaryDark,
+    fontSize: 13,
     fontWeight: '800',
+    color: '#0F172A',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.primaryDark,
+  },
+  promoTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+    marginBottom: 8,
+  },
+  promoInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  promoInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 12,
+    color: '#1E293B',
+    backgroundColor: '#F8FAFC',
+  },
+  promoApplyBtn: {
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promoApplyText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  termsAckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  checkboxActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  payBtn: {
+    width: '100%',
+    height: 56,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  payBtnGrad: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payBtnLabel: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  loaderBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 40,
+  },
+  loaderStatus: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 20,
+  },
+  loaderSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 6,
+  },
+  failedBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 30,
+  },
+  statusCircleFailed: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    ...SHADOWS.medium,
+  },
+  failedTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 8,
+  },
+  failedDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 20,
+    marginBottom: 30,
+  },
+  retryBtn: {
+    width: '80%',
+    paddingVertical: 14,
+    backgroundColor: COLORS.primary,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 12,
+    ...SHADOWS.small,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  returnBtn: {
+    width: '80%',
+    paddingVertical: 14,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  returnBtnText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  receiptContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  receiptCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.medium,
+  },
+  statusCircleSuccess: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  receiptTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1E293B',
+    marginBottom: 6,
+  },
+  receiptDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  receiptTable: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 10,
+    marginBottom: 20,
+  },
+  receiptRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  receiptLabel: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  receiptVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  downloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    borderRadius: 14,
+    width: '100%',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  downloadText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  continueBtn: {
+    width: '100%',
+    height: 52,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  continueBtnGrad: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueBtnLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  submittedContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  submittedCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.medium,
+  },
+  plantIllustration: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 2,
+    borderColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  submittedTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  submittedDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+  },
+  detailGrid: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: '#FAFBFD',
+    gap: 10,
+    marginBottom: 20,
+  },
+  detailGridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  detailGridLabel: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  detailGridValue: {
+    fontSize: 12,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  nextStepCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFEFF',
+    borderWidth: 1,
+    borderColor: '#A5F3FC',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 24,
+  },
+  nextStepTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0E7490',
+  },
+  nextStepSub: {
+    fontSize: 10.5,
+    color: '#0891B2',
+    marginTop: 2,
+    lineHeight: 14,
+    fontWeight: '500',
+  },
+  trackBtn: {
+    width: '100%',
+    height: 52,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  trackBtnGrad: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trackBtnLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  homeBtn: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeBtnLabel: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheetContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: height * 0.8,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sheetTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   methodCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    padding: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 10,
+    marginBottom: 12,
+    gap: 12,
   },
   methodCardActive: {
     borderColor: COLORS.primary,
     backgroundColor: '#F0FDF4',
   },
-  radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioChecked: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.primary,
-  },
-  methodIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#FFFBEB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 12,
-  },
-  methodTitle: {
-    fontSize: 12,
+  methodLabel: {
+    fontSize: 13,
     fontWeight: '800',
-    color: COLORS.textDark,
+    color: '#1E293B',
   },
-  methodSub: {
-    fontSize: 10,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  payBtn: {
-    borderRadius: 30,
-    overflow: 'hidden',
-    marginTop: 14,
-    ...SHADOWS.glow,
-  },
-  payGrad: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  payText: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-  // Success overlay styles
-  successBackdrop: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(2, 44, 34, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    zIndex: 9999,
-  },
-  successSheet: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 24,
-    width: '100%',
-    alignItems: 'center',
-    ...SHADOWS.glow,
-  },
-  stampCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    marginBottom: 20,
-  },
-  successTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: COLORS.primary,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  successDesc: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 16,
-    fontWeight: '600',
-    marginBottom: 20,
-    paddingHorizontal: 8,
-  },
-  receiptSummary: {
-    width: '100%',
+  methodForm: {
+    padding: 12,
     backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 24,
+    marginBottom: 12,
+    gap: 8,
   },
-  receiptRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  receiptLabel: {
+  formInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: '700',
-  },
-  receiptVal: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.textDark,
-  },
-  certificateBtn: {
-    width: '100%',
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...SHADOWS.glow,
-  },
-  certGrad: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-  },
-  certText: {
-    color: COLORS.primaryDark,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  bottomSheet: {
+    color: '#1E293B',
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    padding: 24,
-    maxHeight: height * 0.7,
   },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
-    marginBottom: 20,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  optionTexts: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  modalBackdropCentered: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  flowCard: {
-    backgroundColor: '#FFFFFF',
-    width: '100%',
-    borderRadius: 24,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  flowHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  flowTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: COLORS.primaryDark,
-  },
-  flowBody: {
-    paddingVertical: 10,
-  },
-  flowSubCenter: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 18,
-  },
-  otpInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingVertical: 16,
-    fontSize: 24,
-    fontWeight: '900',
-    textAlign: 'center',
-    letterSpacing: 8,
-    color: COLORS.primaryDark,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  textInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: COLORS.textDark,
-    fontWeight: '700',
-  },
-  actionBtn: {
+  sheetPayBtn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: 'center',
-    ...SHADOWS.glow,
+    justifyContent: 'center',
+    marginTop: 8,
+    ...SHADOWS.small,
   },
-  actionBtnText: {
+  sheetPayText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
   },
 });

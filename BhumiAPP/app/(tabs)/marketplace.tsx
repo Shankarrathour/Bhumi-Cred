@@ -17,6 +17,60 @@ import { AmbientEcoBackground } from '../../src/components/AmbientEcoBackground'
 
 const { width, height } = Dimensions.get('window');
 
+const getOrderStatusDetails = (status: string) => {
+  const s = (status || '').toUpperCase();
+  switch (s) {
+    case 'DELIVERED':
+      return {
+        label: 'DELIVERED (Fulfilled)',
+        color: COLORS.success,
+        eta: 'Delivered to Your Farm'
+      };
+    case 'SHIPPED':
+      return {
+        label: 'SHIPPED (En Route)',
+        color: COLORS.primary,
+        eta: 'Within 2 Hours (En Route)'
+      };
+    case 'PACKED':
+      return {
+        label: 'PACKED (Ready for Shipment)',
+        color: '#0891B2',
+        eta: 'Ready for Dispatch'
+      };
+    case 'PROCESSING':
+      return {
+        label: 'PROCESSING (Preparing Items)',
+        color: '#4F46E5',
+        eta: 'Items being processed'
+      };
+    case 'CONFIRMED':
+      return {
+        label: 'CONFIRMED (Order Accepted)',
+        color: '#059669',
+        eta: 'Awaiting preparation'
+      };
+    case 'CANCELLED':
+      return {
+        label: 'CANCELLED',
+        color: COLORS.danger,
+        eta: 'Order Cancelled'
+      };
+    case 'RETURNED':
+      return {
+        label: 'RETURNED',
+        color: COLORS.danger,
+        eta: 'Order Returned'
+      };
+    default:
+      return {
+        label: 'PENDING (Awaiting Dealer Dispatch)',
+        color: COLORS.warning,
+        eta: 'Calculating... (Dealer Processing)'
+      };
+  }
+};
+
 export default function MarketplaceScreen() {
   // Zustand store
   const categories = useMarketplaceStore((state) => state.categories);
@@ -442,7 +496,7 @@ export default function MarketplaceScreen() {
       {/* 🚚 Active Order Tracker Modal */}
       <Modal visible={isOrderTrackerVisible} transparent animationType="slide" onRequestClose={() => setIsOrderTrackerVisible(false)}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setIsOrderTrackerVisible(false)}>
-          <View style={[styles.sheet, { minHeight: height * 0.65, paddingBottom: 20 + insets.bottom }]} onStartShouldSetResponder={() => true}>
+          <View style={[styles.sheet, { height: height * 0.82, paddingBottom: 20 + insets.bottom }]} onStartShouldSetResponder={() => true}>
             <View style={styles.sheetHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.sheetTitle}>Active Order Tracking</Text>
@@ -450,11 +504,11 @@ export default function MarketplaceScreen() {
                   onPress={async () => {
                     await fetchOrders();
                     if (latestOrder) {
-                      await fetchOrderDetails(latestOrder.order_id || latestOrder.order_number);
+                      await fetchOrderDetails(latestOrder.order_id || latestOrder.order_number, true);
                     }
                   }} 
                   style={{ padding: 4 }}
-                  title="Refresh Status"
+                  accessibilityLabel="Refresh Status"
                 >
                   <MaterialCommunityIcons name="refresh" size={20} color={COLORS.primary} />
                 </TouchableOpacity>
@@ -514,12 +568,12 @@ export default function MarketplaceScreen() {
                   <View style={styles.orderSummary}>
                     <Text style={styles.orderSummaryText}>Order No: {latestOrder?.order_number || 'AGR-20260801-E9M5MM'}</Text>
                     <Text style={styles.orderSummaryText}>
-                      Status: <Text style={{ fontWeight: '800', color: (latestOrder?.status || '').toUpperCase() === 'SHIPPED' ? COLORS.primary : (latestOrder?.status || '').toUpperCase() === 'DELIVERED' ? COLORS.success : COLORS.warning }}>
-                        {(latestOrder?.status || '').toUpperCase() === 'SHIPPED' ? 'SHIPPED (En Route)' : (latestOrder?.status || '').toUpperCase() === 'DELIVERED' ? 'DELIVERED (Fulfilled)' : 'PENDING (Awaiting Dealer Dispatch)'}
+                      Status: <Text style={{ fontWeight: '800', color: getOrderStatusDetails(latestOrder?.status || '').color }}>
+                        {getOrderStatusDetails(latestOrder?.status || '').label}
                       </Text>
                     </Text>
                     <Text style={styles.orderSummaryText}>
-                      Estimated Delivery: {(latestOrder?.status || '').toUpperCase() === 'SHIPPED' ? 'Within 2 Hours (En Route)' : (latestOrder?.status || '').toUpperCase() === 'DELIVERED' ? 'Delivered to Your Farm' : 'Calculating... (Dealer Processing)'}
+                      Estimated Delivery: {getOrderStatusDetails(latestOrder?.status || '').eta}
                     </Text>
                     <Text style={[styles.orderSummaryText, { color: COLORS.primary, fontWeight: '800', marginBottom: 0 }]}>Total: ₹{latestOrder?.final_total || 170}</Text>
                   </View>

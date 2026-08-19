@@ -71,6 +71,8 @@ export default function RegisterSingleTreeScreen() {
   const [selectedPolicyId, setSelectedPolicyId] = useState('');
   const [plans, setPlans] = useState<TreePlan[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   React.useEffect(() => {
     const fetchPlans = async () => {
@@ -214,9 +216,9 @@ export default function RegisterSingleTreeScreen() {
 
     if (!isFarmerVerified()) return;
 
-    // Navigate to payment
+    // Navigate to summary
     router.push({
-      pathname: '/insurance/payment' as any,
+      pathname: '/insurance/summary' as any,
       params: {
         mode: 'single',
         treeName,
@@ -461,7 +463,17 @@ export default function RegisterSingleTreeScreen() {
 
         {/* 4. Policy Plan selection */}
         <View style={styles.formCard}>
-          <Text style={styles.cardSectionTitle}>4. Select Insurance Policy Plan / सुरक्षा योजना</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={[styles.cardSectionTitle, { marginBottom: 0 }]}>4. Select Insurance Policy Plan / सुरक्षा योजना</Text>
+            <TouchableOpacity 
+              style={styles.compareTriggerBtn}
+              onPress={() => setShowCompareModal(true)}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="compare" size={16} color={COLORS.primary} style={{ marginRight: 4 }} />
+              <Text style={styles.compareTriggerText}>Compare / तुलना करें</Text>
+            </TouchableOpacity>
+          </View>
           
           {loadingPlans ? (
             <Text style={{ textAlign: 'center', padding: 20, color: COLORS.textSecondary, fontSize: 12, fontWeight: '700' }}>Loading plans...</Text>
@@ -470,14 +482,37 @@ export default function RegisterSingleTreeScreen() {
           ) : (
             plans.map((plan) => {
               const isSelected = selectedPolicyId === plan._id;
+              const isExpanded = expandedPlanId === plan._id;
+
+              const nameLower = plan.plan_name.toLowerCase();
+              const isBasic = nameLower.includes('basic');
+              const isShieldOrProtection = nameLower.includes('shield') || nameLower.includes('protection') || nameLower.includes('elite') || nameLower.includes('gold');
+              
+              const risks = isBasic 
+                ? ['⛈️ Storm / आंधी-तूफान', '🍂 Pest / कीट', '🔥 Fire / आग'] 
+                : isShieldOrProtection
+                  ? ['⛈️ Severe weather / गंभीर मौसम', '🍂 Epidemic pest blights / कीट रोग', '🔥 Wildfire / जंगल की आग', '🪵 Timber theft / लकड़ी चोरी']
+                  : ['⛈️ Natural storm / मौसम आपदा', '🍂 Pest blights / कीट रोग', '🔥 Accidental fire / दुर्घटनावश आग'];
+
+              const exclusions = isBasic
+                ? ['❌ Intentional cutting / जानबूझकर काटना', '❌ Simple leaf decay / साधारण पत्ती का झड़ना']
+                : ['❌ Land dispute / भूमि विवाद', '❌ Natural aging decay / प्राकृतिक रूप से पुराना होना'];
+
+              const duration = isBasic ? '📅 12 Months (1 Year) / १२ महीने' : isShieldOrProtection ? '📅 24 Months (2 Years) / २४ महीने' : '📅 12 Months (1 Year)';
+              const claimNotes = isBasic
+                ? 'ℹ️ Photo scan + Geotag verification within 48h / फोटो और जीपीएस सत्यापन आवश्यक।'
+                : 'ℹ️ Satellite audit verification + priority payout / सैटेलाइट जांच और त्वरित भुगतान।';
+
               return (
-                <TouchableOpacity 
+                <View 
                   key={plan._id}
                   style={[styles.planCard, isSelected && styles.planCardActive]}
-                  activeOpacity={0.9}
-                  onPress={() => setSelectedPolicyId(plan._id)}
                 >
-                  <View style={styles.planHeader}>
+                  <TouchableOpacity 
+                    style={styles.planHeader}
+                    activeOpacity={0.9}
+                    onPress={() => setSelectedPolicyId(plan._id)}
+                  >
                     <View style={styles.checkboxCircle}>
                       {isSelected && <View style={styles.innerCheckedDot} />}
                     </View>
@@ -487,13 +522,59 @@ export default function RegisterSingleTreeScreen() {
                         <Text style={[styles.planTagText, { color: plan.badge_color }]}>{plan.badge_text}</Text>
                       </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
+                    <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
                       <Text style={styles.planPrice}>₹{plan.price}/{plan.billing_cycle === 'yearly' ? 'Yr' : plan.billing_cycle === 'monthly' ? 'Mo' : 'Life'}</Text>
                       <Text style={styles.planCoverage}>Cover: ₹{plan.cover}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
+                  
                   <Text style={styles.planDesc}>{plan.description}</Text>
-                </TouchableOpacity>
+
+                  {/* Expansion trigger button */}
+                  <TouchableOpacity 
+                    style={styles.expandDetailsRowBtn}
+                    onPress={() => setExpandedPlanId(isExpanded ? null : plan._id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.expandDetailsRowText}>
+                      {isExpanded ? 'Hide policy exclusions & details' : 'View risks, exclusions & details'}
+                    </Text>
+                    <MaterialCommunityIcons 
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'} 
+                      size={16} 
+                      color="#475569" 
+                      style={{ marginLeft: 4 }}
+                    />
+                  </TouchableOpacity>
+
+                  {/* Expanded detail tabs */}
+                  {isExpanded && (
+                    <View style={styles.expandedDetailsContainer}>
+                      <View style={styles.detailItemRow}>
+                        <MaterialCommunityIcons name="clock-outline" size={14} color={COLORS.primary} style={{ marginRight: 6 }} />
+                        <Text style={styles.detailItemText}><Text style={{ fontWeight: '800' }}>Duration:</Text> {duration}</Text>
+                      </View>
+                      
+                      <View style={styles.detailHeaderBox}>
+                        <Text style={styles.detailHeaderTitle}>Covered Risks / बीमित जोखिम</Text>
+                      </View>
+                      {risks.map((risk, i) => (
+                        <Text key={i} style={styles.detailBulletText}>{risk}</Text>
+                      ))}
+
+                      <View style={styles.detailHeaderBox}>
+                        <Text style={[styles.detailHeaderTitle, { color: '#DC2626' }]}>Exclusions / क्या शामिल नहीं है</Text>
+                      </View>
+                      {exclusions.map((ex, i) => (
+                        <Text key={i} style={styles.detailBulletText}>{ex}</Text>
+                      ))}
+
+                      <View style={[styles.detailHeaderBox, { borderBottomWidth: 0, marginTop: 10, paddingBottom: 0 }]}>
+                        <Text style={styles.claimNotesText}>{claimNotes}</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
               );
             })
           )}
@@ -543,6 +624,89 @@ export default function RegisterSingleTreeScreen() {
           </View>
         </View>
       )}
+      {/* Compare Plans Modal */}
+      <Modal visible={showCompareModal} transparent={true} animationType="slide" onRequestClose={() => setShowCompareModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCardContainer}>
+            <View style={styles.modalHeader}>
+              <MaterialCommunityIcons name="compare" size={24} color={COLORS.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.modalTitleText}>Compare Insurance Plans</Text>
+              <TouchableOpacity onPress={() => setShowCompareModal(false)} style={{ marginLeft: 'auto', padding: 4 }}>
+                <MaterialCommunityIcons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
+              <View style={{ flexDirection: 'column' }}>
+                {/* Table Header Row */}
+                <View style={styles.tableRowHeader}>
+                  <View style={[styles.tableCellLabel, { width: 100 }]}><Text style={styles.tableCellHeaderText}>Feature</Text></View>
+                  {plans.map((p) => (
+                    <View key={p._id} style={[styles.tableCellDataHeader, { width: 120 }]}><Text style={styles.tableCellHeaderText} numberOfLines={1}>{p.plan_name}</Text></View>
+                  ))}
+                </View>
+
+                {/* Price Row */}
+                <View style={styles.tableRow}>
+                  <View style={[styles.tableCellLabel, { width: 100 }]}><Text style={styles.tableCellTextBold}>Premium (₹)</Text></View>
+                  {plans.map((p) => (
+                    <View key={p._id} style={[styles.tableCellData, { width: 120 }]}><Text style={styles.tableCellText}>₹{p.price}</Text></View>
+                  ))}
+                </View>
+
+                {/* Coverage Row */}
+                <View style={styles.tableRow}>
+                  <View style={[styles.tableCellLabel, { width: 100 }]}><Text style={styles.tableCellTextBold}>Max Cover</Text></View>
+                  {plans.map((p) => (
+                    <View key={p._id} style={[styles.tableCellData, { width: 120 }]}><Text style={[styles.tableCellText, { color: COLORS.primary, fontWeight: '800' }]}>₹{p.cover}</Text></View>
+                  ))}
+                </View>
+
+                {/* Duration Row */}
+                <View style={styles.tableRow}>
+                  <View style={[styles.tableCellLabel, { width: 100 }]}><Text style={styles.tableCellTextBold as any}>Duration</Text></View>
+                  {plans.map((p) => {
+                    const d = p.plan_name.toLowerCase().includes('basic') ? '1 Year' : p.plan_name.toLowerCase().includes('shield') || p.plan_name.toLowerCase().includes('protection') || p.plan_name.toLowerCase().includes('gold') || p.plan_name.toLowerCase().includes('elite') ? '2 Years' : '1 Year';
+                    return (
+                      <View key={p._id} style={[styles.tableCellData, { width: 120 }]}><Text style={styles.tableCellText as any}>{d}</Text></View>
+                    );
+                  })}
+                </View>
+
+                {/* Covered Risks Count */}
+                <View style={styles.tableRow}>
+                  <View style={[styles.tableCellLabel, { width: 100 }]}><Text style={styles.tableCellTextBold as any}>Covered Risks</Text></View>
+                  {plans.map((p) => {
+                    const count = p.plan_name.toLowerCase().includes('basic') ? '3 Risks' : '4+ Risks';
+                    return (
+                      <View key={p._id} style={[styles.tableCellData, { width: 120 }]}><Text style={styles.tableCellText as any}>{count}</Text></View>
+                    );
+                  })}
+                </View>
+
+                {/* Payout Speed */}
+                <View style={styles.tableRow}>
+                  <View style={[styles.tableCellLabel, { width: 100 }]}><Text style={styles.tableCellTextBold as any}>Payout Speed</Text></View>
+                  {plans.map((p) => {
+                    const speed = p.plan_name.toLowerCase().includes('basic') ? 'Standard (7d)' : 'Fast (48h)';
+                    return (
+                      <View key={p._id} style={[styles.tableCellData, { width: 120 }]}><Text style={styles.tableCellText as any}>{speed}</Text></View>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={[styles.closeModalBtn as any, { marginTop: 16 }]}
+              onPress={() => setShowCompareModal(false)}
+            >
+              <Text style={styles.closeModalBtnText as any}>Close Comparison</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Full Screen Image Preview Modal */}
       <Modal visible={!!previewData} transparent={false} animationType="slide" onRequestClose={() => setPreviewData(null)}>
         <View style={{ flex: 1, backgroundColor: '#000' }}>
@@ -823,6 +987,163 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: '600',
     paddingLeft: 30,
+  },
+  compareTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  compareTriggerText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.primary,
+  },
+  expandDetailsRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 10,
+    marginLeft: 30,
+  },
+  expandDetailsRowText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  expandedDetailsContainer: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingTop: 12,
+    paddingLeft: 30,
+  },
+  detailItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  detailItemText: {
+    fontSize: 11,
+    color: '#334155',
+  },
+  detailHeaderBox: {
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderColor: '#F1F5F9',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  detailHeaderTitle: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+  },
+  detailBulletText: {
+    fontSize: 10,
+    color: '#475569',
+    marginBottom: 4,
+    paddingLeft: 6,
+  },
+  claimNotesText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+    fontStyle: 'italic',
+    lineHeight: 14,
+  },
+  modalCardContainer: {
+    width: '92%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    ...SHADOWS.glow,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalTitleText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORS.textDark,
+  },
+  tableRowHeader: {
+    flexDirection: 'row',
+    borderBottomWidth: 2,
+    borderColor: '#E2E8F0',
+    paddingVertical: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: '#F1F5F9',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  tableCellLabel: {
+    paddingHorizontal: 6,
+  },
+  tableCellDataHeader: {
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  tableCellData: {
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  tableCellHeaderText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+  },
+  tableCellTextBold: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  tableCellText: {
+    fontSize: 10,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  closeModalBtn: {
+    paddingVertical: 12,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  closeModalBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.textDark,
   },
   continueBtn: {
     borderRadius: 30,

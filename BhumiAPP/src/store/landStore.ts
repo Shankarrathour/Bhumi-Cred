@@ -21,6 +21,7 @@ export interface LandPlot {
   irrigationType: string;
   status: string;
   remarks?: string;
+  correctionFields?: string[];
   geoCoords: { latitude: number; longitude: number };
   boundaryPolygon?: { latitude: number; longitude: number }[];
   documentName: string;
@@ -35,8 +36,22 @@ export interface LandPlot {
   vikashKhand?: string;
   village?: string;
   fullAddress?: string;
+  landmark?: string;
+  khasraNumber?: string;
   landDocumentUrl?: string;
   landPhotoUrls?: string[];
+  landType?: string;
+  name?: string;
+  ownershipType?: string;
+  areaUnit?: string;
+  plantationDate?: string;
+  trees?: {
+    species: string;
+    count: number;
+    ageBracket: string;
+    locationOnParcel: string;
+    photoUri?: string;
+  }[];
 }
 
 interface LandState {
@@ -81,8 +96,13 @@ export const useLandStore = create<LandState>()(
             const existing = currentPlots.find(lp => lp.id === bp.id);
             let rawStatus = (bp.verification_status || 'pending').toLowerCase();
             let mappedStatus = 'Pending Verification';
-            if (rawStatus === 'verified') mappedStatus = 'Verified';
-            if (rawStatus === 'rejected') mappedStatus = 'Rejected';
+            if (rawStatus === 'verified' || rawStatus === 'approved') mappedStatus = 'Approved';
+            else if (rawStatus === 'project_assigned') mappedStatus = 'Project Assigned';
+            else if (rawStatus === 'correction_required') mappedStatus = 'Correction Required';
+            else if (rawStatus === 'under_review' || rawStatus === 'auditing') mappedStatus = 'Under Review';
+            else if (rawStatus === 'rejected') mappedStatus = 'Rejected';
+            else if (rawStatus === 'submitted' || rawStatus === 'pending') mappedStatus = 'Submitted';
+            else mappedStatus = bp.verification_status || 'Submitted';
 
             return {
               id: bp.id,
@@ -108,6 +128,20 @@ export const useLandStore = create<LandState>()(
               village: bp.village,
               fullAddress: bp.full_address,
               landmark: bp.landmark,
+              correctionFields: bp.correction_fields || undefined,
+              khasraNumber: bp.khasra_number || existing?.khasraNumber,
+              landType: bp.land_type || existing?.landType,
+              name: bp.name || existing?.name || `Plot in ${bp.village || 'Farm'}`,
+              ownershipType: bp.ownership_type || existing?.ownershipType || 'Own',
+              areaUnit: bp.area_unit || existing?.areaUnit || 'Acre',
+              plantationDate: bp.plantation_date || existing?.plantationDate || '',
+              trees: bp.trees ? bp.trees.map((t: any) => ({
+                species: t.species,
+                count: t.count,
+                ageBracket: t.age_bracket || t.ageBracket,
+                locationOnParcel: t.location_on_parcel || t.locationOnParcel,
+                photoUri: t.photo_uri || t.photoUri
+              })) : [],
             } as LandPlot;
           });
 
@@ -120,7 +154,7 @@ export const useLandStore = create<LandState>()(
 
           set({ plots: [...mappedPlots, ...unsyncedLocalPlots], isLoading: false });
         } catch (err) {
-          console.warn('[landStore] fetchPlots failed:', err);
+          console.log('[landStore] fetchPlots API offline or expired token, using local plots');
           set({ isLoading: false });
         }
       },
@@ -130,6 +164,22 @@ export const useLandStore = create<LandState>()(
 
         const isIrrigated = plotData.irrigationType.toLowerCase() !== 'none' &&
           plotData.irrigationType.trim() !== '';
+
+        // Helper to sync all plots to window.localStorage for BhumiAdmin dashboard sync
+        const syncToAdminLocalStorage = (plots: LandPlot[]) => {
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              const existing = window.localStorage.getItem('bhumicred_land_store');
+              const parsedExisting = existing ? JSON.parse(existing) : {};
+              parsedExisting.state = { ...(parsedExisting.state || {}), plots };
+              parsedExisting.version = 0;
+              window.localStorage.setItem('bhumicred_land_store', JSON.stringify(parsedExisting));
+              console.log('[landStore] Synced', plots.length, 'plots to Admin localStorage');
+            }
+          } catch (e) {
+            // Not in web context, skip
+          }
+        };
 
         try {
           const { data: response } = await api.post('/farmer/land', {
@@ -142,8 +192,13 @@ export const useLandStore = create<LandState>()(
             gram_panchayat: plotData.gramPanchayat,
             vikash_khand: plotData.vikashKhand,
             village: plotData.village,
+            name: plotData.name,
+            ownership_type: plotData.ownershipType,
+            area_unit: plotData.areaUnit,
+            plantation_date: plotData.plantationDate,
             full_address: plotData.fullAddress,
             landmark: plotData.landmark,
+            khasra_number: plotData.khasraNumber,
             coordinates: plotData.geoCoords ? {
               latitude: plotData.geoCoords.latitude,
               longitude: plotData.geoCoords.longitude
@@ -151,24 +206,34 @@ export const useLandStore = create<LandState>()(
             boundary_polygon: plotData.boundaryPolygon && plotData.boundaryPolygon.length > 0
               ? plotData.boundaryPolygon
               : null,
+            land_type: plotData.landType,
             crop_type: plotData.cropType,
             soil_type: plotData.soilType,
             land_document_url: plotData.landDocumentUrl || undefined,
             land_photo_urls: plotData.landPhotoUrls || [],
+            trees: plotData.trees ? plotData.trees.map((t: any) => ({
+              species: t.species,
+              count: t.count,
+              age_bracket: t.ageBracket,
+              location_on_parcel: t.locationOnParcel,
+              photo_uri: t.photoUri
+            })) : [],
           });
 
           const savedParcel = response.data;
           const newPlot: LandPlot = {
             ...plotData,
-            id: savedParcel?.id ?? `LND-${Math.floor(Math.random() * 9000) + 1000}`,
+            id: savedParcel?.data?.id ?? savedParcel?.id ?? `LND-${Math.floor(Math.random() * 9000) + 1000}`,
             status: 'Pending Verification',
             registrationDate: new Date().toISOString().split('T')[0],
             soilDetails: mockSoil(),
           };
 
-          set({ plots: [...get().plots, newPlot], isLoading: false });
+          const updatedPlots = [...get().plots, newPlot];
+          set({ plots: updatedPlots, isLoading: false });
+          syncToAdminLocalStorage(updatedPlots);
         } catch (err) {
-          console.warn('[landStore] addPlot backend call failed, saving locally:', err);
+          console.log('[landStore] addPlot backend offline or expired token, saved plot locally');
 
           const newPlot: LandPlot = {
             ...plotData,
@@ -177,7 +242,9 @@ export const useLandStore = create<LandState>()(
             registrationDate: new Date().toISOString().split('T')[0],
             soilDetails: mockSoil(),
           };
-          set({ plots: [...get().plots, newPlot], isLoading: false });
+          const updatedPlots = [...get().plots, newPlot];
+          set({ plots: updatedPlots, isLoading: false });
+          syncToAdminLocalStorage(updatedPlots);
         }
       },
 

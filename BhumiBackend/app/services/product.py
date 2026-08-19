@@ -5,9 +5,17 @@ from typing import List, Dict, Any, Tuple, Optional
 from fastapi import UploadFile
 from app.repositories.product import ProductRepository
 from app.repositories.category import CategoryRepository
-from app.schemas.product import ProductCreate, ProductUpdate, ProductResponse, ProductCategoryResponse, ProductListResponse, VendorProductUpdate, VendorProductResponse, VendorProductListResponse
+from app.schemas.product import (
+    ProductCreate,
+    ProductUpdate,
+    ProductResponse,
+    ProductCategoryResponse,
+    ProductListResponse,
+    VendorProductResponse,
+    VendorProductListResponse,
+    VendorProductUpdate,
+)
 from app.models.product import Product
-from app.models.vendor import Vendor
 from app.services.inventory import InventoryService
 from app.integrations.cloudinary_service import CloudinaryService
 from app.utils.upload import ALLOWED_IMAGE_TYPES, MAX_PHOTO_BYTES

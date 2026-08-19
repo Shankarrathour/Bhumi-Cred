@@ -25,6 +25,40 @@ async def list_climate_risk_insurance_cards(
 ) -> SuccessResponse[List[ClimateRiskInsuranceCardResponse]]:
     cards = await ClimateRiskInsuranceCard.find_all().sort("+display_order").to_list()
 
+    if not cards:
+        defaults = [
+            ClimateRiskInsuranceCard(
+                name="Teak Tree Weather & Fire Guard",
+                provider="HDFC ERGO Agri Insurance",
+                coverage_amount=500000,
+                premium_amount=62500,
+                description="Comprehensive coverage against wildfire, drought, and windstorm.",
+                is_active=True,
+                display_order=1,
+            ),
+            ClimateRiskInsuranceCard(
+                name="Mango & Fruit Grove Cyclone Cover",
+                provider="ICICI Lombard Insurance",
+                coverage_amount=272000,
+                premium_amount=34000,
+                description="Specialized horticulture cyclone and storm protection.",
+                is_active=True,
+                display_order=2,
+            ),
+            ClimateRiskInsuranceCard(
+                name="Sandalwood & Timber Shield",
+                provider="Bajaj Allianz Climate Cover",
+                coverage_amount=1200000,
+                premium_amount=144000,
+                description="High-value timber plantation risk protection.",
+                is_active=True,
+                display_order=3,
+            ),
+        ]
+        for item in defaults:
+            await item.insert()
+        cards = await ClimateRiskInsuranceCard.find_all().sort("+display_order").to_list()
+
     formatted = []
     for card in cards:
         data = card.model_dump()

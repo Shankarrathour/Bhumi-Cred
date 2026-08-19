@@ -4,11 +4,9 @@ from typing import Literal, Optional
 from app.models.admin_user import AdminRole
 from app.schemas.farmer import FarmerPublicResponse
 from app.schemas.admin_user import AdminUserResponse
-from app.schemas.vendor_auth import VendorProfileResponse
+AuthRole = Literal["farmer", "govt_body", "partner"]
 
 MOBILE_RE = re.compile(r"^[6-9]\d{9}$")
-
-AuthRole = Literal["farmer", "vendor"]
 
 
 # ── Farmer Auth Requests ──────────────────────────────────────────────────────
@@ -90,16 +88,13 @@ class FarmerAuthResponse(BaseModel):
 
 class RoleAuthResponse(BaseModel):
     """
-    Role-aware OTP verification response. `farmer` is populated when role="farmer"
-    (identical shape/keys to the legacy FarmerAuthResponse, for backward compatibility
-    with existing clients that destructure `{ tokens, farmer }`). `vendor` is populated
-    when role="vendor".
+    Role-aware OTP verification response. `farmer` is populated for all roles (farmer,
+    govt_body, partner) for backward compatibility with existing clients that destructure `{ tokens, farmer }`.
     """
     tokens: TokenPair
     role: AuthRole
     is_new: bool = False
     farmer: Optional[FarmerPublicResponse] = None
-    vendor: Optional[VendorProfileResponse] = None
 
 
 class AdminAuthResponse(BaseModel):

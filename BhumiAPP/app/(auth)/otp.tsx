@@ -29,6 +29,7 @@ export default function OTPScreen() {
 
   const [otp, setOtp] = useState(['', '', '', '']);
   const [showNotification, setShowNotification] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [countdown, setCountdown] = useState(RESEND_COOLDOWN);
   const inputRefs = useRef<(TextInput | null)[]>([]);
@@ -67,28 +68,16 @@ export default function OTPScreen() {
     const otpValue = otp.join('');
     if (otpValue.length !== 4) return;
 
+    setIsVerifying(true);
     try {
       const success = await verifyOtpStore(otpValue);
       if (success) {
         const currentRole = useAuthStore.getState().role;
 
-        if (currentRole === 'vendor') {
-          if (flow !== 'login') {
-            // Register flow: a brand-new or wizard-incomplete vendor — continue the wizard.
-            router.replace('/(vendor_auth)/register-wizard');
-          } else {
-            // Login flow: route by admin approval status.
-            const vendorStatus = useAuthStore.getState().vendor?.status;
-            if (vendorStatus === 'Active') {
-              router.replace('/(vendor_tabs)');
-            } else if (vendorStatus === 'Rejected') {
-              router.replace('/(vendor_auth)/rejected');
-            } else if (vendorStatus === 'Suspended') {
-              router.replace('/(vendor_auth)/suspended');
-            } else {
-              router.replace('/(vendor_auth)/pending');
-            }
-          }
+        if (currentRole === 'govt_body' || currentRole === 'partner') {
+          // Govt body and Partner route straight to main tabs
+          useAuthStore.setState({ isAuthenticated: true });
+          router.replace('/(tabs)');
           return;
         }
 
@@ -113,6 +102,8 @@ export default function OTPScreen() {
       }
     } catch (err) {
       Alert.alert('Error', 'Verification failed due to connection error.');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -219,12 +210,12 @@ export default function OTPScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.primaryButton, (isLoading || otp.join('').length !== 4) && styles.buttonDisabled]}
+              style={[styles.primaryButton, (isVerifying || otp.join('').length !== 4) && styles.buttonDisabled]}
               onPress={handleVerify}
-              disabled={isLoading || otp.join('').length !== 4}
+              disabled={isVerifying || otp.join('').length !== 4}
               activeOpacity={0.85}
             >
-              {isLoading ? (
+              {isVerifying ? (
                 <ActivityIndicator color={COLORS.primaryDark} />
               ) : (
                 <Text style={styles.primaryButtonText}>Verify & Proceed</Text>

@@ -2,7 +2,7 @@ from typing import Annotated
 from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from app.auth.jwt import decode_access_token, TOKEN_TYPE_FARMER, TOKEN_TYPE_ADMIN, TOKEN_TYPE_VENDOR
+from app.auth.jwt import decode_access_token, TOKEN_TYPE_FARMER, TOKEN_TYPE_ADMIN, TOKEN_TYPE_GOVT, TOKEN_TYPE_PARTNER
 from app.core.context import user_id_var
 from app.core.exceptions import (
     InvalidTokenException,
@@ -16,11 +16,9 @@ from app.core.exceptions import (
     AppException
 )
 from app.models.farmer import Farmer, KYCStatus
-from app.models.vendor import Vendor
 from app.models.admin_user import AdminUser, AdminRole
 from app.repositories.farmer import FarmerRepository
 from app.repositories.admin_user import AdminUserRepository
-from app.repositories.vendor import VendorRepository
 from fastapi import status
 
 _bearer = HTTPBearer(auto_error=False)
@@ -51,7 +49,7 @@ async def get_current_farmer(
 
     repo = FarmerRepository()
     farmer = await repo.get_by_id(farmer_id)
-    if not farmer:
+    if not farmer or getattr(farmer, "role", "farmer") != "farmer":
         raise FarmerNotFoundException()
     if not farmer.is_active:
         raise FarmerBlockedException()
@@ -100,34 +98,60 @@ async def get_verified_farmer(
 
 VerifiedFarmer = Annotated[Farmer, Depends(get_verified_farmer)]
 
-# ── Vendor dependencies ───────────────────────────────────────────────────────
+# ── Govt Body dependencies ───────────────────────────────────────────────────
 
-async def get_current_vendor(
+async def get_current_govt_body(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-) -> Vendor:
+) -> Farmer:
     token = _extract_token(credentials)
     payload = decode_access_token(token)
 
-    if payload.get("type") != TOKEN_TYPE_VENDOR:
-        raise InvalidTokenException("Token is not a vendor token.")
+    if payload.get("type") != TOKEN_TYPE_GOVT:
+        raise InvalidTokenException("Token is not a government body token.")
 
-    vendor_id = payload.get("sub")
-    if not vendor_id:
+    user_id = payload.get("sub")
+    if not user_id:
         raise InvalidTokenException("Token missing subject claim.")
 
-    vendor = await Vendor.get(vendor_id)
-    if not vendor:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=401, detail="Vendor not found.")
-        
-    if vendor.status == "Rejected":
-        from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Vendor account rejected.")
+    repo = FarmerRepository()
+    user = await repo.get_by_id(user_id)
+    if not user or getattr(user, "role", "farmer") != "govt_body":
+        raise FarmerNotFoundException()
+    if not user.is_active:
+        raise FarmerBlockedException()
 
-    user_id_var.set(str(vendor.id))
-    return vendor
+    user_id_var.set(f"govt_body:{user_id}")
+    return user
 
-CurrentVendor = Annotated[Vendor, Depends(get_current_vendor)]
+CurrentGovtBody = Annotated[Farmer, Depends(get_current_govt_body)]
+
+
+# ── Partner dependencies ─────────────────────────────────────────────────────
+
+async def get_current_partner(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+) -> Farmer:
+    token = _extract_token(credentials)
+    payload = decode_access_token(token)
+
+    if payload.get("type") != TOKEN_TYPE_PARTNER:
+        raise InvalidTokenException("Token is not a partner token.")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise InvalidTokenException("Token missing subject claim.")
+
+    repo = FarmerRepository()
+    user = await repo.get_by_id(user_id)
+    if not user or getattr(user, "role", "farmer") != "partner":
+        raise FarmerNotFoundException()
+    if not user.is_active:
+        raise FarmerBlockedException()
+
+    user_id_var.set(f"partner:{user_id}")
+    return user
+
+CurrentPartner = Annotated[Farmer, Depends(get_current_partner)]
 
 
 # ── Admin dependencies ────────────────────────────────────────────────────────
@@ -175,50 +199,4 @@ def require_roles(*roles: AdminRole):
 
     return _checker
 
-# ── Vendor dependencies ───────────────────────────────────────────────────────
 
-async def get_current_vendor(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-) -> Vendor:
-    token = _extract_token(credentials)
-    payload = decode_access_token(token)
-
-    if payload.get("type") != TOKEN_TYPE_VENDOR:
-        raise InvalidTokenException("Token is not a vendor token.")
-
-    vendor_id = payload.get("sub")
-    if not vendor_id:
-        raise InvalidTokenException("Token missing subject claim.")
-
-    repo = VendorRepository()
-    vendor = await repo.get_by_id(vendor_id)
-    if not vendor:
-        raise AppException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            error_code="VENDOR_NOT_FOUND",
-            detail="Vendor not found."
-        )
-    if not vendor.is_active:
-        raise AppException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            error_code="VENDOR_BLOCKED",
-            detail="Vendor account is blocked."
-        )
-
-    user_id_var.set(f"vendor:{vendor_id}")
-    return vendor
-
-CurrentVendor = Annotated[Vendor, Depends(get_current_vendor)]
-
-async def get_verified_vendor(
-    vendor: Vendor = Depends(get_current_vendor)
-) -> Vendor:
-    if not vendor.is_verified:
-        raise AppException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            error_code="VENDOR_UNVERIFIED",
-            detail="Vendor account is pending verification."
-        )
-    return vendor
-
-VerifiedVendor = Annotated[Vendor, Depends(get_verified_vendor)]

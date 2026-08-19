@@ -63,7 +63,7 @@ export const useRejectWithdrawal = () => {
   return useMutation({
     mutationFn: async ({ withdrawalId, reason }: { withdrawalId: string, reason: string }) => {
       const response = await api.put(`/admin/withdrawals/${withdrawalId}/reject`, {
-        rejection_reason: reason
+        reason: reason
       });
       return response.data;
     },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Platform, Dimensions, Keyboard, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Platform, Dimensions, Keyboard, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../src/theme/theme';
 
@@ -15,27 +15,56 @@ interface CustomCalendarModalProps {
   onClose: () => void;
   onSelectDate: (date: string) => void;
   initialDate?: string;
+  mode?: 'dob' | 'general' | 'plantation';
 }
 
-export default function CustomCalendarModal({ visible, onClose, onSelectDate, initialDate }: CustomCalendarModalProps) {
-  const [currYear, setCurrYear] = useState(new Date().getFullYear() - 25);
-  const [currMonth, setCurrMonth] = useState(0); // 0-11
+const YEARS = Array.from({ length: 77 }, (_, i) => 1950 + i); // 1950 to 2026
+
+export default function CustomCalendarModal({ visible, onClose, onSelectDate, initialDate, mode = 'dob' }: CustomCalendarModalProps) {
+  const today = new Date();
+  const [currYear, setCurrYear] = useState(2000);
+  const [currMonth, setCurrMonth] = useState(0); // 0 = January
   const [isManualEdit, setIsManualEdit] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
   const [manualDate, setManualDate] = useState('');
 
   useEffect(() => {
-    if (visible && initialDate && initialDate !== 'Select Date') {
-      const parts = initialDate.split('/');
-      if (parts.length === 3) {
-        setCurrMonth(parseInt(parts[1], 10) - 1);
-        setCurrYear(parseInt(parts[2], 10));
-        setManualDate(initialDate);
+    if (visible) {
+      if (initialDate && initialDate !== 'Select Date' && initialDate.includes('/')) {
+        const parts = initialDate.split('/');
+        if (parts.length === 3) {
+          const m = parseInt(parts[1], 10) - 1;
+          const y = parseInt(parts[2], 10);
+          if (!isNaN(m) && !isNaN(y) && m >= 0 && m <= 11 && y > 1900) {
+            setCurrMonth(m);
+            setCurrYear(y);
+            setManualDate(initialDate);
+            setIsManualEdit(false);
+            setShowYearPicker(false);
+            return;
+          }
+        }
       }
-    } else {
-      setManualDate('');
+
+      // If no valid initial date, check the mode
+      if (mode === 'dob') {
+        // DOB mode: default to Year 2000
+        setCurrYear(2000);
+        setCurrMonth(0); // January
+        setManualDate('15/01/2000');
+      } else {
+        // General / Plantation mode: default to current date/month/year
+        const now = new Date();
+        setCurrYear(now.getFullYear());
+        setCurrMonth(now.getMonth());
+        const d = now.getDate() < 10 ? '0' + now.getDate() : now.getDate();
+        const m = (now.getMonth() + 1) < 10 ? '0' + (now.getMonth() + 1) : (now.getMonth() + 1);
+        setManualDate(`${d}/${m}/${now.getFullYear()}`);
+      }
       setIsManualEdit(false);
+      setShowYearPicker(false);
     }
-  }, [visible, initialDate]);
+  }, [visible, initialDate, mode]);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const daysArray = Array.from({ length: getDaysInMonth(currYear, currMonth) }, (_, i) => i + 1);
@@ -86,7 +115,10 @@ export default function CustomCalendarModal({ visible, onClose, onSelectDate, in
             <View style={styles.calSheetHeader}>
               <Text style={styles.calSheetHeadline}>Select Date</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <TouchableOpacity onPress={() => setIsManualEdit(!isManualEdit)} style={{ marginRight: 16 }}>
+                <TouchableOpacity onPress={() => { setShowYearPicker(!showYearPicker); setIsManualEdit(false); }} style={{ marginRight: 12, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: showYearPicker ? '#ECFDF5' : '#F1F5F9', borderRadius: 8, borderWidth: 1, borderColor: showYearPicker ? '#10B981' : '#E2E8F0' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: showYearPicker ? '#047857' : '#475569' }}>Year {currYear}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => { setIsManualEdit(!isManualEdit); setShowYearPicker(false); }} style={{ marginRight: 16 }}>
                   <MaterialCommunityIcons name="pencil" size={24} color={isManualEdit ? COLORS.primary : "#94A3B8"} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => { Keyboard.dismiss(); onClose(); }}>
@@ -102,12 +134,39 @@ export default function CustomCalendarModal({ visible, onClose, onSelectDate, in
                   style={styles.manualInput}
                   value={manualDate}
                   onChangeText={setManualDate}
-                  placeholder="e.g. 15/08/1990"
+                  placeholder="e.g. 15/08/2000"
                   keyboardType="numbers-and-punctuation"
                 />
                 <TouchableOpacity style={styles.saveBtn} onPress={handleManualSave}>
                   <Text style={styles.saveBtnText}>Save Date</Text>
                 </TouchableOpacity>
+              </View>
+            ) : showYearPicker ? (
+              <View style={{ maxHeight: 300 }}>
+                <Text style={[styles.pickerLabel, { marginBottom: 12 }]}>SELECT YEAR / साल चुनें</Text>
+                <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 10 }} showsVerticalScrollIndicator={false}>
+                  {YEARS.map((yr) => (
+                    <TouchableOpacity
+                      key={yr}
+                      style={{
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: 12,
+                        backgroundColor: yr === currYear ? COLORS.primary : '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: yr === currYear ? COLORS.primary : '#E2E8F0',
+                      }}
+                      onPress={() => {
+                        setCurrYear(yr);
+                        setShowYearPicker(false);
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: yr === currYear ? '#FFFFFF' : '#334155' }}>
+                        {yr}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
               </View>
             ) : (
               <View>
@@ -116,10 +175,10 @@ export default function CustomCalendarModal({ visible, onClose, onSelectDate, in
                   <TouchableOpacity onPress={handlePrevMonth} style={styles.navBtn}>
                     <MaterialCommunityIcons name="chevron-left" size={28} color="#1E293B" />
                   </TouchableOpacity>
-                  <View style={styles.navCenter}>
+                  <TouchableOpacity style={styles.navCenter} onPress={() => setShowYearPicker(true)}>
                     <Text style={styles.navMonth}>{MONTHS[currMonth]}</Text>
-                    <Text style={styles.navYear}>{currYear}</Text>
-                  </View>
+                    <Text style={styles.navYear}>{currYear} ✏️</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity onPress={handleNextMonth} style={styles.navBtn}>
                     <MaterialCommunityIcons name="chevron-right" size={28} color="#1E293B" />
                   </TouchableOpacity>

@@ -593,11 +593,8 @@ export const useEcosystemStore = create<EcosystemState>()(
           };
         } catch (err) {
           console.warn('[ecosystemStore] fetchFarmers failed:', err);
-          if (get().farmers.length === 0) {
-            set({ farmers: seedFarmers });
-          }
           return {
-            total: get().farmers.length,
+            total: 0,
             page: 1,
             limit: 12,
             totalPages: 1,
@@ -662,7 +659,7 @@ export const useEcosystemStore = create<EcosystemState>()(
 
       fetchOrders: async () => {
         try {
-          const { data } = await adminApi.get('/admin/orders');
+          const { data } = await adminApi.get('/admin/marketplace-orders');
           const rawList = Array.isArray(data) ? data : data?.data || [];
           const apiOrders: Order[] = rawList.map(backendOrderToFrontend);
           if (apiOrders.length > 0) {

@@ -2977,3 +2977,123 @@ export const LOCATION_DATA: Record<string, Record<string, Record<string, string[
 };
 
 export const COUNTRIES_LIST = Object.keys(LOCATION_DATA);
+
+export interface LocationHierarchy {
+  tehsils: string[];
+  vikasKhands: string[];
+  gramPanchayats: string[];
+  villages: string[];
+}
+
+export const DISTRICT_HIERARCHY_DATA: Record<string, LocationHierarchy> = {
+  "Sehore": {
+    tehsils: ["Sehore Khas", "Ashta", "Ichhawar", "Nasrullaganj", "Shyampur", "Rehti", "Jawar"],
+    vikasKhands: ["Sehore Vikas Khand", "Ashta Vikas Khand", "Ichhawar Vikas Khand", "Budhni Vikas Khand", "Nasrullaganj Vikas Khand"],
+    gramPanchayats: ["Sehore Khas Gram Panchayat", "Shyampur Gram Panchayat", "Jawar Gram Panchayat", "Bhairopur Gram Panchayat", "Doraha Gram Panchayat", "Ahmedpur Gram Panchayat", "Bilorija Gram Panchayat", "Semra Gram Panchayat"],
+    villages: ["Sehore Khas", "Shyampur", "Jawar", "Bhairopur", "Doraha", "Ahmedpur", "Bilorija", "Semra", "Kankarkheda", "Mala", "Khatpura"]
+  },
+  "Bhopal": {
+    tehsils: ["Bhopal Sadar", "Huzur", "Berasia", "Kolar"],
+    vikasKhands: ["Huzur Vikas Khand", "Berasia Vikas Khand"],
+    gramPanchayats: ["Huzur Gram Panchayat", "Berasia Gram Panchayat", "Gunaga Gram Panchayat", "Parwalia Gram Panchayat", "Mendora Gram Panchayat", "Kolar Gram Panchayat"],
+    villages: ["Huzur", "Berasia", "Gunaga", "Parwalia Sadarak", "Mendora", "Kolar", "Ratibad", "Misrod", "Bhadbhada"]
+  },
+  "Indore": {
+    tehsils: ["Indore Khas", "Depalpur", "Sanwer", "Mhow (Dr. Ambedkar Nagar)", "Hatod"],
+    vikasKhands: ["Indore Vikas Khand", "Sanwer Vikas Khand", "Depalpur Vikas Khand", "Mhow Vikas Khand"],
+    gramPanchayats: ["Depalpur Gram Panchayat", "Sanwer Gram Panchayat", "Hatod Gram Panchayat", "Mhow Gram Panchayat", "Bicholi Gram Panchayat", "Kudana Gram Panchayat"],
+    villages: ["Depalpur", "Sanwer", "Hatod", "Mhow", "Bicholi Harsi", "Kudana", "Rau", "Pigdamber", "Dakachya"]
+  },
+  "Dewas": {
+    tehsils: ["Dewas Khas", "Sonkatch", "Hatpiplya", "Bagli", "Kannod", "Khategaon", "Tonk Khurd"],
+    vikasKhands: ["Dewas Vikas Khand", "Sonkatch Vikas Khand", "Bagli Vikas Khand", "Kannod Vikas Khand"],
+    gramPanchayats: ["Sonkatch Gram Panchayat", "Hatpiplya Gram Panchayat", "Bagli Gram Panchayat", "Kannod Gram Panchayat", "Khategaon Gram Panchayat"],
+    villages: ["Sonkatch", "Hatpiplya", "Bagli", "Kannod", "Khategaon", "Tonk Khurd", "Pipalrawan"]
+  },
+  "Dhar": {
+    tehsils: ["Dhar Khas", "Badnawar", "Sardarpur", "Kukshi", "Manawar", "Gandhwani", "Dharampuri"],
+    vikasKhands: ["Dhar Vikas Khand", "Badnawar Vikas Khand", "Kukshi Vikas Khand", "Manawar Vikas Khand"],
+    gramPanchayats: ["Badnawar Gram Panchayat", "Sardarpur Gram Panchayat", "Kukshi Gram Panchayat", "Manawar Gram Panchayat"],
+    villages: ["Badnawar", "Sardarpur", "Kukshi", "Manawar", "Gandhwani", "Dharampuri", "Rajgarh"]
+  },
+  "Ujjain": {
+    tehsils: ["Ujjain Khas", "Nagda", "Khachrod", "Tarana", "Mahidpur", "Badnagar", "Ghatiya"],
+    vikasKhands: ["Ujjain Vikas Khand", "Khachrod Vikas Khand", "Tarana Vikas Khand", "Mahidpur Vikas Khand"],
+    gramPanchayats: ["Nagda Gram Panchayat", "Khachrod Gram Panchayat", "Tarana Gram Panchayat", "Mahidpur Gram Panchayat"],
+    villages: ["Ujjain Khas", "Nagda", "Khachrod", "Tarana", "Mahidpur", "Badnagar", "Ghatiya"]
+  },
+  "Gwalior": {
+    tehsils: ["Gwalior Khas", "Dabra", "Bhantarwar", "Chinor"],
+    vikasKhands: ["Gwalior Vikas Khand", "Dabra Vikas Khand", "Bhantarwar Vikas Khand"],
+    gramPanchayats: ["Gwalior Gram Panchayat", "Dabra Gram Panchayat", "Chinor Gram Panchayat"],
+    villages: ["Gwalior Khas", "Dabra", "Bhantarwar", "Chinor", "Tekanpur"]
+  },
+  "Jabalpur": {
+    tehsils: ["Jabalpur Khas", "Patan", "Sihora", "Panagar", "Kundam", "Majholi", "Shahpura"],
+    vikasKhands: ["Jabalpur Vikas Khand", "Patan Vikas Khand", "Sihora Vikas Khand", "Kundam Vikas Khand"],
+    gramPanchayats: ["Patan Gram Panchayat", "Sihora Gram Panchayat", "Panagar Gram Panchayat", "Shahpura Gram Panchayat"],
+    villages: ["Patan", "Sihora", "Panagar", "Kundam", "Majholi", "Shahpura", "Baredi"]
+  },
+  "Raisen": {
+    tehsils: ["Raisen Khas", "Sanchi", "Gauharjanj", "Begamganj", "Bareli", "Silwani", "Udaipura"],
+    vikasKhands: ["Raisen Vikas Khand", "Sanchi Vikas Khand", "Bareli Vikas Khand", "Silwani Vikas Khand"],
+    gramPanchayats: ["Sanchi Gram Panchayat", "Gauharjanj Gram Panchayat", "Begamganj Gram Panchayat", "Bareli Gram Panchayat"],
+    villages: ["Raisen Khas", "Sanchi", "Gauharganj", "Begamganj", "Bareli", "Silwani", "Udaipura"]
+  },
+  "Vidisha": {
+    tehsils: ["Vidisha Khas", "Basoda", "Kurwai", "Sironj", "Lateri", "Gyaraspur", "Gulabganj"],
+    vikasKhands: ["Vidisha Vikas Khand", "Basoda Vikas Khand", "Sironj Vikas Khand", "Kurwai Vikas Khand"],
+    gramPanchayats: ["Vidisha Gram Panchayat", "Basoda Gram Panchayat", "Kurwai Gram Panchayat", "Sironj Gram Panchayat"],
+    villages: ["Vidisha Khas", "Basoda", "Kurwai", "Sironj", "Lateri", "Gyaraspur"]
+  },
+  "Sagar": {
+    tehsils: ["Sagar Khas", "Bina", "Khurai", "Banda", "Rehli", "Garhakota", "Deori"],
+    vikasKhands: ["Sagar Vikas Khand", "Bina Vikas Khand", "Khurai Vikas Khand", "Rehli Vikas Khand"],
+    gramPanchayats: ["Bina Gram Panchayat", "Khurai Gram Panchayat", "Rehli Gram Panchayat", "Garhakota Gram Panchayat"],
+    villages: ["Sagar Khas", "Bina", "Khurai", "Banda", "Rehli", "Garhakota", "Deori"]
+  },
+  "Satna": {
+    tehsils: ["Satna Khas", "Maihar", "Nagod", "Amarpatan", "Unchehara", "Rampur Baghelan"],
+    vikasKhands: ["Satna Vikas Khand", "Maihar Vikas Khand", "Nagod Vikas Khand", "Amarpatan Vikas Khand"],
+    gramPanchayats: ["Maihar Gram Panchayat", "Nagod Gram Panchayat", "Amarpatan Gram Panchayat"],
+    villages: ["Satna Khas", "Maihar", "Nagod", "Amarpatan", "Unchehara", "Rampur Baghelan"]
+  },
+  "Rewa": {
+    tehsils: ["Rewa Khas", "Huzur", "Raipur Karchuliyan", "Mauganj", "Hanumana", "Teonthar", "Sirmaur"],
+    vikasKhands: ["Rewa Vikas Khand", "Mauganj Vikas Khand", "Hanumana Vikas Khand", "Teonthar Vikas Khand"],
+    gramPanchayats: ["Huzur Gram Panchayat", "Raipur Gram Panchayat", "Mauganj Gram Panchayat", "Hanumana Gram Panchayat"],
+    villages: ["Rewa Khas", "Huzur", "Raipur Karchuliyan", "Mauganj", "Hanumana", "Teonthar", "Sirmaur"]
+  }
+};
+
+export const getTehsilsForDistrict = (district: string): string[] => {
+  if (!district) return [];
+  if (DISTRICT_HIERARCHY_DATA[district]?.tehsils) {
+    return DISTRICT_HIERARCHY_DATA[district].tehsils;
+  }
+  return [`${district} Tehsil`, `${district} Sadar Tehsil`, `${district} North Tehsil`, `${district} South Tehsil`].filter(Boolean);
+};
+
+export const getVikasKhandsForDistrict = (district: string): string[] => {
+  if (!district) return [];
+  if (DISTRICT_HIERARCHY_DATA[district]?.vikasKhands) {
+    return DISTRICT_HIERARCHY_DATA[district].vikasKhands;
+  }
+  return [`${district} Vikas Khand`, `${district} Central Vikas Khand`, `${district} Rural Vikas Khand`].filter(Boolean);
+};
+
+export const getGramPanchayatsForDistrict = (district: string): string[] => {
+  if (!district) return [];
+  if (DISTRICT_HIERARCHY_DATA[district]?.gramPanchayats) {
+    return DISTRICT_HIERARCHY_DATA[district].gramPanchayats;
+  }
+  return [`${district} Gram Panchayat`, `${district} Main Gram Panchayat`, `${district} East Gram Panchayat`].filter(Boolean);
+};
+
+export const getVillagesForDistrict = (district: string): string[] => {
+  if (!district) return [];
+  if (DISTRICT_HIERARCHY_DATA[district]?.villages) {
+    return DISTRICT_HIERARCHY_DATA[district].villages;
+  }
+  return [`${district} Khas Village`, `${district} Village`, `${district} Rural Village`].filter(Boolean);
+};

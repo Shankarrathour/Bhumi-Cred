@@ -8,7 +8,6 @@ import {
   FileText, 
   FolderOpen, 
   Gavel, 
-  Building2, 
   DollarSign, 
   Calendar, 
   MapPin, 
@@ -16,7 +15,6 @@ import {
   Download, 
   ShieldCheck, 
   Award,
-  ChevronRight,
   TrendingUp
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -58,11 +56,11 @@ export const GovtSchemesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'tenders' | 'schemes' | 'budget'>('tenders');
   
   // Dashboard Metrics
-  const [openCount, setOpenCount] = useState(14);
+  const [openCount] = useState(14);
   const [appliedCount, setAppliedCount] = useState(6);
-  const [wonCount, setWonCount] = useState(3);
-  const [lostCount, setLostCount] = useState(2);
-  const [completedCount, setCompletedCount] = useState(1);
+  const [wonCount] = useState(3);
+  const [lostCount] = useState(2);
+  const [completedCount] = useState(1);
 
   // Search Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -527,76 +525,76 @@ export const GovtSchemesPage: React.FC = () => {
 
       {/* ── DOCUMENT CENTER MODAL ── */}
       {selectedTender && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-card border border-border w-full max-w-lg rounded-2xl shadow-2xl p-6 relative animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#E8EDF5] relative space-y-4">
             {/* Close Button */}
             <button 
               onClick={() => setSelectedTender(null)}
-              className="absolute right-4 top-4 p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg transition-colors border-0 bg-transparent cursor-pointer"
+              className="absolute right-4 top-4 p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition-colors border-0 bg-transparent cursor-pointer"
             >
               <XCircle size={20} />
             </button>
 
             {/* Modal Header */}
-            <div className="flex items-center gap-3 border-b border-border pb-4">
-              <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400">
+            <div className="flex items-center gap-3 border-b border-[#F1F5F9] pb-4">
+              <div className="bg-[#F0FDF4] p-2 rounded-xl border border-[#DCFCE7] text-[#16A34A]">
                 <FolderOpen size={22} />
               </div>
               <div>
-                <h3 className="font-extrabold text-sm text-foreground uppercase leading-tight">{selectedTender.title}</h3>
-                <span className="text-[10px] text-muted-foreground font-mono mt-0.5 block">Tender ID: {selectedTender.id}</span>
+                <h3 className="font-extrabold text-[15px] text-[#0F172A] uppercase leading-tight">{selectedTender.title}</h3>
+                <span className="text-[11px] text-[#64748B] font-mono mt-0.5 block">Tender ID: {selectedTender.id}</span>
               </div>
             </div>
 
             {/* Document center list */}
-            <div className="py-4 space-y-3.5 text-xs">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block mb-2">Tender Document Center</span>
+            <div className="py-2 space-y-3 text-xs">
+              <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-widest block mb-1">Tender Document Center</span>
               
               {/* RFP Document (Download) */}
-              <div className="flex justify-between items-center p-3 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30">
+              <div className="flex justify-between items-center p-3 rounded-xl border border-[#E8EDF5] bg-[#F8FAFC]">
                 <div>
-                  <span className="font-bold text-foreground block">RFP (Request for Proposal)</span>
-                  <span className="text-[9.5px] text-muted-foreground block font-mono mt-0.5">TND_RFP_V2.pdf • 2.4 MB</span>
+                  <span className="font-bold text-[#0F172A] block">RFP (Request for Proposal)</span>
+                  <span className="text-[10px] text-[#64748B] block font-mono mt-0.5">TND_RFP_V2.pdf • 2.4 MB</span>
                 </div>
                 <button 
                   onClick={() => toast.success('Downloaded RFP Document')}
-                  className="px-3 py-1.5 bg-card hover:bg-muted border border-border text-foreground font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
+                  className="px-3 py-1.5 bg-white hover:bg-[#F1F5F9] border border-[#E2E8F0] text-[#0F172A] font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
                 >
                   <Download size={13}/> Download
                 </button>
               </div>
 
               {/* BOQ Document (Download) */}
-              <div className="flex justify-between items-center p-3 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30">
+              <div className="flex justify-between items-center p-3 rounded-xl border border-[#E8EDF5] bg-[#F8FAFC]">
                 <div>
-                  <span className="font-bold text-foreground block">BOQ (Bill of Quantities)</span>
-                  <span className="text-[9.5px] text-muted-foreground block font-mono mt-0.5">TND_BOQ_V1.xlsx • 540 KB</span>
+                  <span className="font-bold text-[#0F172A] block">BOQ (Bill of Quantities)</span>
+                  <span className="text-[10px] text-[#64748B] block font-mono mt-0.5">TND_BOQ_V1.xlsx • 540 KB</span>
                 </div>
                 <button 
                   onClick={() => toast.success('Downloaded BOQ Document')}
-                  className="px-3 py-1.5 bg-card hover:bg-muted border border-border text-foreground font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
+                  className="px-3 py-1.5 bg-white hover:bg-[#F1F5F9] border border-[#E2E8F0] text-[#0F172A] font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
                 >
                   <Download size={13}/> Download
                 </button>
               </div>
 
               {/* Uploads Section */}
-              <div className="border-t border-border/80 pt-4 space-y-3.5">
+              <div className="border-t border-[#F1F5F9] pt-3 space-y-3">
                 
                 {/* Eligibility Check list (Upload) */}
-                <div className="flex justify-between items-center p-3 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30">
+                <div className="flex justify-between items-center p-3 rounded-xl border border-[#E8EDF5] bg-[#F8FAFC]">
                   <div>
-                    <span className="font-bold text-foreground block">Eligibility Checklist & Annexure</span>
-                    <span className="text-[9.5px] text-muted-foreground block mt-0.5">Verification standard for forest land holding</span>
+                    <span className="font-bold text-[#0F172A] block">Eligibility Checklist & Annexure</span>
+                    <span className="text-[10px] text-[#64748B] block mt-0.5">Verification standard for forest land holding</span>
                   </div>
                   {uploadedDocs['Eligibility Checklist'] ? (
-                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-mono">
+                    <span className="text-[11px] font-bold text-[#16A34A] flex items-center gap-1 font-mono">
                       <CheckCircle2 size={13}/> Uploaded
                     </span>
                   ) : (
                     <button 
                       onClick={() => handleUploadDoc('Eligibility Checklist')}
-                      className="px-3 py-1.5 bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
+                      className="px-3 py-1.5 bg-[#F0FDF4] border border-[#DCFCE7] hover:bg-[#DCFCE7] text-[#16A34A] font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
                     >
                       <Upload size={13}/> Upload
                     </button>
@@ -604,19 +602,19 @@ export const GovtSchemesPage: React.FC = () => {
                 </div>
 
                 {/* Certificates (Upload) */}
-                <div className="flex justify-between items-center p-3 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30">
+                <div className="flex justify-between items-center p-3 rounded-xl border border-[#E8EDF5] bg-[#F8FAFC]">
                   <div>
-                    <span className="font-bold text-foreground block">Empanelment Certificates</span>
-                    <span className="text-[9.5px] text-muted-foreground block mt-0.5">Auditor and land registration approvals</span>
+                    <span className="font-bold text-[#0F172A] block">Empanelment Certificates</span>
+                    <span className="text-[10px] text-[#64748B] block mt-0.5">Auditor and land registration approvals</span>
                   </div>
                   {uploadedDocs['Certificates'] ? (
-                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-mono">
+                    <span className="text-[11px] font-bold text-[#16A34A] flex items-center gap-1 font-mono">
                       <CheckCircle2 size={13}/> Uploaded
                     </span>
                   ) : (
                     <button 
                       onClick={() => handleUploadDoc('Certificates')}
-                      className="px-3 py-1.5 bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
+                      className="px-3 py-1.5 bg-[#F0FDF4] border border-[#DCFCE7] hover:bg-[#DCFCE7] text-[#16A34A] font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
                     >
                       <Upload size={13}/> Upload
                     </button>
@@ -624,19 +622,19 @@ export const GovtSchemesPage: React.FC = () => {
                 </div>
 
                 {/* Proposal Document (Upload) */}
-                <div className="flex justify-between items-center p-3 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-900/30">
+                <div className="flex justify-between items-center p-3 rounded-xl border border-[#E8EDF5] bg-[#F8FAFC]">
                   <div>
-                    <span className="font-bold text-foreground block">Proposal Document (Required)</span>
-                    <span className="text-[9.5px] text-muted-foreground block mt-0.5">Submit financial bid & implementation layout</span>
+                    <span className="font-bold text-[#0F172A] block">Proposal Document (Required)</span>
+                    <span className="text-[10px] text-[#64748B] block mt-0.5">Submit financial bid & implementation layout</span>
                   </div>
                   {uploadedDocs['Proposal Document'] ? (
-                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-mono">
+                    <span className="text-[11px] font-bold text-[#16A34A] flex items-center gap-1 font-mono">
                       <CheckCircle2 size={13}/> Uploaded
                     </span>
                   ) : (
                     <button 
                       onClick={() => handleUploadDoc('Proposal Document')}
-                      className="px-3 py-1.5 bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
+                      className="px-3 py-1.5 bg-[#F0FDF4] border border-[#DCFCE7] hover:bg-[#DCFCE7] text-[#16A34A] font-bold text-[11px] rounded-lg transition-colors flex items-center gap-1 border-0 cursor-pointer"
                     >
                       <Upload size={13}/> Upload
                     </button>
@@ -647,21 +645,21 @@ export const GovtSchemesPage: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="pt-4 border-t border-border flex items-center justify-between gap-3">
-              <span className="text-[10px] text-muted-foreground">
+            <div className="pt-3 border-t border-[#F1F5F9] flex items-center justify-between gap-3">
+              <span className="text-[10.5px] text-[#94A3B8]">
                 All uploads require digital signatures.
               </span>
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => setSelectedTender(null)}
-                  className="px-3.5 py-1.5 bg-card hover:bg-muted border border-border text-foreground text-[11px] font-bold rounded-lg cursor-pointer"
+                  className="px-4 py-2 bg-[#F8FAFC] hover:bg-[#E2E8F0] border border-[#CBD5E1] text-[#0F172A] text-[12px] font-bold rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
                 {selectedTender.status === 'OPEN' && (
                   <button 
                     onClick={handleApplyTender}
-                    className="px-3.5 py-1.5 bg-primary hover:bg-primary/95 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-xs border-0 cursor-pointer"
+                    className="px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white text-[12px] font-bold rounded-xl flex items-center gap-1 shadow-xs border-0 cursor-pointer"
                   >
                     Submit Bid Application
                   </button>
