@@ -242,6 +242,10 @@ def create_app() -> FastAPI:
         upload_dir.mkdir(parents=True, exist_ok=True)
         app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
 
+    banners_dir = Path("uploads/banners")
+    banners_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/banners", StaticFiles(directory=str(banners_dir)), name="banners")
+
     # ── Health check ──────────────────────────────────────────────────────────
     @app.get("/health", tags=["Health"], include_in_schema=False)
     async def health() -> dict:

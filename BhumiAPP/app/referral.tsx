@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Clipboard, Alert, Image, Dimensions
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Clipboard, Alert, Image, Dimensions, ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,26 +8,56 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../src/theme/theme';
 import { useAuthStore } from '../src/store/authStore';
+import api from '../src/api/apiClient';
 
 const { width } = Dimensions.get('window');
 
-const REFERRED_FARMERS = [
-  { id: '1', name: 'Ramesh Patel', village: 'Sehore, MP', date: '04 Aug 2026', status: 'Verified', reward: '₹500 + 10 tCO₂e' },
-  { id: '2', name: 'Suresh Verma', village: 'Indore, MP', date: '01 Aug 2026', status: 'Verified', reward: '₹500 + 10 tCO₂e' },
-  { id: '3', name: 'Kavita Rao', village: 'Ujjain, MP', date: '28 Jul 2026', status: 'Pending Verification', reward: 'Pending' },
-  { id: '4', name: 'Mohan Singh', village: 'Betul, MP', date: '20 Jul 2026', status: 'Verified', reward: '₹500 + 10 tCO₂e' },
-];
+interface ReferralItem {
+  id: string;
+  name: string;
+  village: string;
+  date: string;
+  status: string;
+  reward: string;
+}
 
 export default function ReferralScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
 
-  const referralCode = user?.mobile
-    ? `BHUMI-${user.mobile.slice(-4)}`
-    : 'BHUMI-9021';
-
+  const [loading, setLoading] = useState(true);
+  const [referralCode, setReferralCode] = useState<string>(
+    user?.mobile ? `BHUMI-${user.mobile.slice(-4)}` : 'BHUMI-3449'
+  );
+  const [farmersInvited, setFarmersInvited] = useState<number>(0);
+  const [cashEarned, setCashEarned] = useState<number>(0);
+  const [carbonBonus, setCarbonBonus] = useState<number>(0);
+  const [referredList, setReferredList] = useState<ReferralItem[]>([]);
   const [copied, setCopied] = useState(false);
+
+  const fetchReferralData = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/farmer/referrals/my-code');
+      if (res.data && res.data.success && res.data.data) {
+        const d = res.data.data;
+        if (d.referral_code) setReferralCode(d.referral_code);
+        setFarmersInvited(d.farmers_invited ?? 0);
+        setCashEarned(d.cash_earned ?? 0);
+        setCarbonBonus(d.carbon_bonus_tco2e ?? 0);
+        if (d.referred_farmers) setReferredList(d.referred_farmers);
+      }
+    } catch (err) {
+      console.log('Error loading referral summary:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReferralData();
+  }, []);
 
   const handleCopy = () => {
     Clipboard.setString(referralCode);
@@ -114,15 +144,15 @@ export default function ReferralScreen() {
         {/* Rewards Summary Bar */}
         <View style={styles.rewardsRow}>
           <View style={styles.rewardStatCard}>
-            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statNumber}>{farmersInvited}</Text>
             <Text style={styles.statLabel}>Farmers Invited</Text>
           </View>
           <View style={styles.rewardStatCard}>
-            <Text style={[styles.statNumber, { color: '#16A34A' }]}>₹6,000</Text>
+            <Text style={[styles.statNumber, { color: '#16A34A' }]}>₹{cashEarned.toLocaleString()}</Text>
             <Text style={styles.statLabel}>Cash Earned</Text>
           </View>
           <View style={styles.rewardStatCard}>
-            <Text style={[styles.statNumber, { color: '#2563EB' }]}>120 tCO₂e</Text>
+            <Text style={[styles.statNumber, { color: '#2563EB' }]}>{carbonBonus} tCO₂e</Text>
             <Text style={styles.statLabel}>Carbon Bonus</Text>
           </View>
         </View>
@@ -166,38 +196,35 @@ export default function ReferralScreen() {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionHeaderTitle}>Referred Farmers Activity</Text>
 
-          {REFERRED_FARMERS.map((item) => (
-            <View key={item.id} style={styles.historyRow}>
-              <View style={styles.historyAvatar}>
-                <Text style={styles.avatarText}>{item.name.substring(0, 2).toUpperCase()}</Text>
-              </View>
+          {referredList.length === 0 ? (
+            <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, color: COLORS.textSecondary, fontWeight: '600' }}>No referrals recorded yet</Text>
+            </View>
+          ) : (
+            referredList.map((item) => (
+              <View key={item.id} style={styles.historyRow}>
+                <View style={styles.historyAvatar}>
+                  <Text style={styles.avatarText}>{item.name.substring(0, 2).toUpperCase()}</Text>
+                </View>
 
-              <View style={styles.historyMain}>
-                <Text style={styles.farmerName}>{item.name}</Text>
-                <Text style={styles.farmerSub}>{item.village} • Joined {item.date}</Text>
-              </View>
+                <View style={styles.historyMain}>
+                  <Text style={styles.farmerName}>{item.name}</Text>
+                  <Text style={styles.farmerSub}>{item.village} • Joined {item.date}</Text>
+                </View>
 
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[
-                  styles.rewardTag,
-                  item.status === 'Verified' ? { color: '#16A34A' } : { color: '#D97706' }
-                ]}>
-                  {item.reward}
-                </Text>
-                <View style={[
-                  styles.statusPill,
-                  item.status === 'Verified' ? { backgroundColor: '#DCFCE7' } : { backgroundColor: '#FEF3C7' }
-                ]}>
-                  <Text style={[
-                    styles.statusPillText,
-                    item.status === 'Verified' ? { color: '#16A34A' } : { color: '#D97706' }
-                  ]}>
-                    {item.status}
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.rewardText, item.status !== 'Verified' && { color: COLORS.textSecondary }]}>
+                    {item.reward}
                   </Text>
+                  <View style={[styles.statusBadge, item.status === 'Verified' ? styles.statusVerified : styles.statusPending]}>
+                    <Text style={[styles.statusBadgeText, item.status === 'Verified' ? styles.statusVerifiedText : styles.statusPendingText]}>
+                      {item.status}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
       </ScrollView>
     </View>

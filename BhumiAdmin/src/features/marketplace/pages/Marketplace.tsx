@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ShoppingCart, RefreshCw, Eye, Store, Package, TrendingUp, RotateCcw, Download, Layers
+  ShoppingCart, RefreshCw, Eye, Store, Package, TrendingUp, RotateCcw, Download, Layers, CheckCircle, Truck
 } from 'lucide-react';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { KpiCard } from '../../../components/ui/KpiCard';
@@ -449,13 +449,32 @@ export const Marketplace = () => {
   };
 
   const handleProcessRefund = (orderId: string) => {
+    const orderObj = ordersList.find(o => o.id === orderId);
+    const isRealOrder = orderId.length === 24;
+
+    if (isRealOrder) {
+      updateOrderStatus({ orderId, status: 'Returned' }, {
+        onSuccess: () => {
+          toast.success(`Refund of ₹${(orderObj?.total_amount ?? 0).toLocaleString()} processed & notification sent!`);
+        },
+        onError: () => {
+          toast.error("Failed to sync refund on backend server.");
+        }
+      });
+    } else {
+      toast.success(`Refund of ₹${(orderObj?.total_amount ?? 0).toLocaleString()} processed for Order ${orderObj?.order_id || orderId}!`);
+    }
+
     setOrdersList(prev => prev.map(o => {
       if (o.id === orderId) {
-        toast.success(`Refund of ₹${(o.total_amount ?? 0).toLocaleString()} processed for Order ${o.order_id}!`);
         return { ...o, payment_status: 'REFUNDED', order_status: 'Returned' };
       }
       return o;
     }));
+
+    if (selectedOrder && selectedOrder.id === orderId) {
+      setSelectedOrder(prev => prev ? { ...prev, payment_status: 'REFUNDED', order_status: 'Returned' } : null);
+    }
   };
 
   return (
@@ -684,9 +703,38 @@ export const Marketplace = () => {
                       />
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button onClick={() => setSelectedOrder(o)} className="btn btn-secondary btn-sm gap-1 ml-auto cursor-pointer">
-                        <Eye size={13} /> Order Details
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {o.order_status === 'Pending' && (
+                          <button
+                            onClick={() => handleUpdateOrderStatus(o.id, 'Packed')}
+                            className="px-2.5 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg border border-[#DCFCE7] transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                            title="Approve order & send to packing"
+                          >
+                            <CheckCircle size={13} /> Approve Order
+                          </button>
+                        )}
+                        {o.order_status === 'Packed' && (
+                          <button
+                            onClick={() => handleUpdateOrderStatus(o.id, 'Shipped')}
+                            className="px-2.5 py-1 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] text-[11.5px] font-bold rounded-lg border border-[#DBEAFE] transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                            title="Dispatch & ship order"
+                          >
+                            <Truck size={13} /> Dispatch & Ship
+                          </button>
+                        )}
+                        {o.order_status === 'Shipped' && (
+                          <button
+                            onClick={() => handleUpdateOrderStatus(o.id, 'Delivered')}
+                            className="px-2.5 py-1 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg border border-[#DCFCE7] transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                            title="Mark order delivered"
+                          >
+                            <CheckCircle size={13} /> Mark Delivered
+                          </button>
+                        )}
+                        <button onClick={() => setSelectedOrder(o)} className="btn btn-secondary btn-sm gap-1 cursor-pointer">
+                          <Eye size={13} /> Order Details
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -743,8 +791,26 @@ export const Marketplace = () => {
               </div>
 
               {/* Status Updater */}
-              <div className="p-3.5 border border-[#E8EDF5] rounded-xl space-y-2 bg-[#F8FAFC]">
-                <span className="text-[11px] font-bold text-[#0F172A] uppercase">Update Order Status</span>
+              <div className="p-3.5 border border-[#E8EDF5] rounded-xl space-y-2.5 bg-[#F8FAFC]">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-[11px] font-bold text-[#0F172A] uppercase">Update Order Status</span>
+                  {selectedOrder.order_status === 'Pending' && (
+                    <button
+                      onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'Packed')}
+                      className="px-3 py-1 bg-[#16A34A] hover:bg-[#15803D] text-white text-[12px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <CheckCircle size={14} /> Approve & Pack Order
+                    </button>
+                  )}
+                  {selectedOrder.order_status === 'Packed' && (
+                    <button
+                      onClick={() => handleUpdateOrderStatus(selectedOrder.id, 'Shipped')}
+                      className="px-3 py-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[12px] font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Truck size={14} /> Dispatch & Ship Order
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {ORDER_STATUSES.map(s => (
                     <button

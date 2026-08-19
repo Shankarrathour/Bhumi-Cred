@@ -684,12 +684,12 @@ export const CMSPage: React.FC = () => {
                     )}
                     {apiBanners.map(banner => (
                       <div key={banner.id} className={cn("border bg-card rounded-xl overflow-hidden flex flex-col shadow-sm transition-all hover:shadow-md", banner.is_active ? "border-border" : "opacity-60 border-dashed border-border")}>
-                        <div style={{ aspectRatio: 3 }} className="relative bg-muted border-b border-border overflow-hidden">
+                        <div style={{ aspectRatio: 2.2 }} className="relative bg-slate-950 border-b border-border overflow-hidden p-0.5">
                           <img 
                             src={banner.image_url || banner.imageUrl} 
                             alt={banner.title || "Promotional banner"} 
                             loading="lazy" 
-                            className="w-full h-full object-cover object-center" 
+                            className="w-full h-full object-contain object-center rounded-lg" 
                           />
                           <div className="absolute top-2 right-2 flex gap-1.5">
                             <button 

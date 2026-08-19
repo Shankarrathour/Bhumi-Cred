@@ -99,23 +99,45 @@ class EcologicalService:
         else:
             candidate_farmers = all_active_farmers
 
-        my_credits = farmer.carbon_credits_generated or 0.0
-        my_acres = total_acres
+        # Helper function to calculate real total trees and land acreage for any farmer from MongoDB
+        async def compute_farmer_tree_and_land(f: Farmer) -> tuple[int, float]:
+            f_parcels = await LandParcel.find(
+                LandParcel.farmer_id == str(f.id),
+                LandParcel.is_deleted == False
+            ).to_list()
+
+            f_trees = f.total_trees or 0
+            f_acres = f.total_acreage or 0.0
+
+            if f_parcels:
+                p_trees = sum(
+                    p.tree_stock_count or (sum(t.count for t in p.trees) if p.trees else 0)
+                    for p in f_parcels
+                )
+                p_acres = sum(p.area_acres for p in f_parcels if p.area_acres)
+                f_trees = max(f_trees, p_trees)
+                f_acres = max(f_acres, p_acres)
+
+            return f_trees, f_acres
+
+        # Compute current farmer's metrics
+        my_trees, my_acres = await compute_farmer_tree_and_land(farmer)
+        # Dynamic Green Score: (Trees * 10) + (Land Acres * 5) + Sustainability Score
+        my_score = (my_trees * 10) + (my_acres * 5) + (farmer.sustainability_score or 0)
 
         higher_count = 0
         for f in candidate_farmers:
             if str(f.id) == str(farmer.id):
                 continue
-            f_score = f.sustainability_score or 0
-            f_credits = f.carbon_credits_generated or 0.0
-            f_acres = f.total_acreage or 0.0
+            f_trees, f_acres = await compute_farmer_tree_and_land(f)
+            f_score = (f_trees * 10) + (f_acres * 5) + (f.sustainability_score or 0)
 
-            if f_score > eco_index:
+            if f_score > my_score:
                 higher_count += 1
-            elif f_score == eco_index:
-                if f_credits > my_credits:
+            elif f_score == my_score:
+                if f_trees > my_trees:
                     higher_count += 1
-                elif f_credits == my_credits and f_acres > my_acres:
+                elif f_trees == my_trees and f_acres > my_acres:
                     higher_count += 1
 
         district_rank = higher_count + 1

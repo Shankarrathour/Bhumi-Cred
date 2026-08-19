@@ -39,12 +39,10 @@ const adminApi = axios.create({
 });
 
 adminApi.interceptors.request.use((config) => {
-  if (_accessToken) {
-    config.headers = {
-      ...config.headers,
-      Authorization: `Bearer ${_accessToken}`
-    } as any;
-    config.headers.Authorization = `Bearer ${_accessToken}`;
+  const token = _accessToken || localStorage.getItem('admin_access_token') || localStorage.getItem('token');
+  if (token) {
+    config.headers = config.headers || {};
+    (config.headers as any).Authorization = `Bearer ${token}`;
   }
   return config;
 });

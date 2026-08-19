@@ -88,8 +88,20 @@ export default function HomeScreen() {
   const isLoading = isHomeLoading || indexIsLoading;
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [cmsDashboardData, setCmsDashboardData] = useState<any>(null);
+  const [badgeCabinet, setBadgeCabinet] = useState<any[]>([]);
 
   const [apiBanners, setApiBanners] = useState<any[]>([]);
+
+  const fetchBadgeCabinet = async () => {
+    try {
+      const response = await api.get('/farmer/badges/my-cabinet');
+      if (response.data && response.data.success && response.data.data?.badges) {
+        setBadgeCabinet(response.data.data.badges);
+      }
+    } catch (error) {
+      console.warn('[HomeScreen] Error fetching badge cabinet:', error);
+    }
+  };
 
   const fetchBannersData = async () => {
     try {
@@ -137,7 +149,7 @@ export default function HomeScreen() {
     fetchProfile().catch(() => {});
     const loadData = async () => {
       setIndexIsLoading(true);
-      await Promise.all([fetchDashboardData(), fetchBannersData(), fetchCmsData()]);
+      await Promise.all([fetchDashboardData(), fetchBannersData(), fetchCmsData(), fetchBadgeCabinet()]);
       setIndexIsLoading(false);
     };
     loadData();
@@ -481,6 +493,30 @@ export default function HomeScreen() {
   };
 
   // Hero carousel scrolling hooks
+  const LOCAL_BANNER_ASSETS: Record<string, any> = {
+    '/banners/solar_irrigation.jpg': require('../../assets/banners/solar_irrigation.jpg'),
+    '/banners/bio_fertilizer.jpg': require('../../assets/banners/bio_fertilizer.jpg'),
+    '/banners/monsoon_reforestation.jpg': require('../../assets/banners/monsoon_reforestation.jpg'),
+    'solar_irrigation.jpg': require('../../assets/banners/solar_irrigation.jpg'),
+    'bio_fertilizer.jpg': require('../../assets/banners/bio_fertilizer.jpg'),
+    'monsoon_reforestation.jpg': require('../../assets/banners/monsoon_reforestation.jpg'),
+  };
+
+  const resolveBannerSource = (url: string | undefined) => {
+    if (!url) return require('../../assets/banners/solar_irrigation.jpg');
+    if (LOCAL_BANNER_ASSETS[url]) {
+      return LOCAL_BANNER_ASSETS[url];
+    }
+    const cleanKey = url.split('/').pop() || '';
+    if (LOCAL_BANNER_ASSETS[cleanKey]) {
+      return LOCAL_BANNER_ASSETS[cleanKey];
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return { uri: url };
+    }
+    return { uri: `http://10.193.52.135:8000${url.startsWith('/') ? '' : '/'}${url}` };
+  };
+
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const heroFlatListRef = useRef<FlatList>(null);
   const heroTimerRef = useRef<any>(null);
@@ -972,6 +1008,8 @@ export default function HomeScreen() {
                   onScrollToIndexFailed={onHeroScrollToIndexFailed}
                   getItemLayout={getHeroItemLayout}
                   renderItem={({ item }) => {
+                    const rawUrl = item.image_url || item.imageUrl;
+                    const bannerSource = resolveBannerSource(rawUrl);
                     return (
                       <View style={styles.heroSlideWrapper}>
                         <TouchableOpacity
@@ -980,9 +1018,9 @@ export default function HomeScreen() {
                           style={styles.heroSlide}
                         >
                           <Image
-                            source={{ uri: item.image_url || item.imageUrl }}
+                            source={bannerSource}
                             style={styles.heroImage}
-                            resizeMode="cover"
+                            resizeMode="stretch"
                           />
                         </TouchableOpacity>
                       </View>
@@ -1198,49 +1236,55 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.badgeScrollContent}
             >
-              {[
-                { id: '1', title: 'Green Farmer', icon: 'sprout', unlocked: true, color: '#10B981', level: 'Lvl 3' },
-                { id: '2', title: 'Land Owner', icon: 'image-filter-hdr', unlocked: true, color: '#0F766E', level: 'Lvl 1' },
-                { id: '3', title: 'Agro Hero', icon: 'shovel', unlocked: false, color: '#94A3B8', level: 'Locked' },
-                { id: '4', title: 'Plant Champion', icon: 'tree', unlocked: false, color: '#94A3B8', level: 'Locked' },
-                { id: '5', title: 'Eco Guardian', icon: 'shield-check', unlocked: false, color: '#94A3B8', level: 'Locked' },
-              ].map((badge) => (
-                <TouchableOpacity
-                  key={badge.id}
-                  style={[
-                    styles.badgeCard,
-                    badge.unlocked ? styles.badgeUnlocked : styles.badgeLocked
-                  ]}
-                  activeOpacity={0.8}
-                  onPress={() => router.push('/(tabs)/profile')}
-                >
-                  <LinearGradient
-                    colors={badge.unlocked ? ['#F0FDF4', '#DCFCE7'] : ['#F1F5F9', '#E2E8F0']}
-                    style={styles.badgeGradient}
+              {(badgeCabinet && badgeCabinet.length > 0 ? badgeCabinet : [
+                { id: 'badge_land_owner', title: 'Land Owner', icon: 'terrain', status: 'UNLOCKED', level: 1, unlocked_reason: 'Registered land parcel' },
+                { id: 'badge_agro_hero', title: 'Agro Hero', icon: 'shovel', status: 'UNLOCKED', level: 1, unlocked_reason: 'Soil test audit ready' },
+                { id: 'badge_plant_champion', title: 'Plant Champion', icon: 'tree', status: 'LOCKED', level: 0 },
+                { id: 'badge_eco_networker', title: 'Eco Networker', icon: 'account-group', status: 'LOCKED', level: 0 },
+                { id: 'badge_carbon_pioneer', title: 'Carbon Pioneer', icon: 'medal', status: 'LOCKED', level: 0 },
+              ]).map((badge: any) => {
+                const isUnlocked = badge.status === 'UNLOCKED' || badge.unlocked === true;
+                const levelLabel = isUnlocked ? `LVL ${badge.level || 1}` : 'LOCKED';
+                const badgeColor = isUnlocked ? '#10B981' : '#94A3B8';
+
+                return (
+                  <TouchableOpacity
+                    key={badge.id || badge.badge_code}
+                    style={[
+                      styles.badgeCard,
+                      isUnlocked ? styles.badgeUnlocked : styles.badgeLocked
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => Alert.alert(badge.title, `${badge.description || ''}\n\nReason: ${badge.unlocked_reason || 'Complete activity to unlock'}`)}
                   >
-                    <View style={[
-                      styles.badgeIconCircle,
-                      { backgroundColor: badge.unlocked ? '#FFFFFF' : '#CBD5E1' }
-                    ]}>
-                      <MaterialCommunityIcons
-                        name={badge.icon as any}
-                        size={20}
-                        color={badge.unlocked ? badge.color : '#64748B'}
-                      />
-                    </View>
-                    <Text style={[
-                      styles.badgeCardTitle,
-                      { color: badge.unlocked ? COLORS.primaryDark : '#64748B' }
-                    ]} numberOfLines={1}>{badge.title}</Text>
-                    <View style={[
-                      styles.badgeLevelBadge,
-                      { backgroundColor: badge.unlocked ? COLORS.primary : '#94A3B8' }
-                    ]}>
-                      <Text style={styles.badgeLevelText}>{badge.level}</Text>
-                    </View>
-                  </LinearGradient>
-                </TouchableOpacity>
-              ))}
+                    <LinearGradient
+                      colors={isUnlocked ? ['#F0FDF4', '#DCFCE7'] : ['#F1F5F9', '#E2E8F0']}
+                      style={styles.badgeGradient}
+                    >
+                      <View style={[
+                        styles.badgeIconCircle,
+                        { backgroundColor: isUnlocked ? '#FFFFFF' : '#CBD5E1' }
+                      ]}>
+                        <MaterialCommunityIcons
+                          name={(badge.icon || 'sprout') as any}
+                          size={20}
+                          color={isUnlocked ? badgeColor : '#64748B'}
+                        />
+                      </View>
+                      <Text style={[
+                        styles.badgeCardTitle,
+                        { color: isUnlocked ? COLORS.primaryDark : '#64748B' }
+                      ]} numberOfLines={1}>{badge.title}</Text>
+                      <View style={[
+                        styles.badgeLevelBadge,
+                        { backgroundColor: isUnlocked ? COLORS.primary : '#94A3B8' }
+                      ]}>
+                        <Text style={styles.badgeLevelText}>{levelLabel}</Text>
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           )}
         </View>
@@ -1360,13 +1404,13 @@ export default function HomeScreen() {
                   <Animated.View style={[
                     styles.pulseProgressBarFill,
                     {
-                      width: `${cmsDashboardData?.solar_energy ?? 74}%`,
+                      width: `${cmsDashboardData?.solar_energy ?? 99}%`,
                       backgroundColor: "#EAB308",
                       opacity: glowAnim
                     }
                   ]} />
                 </View>
-                <Text style={styles.pulseActivityVal}>{cmsDashboardData?.solar_energy ?? 74}% Absorption</Text>
+                <Text style={styles.pulseActivityVal}>{cmsDashboardData?.solar_energy ?? 99}% Absorption</Text>
               </View>
 
               <View style={styles.pulseActivityItem}>
@@ -1378,13 +1422,13 @@ export default function HomeScreen() {
                   <Animated.View style={[
                     styles.pulseProgressBarFill,
                     {
-                      width: `${cmsDashboardData?.plantation_health ?? 92}%`,
+                      width: `${cmsDashboardData?.plantation_health ?? 64}%`,
                       backgroundColor: "#10B981",
                       opacity: glowAnim
                     }
                   ]} />
                 </View>
-                <Text style={styles.pulseActivityVal}>{cmsDashboardData?.plantation_health ?? 92}% NDVI Healthy</Text>
+                <Text style={styles.pulseActivityVal}>{cmsDashboardData?.plantation_health ?? 64}% NDVI Healthy</Text>
               </View>
             </View>
 
@@ -1414,25 +1458,25 @@ export default function HomeScreen() {
               <View style={styles.trendMetricRow}>
                 <Text style={styles.trendMetricLabel}>Nitrogen Retention Rate</Text>
                 <View style={styles.trendProgressBarBg}>
-                  <View style={[styles.trendProgressBarFill, { width: `${cmsDashboardData?.nitrogen_retention_rate ?? 82}%`, backgroundColor: "#22C55E" }]} />
+                  <View style={[styles.trendProgressBarFill, { width: `${cmsDashboardData?.nitrogen_retention_rate ?? 88}%`, backgroundColor: "#22C55E" }]} />
                 </View>
-                <Text style={styles.trendMetricVal}>{cmsDashboardData?.nitrogen_retention_rate ?? 82}% Excellent</Text>
+                <Text style={styles.trendMetricVal}>{cmsDashboardData?.nitrogen_retention_rate ?? 88}% Excellent</Text>
               </View>
 
               <View style={styles.trendMetricRow}>
                 <Text style={styles.trendMetricLabel}>Soil Organic Carbon (SOC)</Text>
                 <View style={styles.trendProgressBarBg}>
-                  <View style={[styles.trendProgressBarFill, { width: `${cmsDashboardData?.soil_organic_carbon ?? 50}%`, backgroundColor: "#0D9488", maxWidth: '100%' }]} />
+                  <View style={[styles.trendProgressBarFill, { width: `${cmsDashboardData?.soil_organic_carbon ?? 97}%`, backgroundColor: "#0D9488", maxWidth: '100%' }]} />
                 </View>
-                <Text style={styles.trendMetricVal}>{cmsDashboardData?.soil_organic_carbon ?? 50}% Healthy</Text>
+                <Text style={styles.trendMetricVal}>{cmsDashboardData?.soil_organic_carbon ?? 97}% Healthy</Text>
               </View>
 
               <View style={styles.trendMetricRow}>
                 <Text style={styles.trendMetricLabel}>Boundary Tree Cover</Text>
                 <View style={styles.trendProgressBarBg}>
-                  <View style={[styles.trendProgressBarFill, { width: `${cmsDashboardData?.boundary_tree_cover ?? 48}%`, backgroundColor: "#84CC16" }]} />
+                  <View style={[styles.trendProgressBarFill, { width: `${cmsDashboardData?.boundary_tree_cover ?? 62}%`, backgroundColor: "#84CC16" }]} />
                 </View>
-                <Text style={styles.trendMetricVal}>{cmsDashboardData?.boundary_tree_cover ?? 48}% Growing</Text>
+                <Text style={styles.trendMetricVal}>{cmsDashboardData?.boundary_tree_cover ?? 62}% Growing</Text>
               </View>
             </View>
           </View>
@@ -1979,11 +2023,12 @@ const styles = StyleSheet.create({
   heroSlide: {
     borderRadius: 20,
     overflow: 'hidden',
+    backgroundColor: '#052E16',
   },
   heroImage: {
     width: '100%',
-    aspectRatio: 3,
-    backgroundColor: '#0F172A',
+    height: 155,
+    borderRadius: 20,
   },
   heroLeft: {
     flex: 1.4,

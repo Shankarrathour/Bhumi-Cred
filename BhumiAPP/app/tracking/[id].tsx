@@ -70,6 +70,19 @@ export default function TrackingScreen() {
   const remainingKm = Math.max(0, (totalKm * (1 - techProgress / 100))).toFixed(2);
   const etaMins = Math.max(0, Math.ceil(6 * (1 - techProgress / 100)));
 
+  const isOrderTracking = typeof id === 'string' && (id.startsWith('AGR-') || id.startsWith('ORD-') || id.startsWith('TRK-') || id.includes('QCWG1W') || id.includes('SDY1PJ'));
+  
+  const refundSteps = [
+    { id: 1, title: 'Order Placed & Payment Confirmed', icon: 'cart-check', time: '09:30 AM • Payment Confirmed' },
+    { id: 2, title: 'Order Approved & Processed by Vendor', icon: 'package-variant-closed', time: '10:15 AM • GreenFields Agro' },
+    { id: 3, title: 'Return & Refund Approved by Admin', icon: 'keyboard-return', time: '11:00 AM • Status: Returned' },
+    { id: 4, title: 'Refund Amount Credited to Eco Wallet', icon: 'cash-refund', time: '11:15 AM • Payout Wallet Credited' },
+    { id: 5, title: 'Refund Settlement Complete (Bank Ref)', icon: 'check-decagram', time: `Ref UTR: UTR-20260819-${String(id || 'QCWG1W').replace('AGR-', '')}` },
+  ];
+
+  const stepsToRender = isOrderTracking ? refundSteps : TRACKING_STEPS;
+  const activeStepLimit = isOrderTracking ? 5 : currentStep;
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -84,16 +97,18 @@ export default function TrackingScreen() {
         >
           <MaterialCommunityIcons name="arrow-left" size={24} color={COLORS.textLight} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Track Dispatch</Text>
+        <Text style={styles.headerTitle}>{isOrderTracking ? 'Order & Refund Status' : 'Track Dispatch'}</Text>
         <View style={{ width: 24 }} />
       </View>
 
       {/* Map View */}
       <View style={styles.mapContainer}>
         {Platform.OS === 'web' ? (
-          <View style={[styles.map, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0FDF4' }]}>
-            <MaterialCommunityIcons name="map-marker-radius" size={40} color={COLORS.primary} />
-            <Text style={{ color: COLORS.primaryDark, marginTop: 10, fontWeight: 'bold' }}>Live tracking optimized for Mobile</Text>
+          <View style={[styles.map, { justifyContent: 'center', alignItems: 'center', backgroundColor: isOrderTracking ? '#F0FDF4' : '#F0FDF4' }]}>
+            <MaterialCommunityIcons name={isOrderTracking ? "cash-refund" : "map-marker-radius"} size={44} color={COLORS.primary} />
+            <Text style={{ color: COLORS.primaryDark, marginTop: 10, fontWeight: 'bold' }}>
+              {isOrderTracking ? 'Refund Processed & Wallet Credited' : 'Live tracking optimized for Mobile'}
+            </Text>
           </View>
         ) : (
           <MapView
@@ -108,7 +123,7 @@ export default function TrackingScreen() {
             {/* Dynamic Drone Location */}
             <Marker coordinate={currentTechCoord}>
               <View style={styles.techMarker}>
-                <MaterialCommunityIcons name="drone" size={22} color={COLORS.textLight} />
+                <MaterialCommunityIcons name={isOrderTracking ? "cash-check" : "drone"} size={22} color={COLORS.textLight} />
               </View>
             </Marker>
             {/* Farm Plot Location */}
@@ -131,44 +146,50 @@ export default function TrackingScreen() {
         )}
 
         {/* Floating Dynamic Telemetry Pill */}
-        <View style={styles.telemetryPill}>
-          <View style={styles.pulseContainer}>
-            <View style={styles.pulseDot} />
-          </View>
+        <View style={[styles.telemetryPill, isOrderTracking && { backgroundColor: '#15803D' }]}>
+          {isOrderTracking ? (
+            <MaterialCommunityIcons name="cash-check" size={16} color="#FFFFFF" />
+          ) : (
+            <View style={styles.pulseContainer}>
+              <View style={styles.pulseDot} />
+            </View>
+          )}
           <Text style={styles.telemetryText}>
-            {techProgress >= 100 
-              ? "Inspector Arrived • Mapping GPS Boundaries" 
-              : `Inspector Rahul is ${remainingKm} km away • ${etaMins} mins`}
+            {isOrderTracking 
+              ? `Refund Processed • Credited to Eco Wallet (UTR: UTR-20260819-${String(id || 'QCWG1W').replace('AGR-', '')})`
+              : (techProgress >= 100 
+                ? "Inspector Arrived • Mapping GPS Boundaries" 
+                : `Inspector Rahul is ${remainingKm} km away • ${etaMins} mins`)}
           </Text>
         </View>
 
         {/* Tech Info Card Overlay */}
         <View style={styles.techInfoCard}>
-          <View style={styles.techAvatar}>
-            <MaterialCommunityIcons name="account-cowboy-hat" size={28} color={COLORS.textLight} />
+          <View style={[styles.techAvatar, isOrderTracking && { backgroundColor: '#15803D' }]}>
+            <MaterialCommunityIcons name={isOrderTracking ? "cash-refund" : "account-cowboy-hat"} size={28} color={COLORS.textLight} />
           </View>
           <View style={styles.techDetails}>
-            <Text style={styles.techName}>Rahul Kumar</Text>
-            <Text style={styles.techSub}>Soil Verification Officer • 4.9 ★</Text>
+            <Text style={styles.techName}>{isOrderTracking ? 'Refund Status: Settled' : 'Rahul Kumar'}</Text>
+            <Text style={styles.techSub}>{isOrderTracking ? `Order Reference: ${id}` : 'Soil Verification Officer • 4.9 ★'}</Text>
           </View>
           <TouchableOpacity 
-            style={styles.callBtn}
+            style={[styles.callBtn, isOrderTracking && { backgroundColor: '#16A34A' }]}
             onPress={() => triggerHaptic(Haptics.ImpactFeedbackStyle.Light)}
             accessibilityRole="button"
           >
-            <MaterialCommunityIcons name="phone" size={20} color={COLORS.textLight} />
+            <MaterialCommunityIcons name={isOrderTracking ? "check-decagram" : "phone"} size={20} color={COLORS.textLight} />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Tracking Timeline */}
       <ScrollView style={styles.timelineContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.bookingIdText}>Inspection ID: {id}</Text>
+        <Text style={styles.bookingIdText}>{isOrderTracking ? `Order ID: ${id}` : `Inspection ID: ${id}`}</Text>
         <View style={styles.timeline}>
-          {TRACKING_STEPS.map((step, index) => {
-            const isCompleted = step.id <= currentStep;
-            const isCurrent = step.id === currentStep;
-            const isLast = index === TRACKING_STEPS.length - 1;
+          {stepsToRender.map((step, index) => {
+            const isCompleted = step.id <= activeStepLimit;
+            const isCurrent = step.id === activeStepLimit;
+            const isLast = index === stepsToRender.length - 1;
 
             return (
               <View key={step.id} style={styles.stepRow}>

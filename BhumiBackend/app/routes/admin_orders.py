@@ -175,5 +175,39 @@ async def update_admin_order_status(
         shipping_partner="Delhivery",
         order_date=order_date
     )
-    
+
+    # Send notification to farmer
+    if order.farmer_id:
+        try:
+            from app.repositories.notification import NotificationRepository
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(NotificationRepository())
+
+            title_map = {
+                "PACKED": "Order Approved & Packed",
+                "SHIPPED": "Order Dispatched & Shipped",
+                "DELIVERED": "Order Delivered",
+                "CANCELLED": "Order Cancelled",
+                "RETURNED": "Order Refund Processed",
+            }
+            msg_map = {
+                "PACKED": f"Your order {order_num} ({product_name}) has been approved and packed!",
+                "SHIPPED": f"Your order {order_num} ({product_name}) has been shipped! Tracking ID: {tracking_num}.",
+                "DELIVERED": f"Your order {order_num} ({product_name}) has been delivered successfully!",
+                "CANCELLED": f"Your order {order_num} ({product_name}) has been cancelled.",
+                "RETURNED": f"Refund of ₹{total_amount} processed for order {order_num} ({product_name})!",
+            }
+            notif_title = title_map.get(new_status_str, f"Order Status Update: {order_status}")
+            notif_msg = msg_map.get(new_status_str, f"Your order {order_num} status has been updated to {order_status}.")
+
+            await notif_svc.create_notification(
+                farmer_id=str(order.farmer_id),
+                title=notif_title,
+                message=notif_msg,
+                type="order"
+            )
+        except Exception as err:
+            import logging
+            logging.getLogger(__name__).warning(f"Could not send order update notification to farmer: {err}")
+
     return SuccessResponse(message="Order status updated successfully", data=response_data)

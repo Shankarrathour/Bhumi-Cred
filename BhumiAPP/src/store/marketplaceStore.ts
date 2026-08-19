@@ -603,17 +603,14 @@ export const useMarketplaceStore = create<MarketplaceState>()(
       },
 
       clearCart: async () => {
-        const { isAuthenticated } = useAuthStore.getState();
-        if (!isAuthenticated) {
-          set({ cart: [], cartSummary: null });
-          return;
-        }
-
-        try {
-          await api.post('/cart/clear');
-          set({ cart: [], cartSummary: null });
-        } catch (err) {
-          console.warn('[marketplaceStore] clearCart failed:', err);
+        set({ cart: [], cartSummary: null });
+        const { isAuthenticated, accessToken } = useAuthStore.getState();
+        if (isAuthenticated && accessToken) {
+          try {
+            await api.post('/cart/clear');
+          } catch (err) {
+            console.warn('[marketplaceStore] clearCart backend sync notice:', err);
+          }
         }
       },
 

@@ -152,3 +152,15 @@ api_router.include_router(vendor_support_router)
 # ── Module 21: Soil Testing & Reports ─────────────────────────────────────────
 from app.routes.soil_testing import router as soil_testing_router
 api_router.include_router(soil_testing_router)
+
+# ── Module 22: Admin MRV Operations Center ───────────────────────────────────
+from app.routes.admin_mrv import router as admin_mrv_router
+api_router.include_router(admin_mrv_router)
+
+# ── Module 23: Referrals & Rewards ───────────────────────────────────────────
+from app.routes.referrals import router as referrals_router
+api_router.include_router(referrals_router)
+
+# ── Module 24: Farmer Eco Badges & Cabinet ────────────────────────────────────
+from app.routes.farmer_badges import router as farmer_badges_router
+api_router.include_router(farmer_badges_router)

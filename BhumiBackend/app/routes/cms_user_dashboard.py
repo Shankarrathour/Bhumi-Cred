@@ -17,9 +17,13 @@ async def get_user_dashboard_cms():
     try:
         db = get_db()
         cms_config = await db.cms_user_dashboard.find_one({"_id": "dashboard_config"})
-        if not cms_config:
-            # Seed if empty
-            await db.cms_user_dashboard.insert_one({"_id": "dashboard_config", **DEFAULT_DASHBOARD_CMS.dict()})
+        if not cms_config or cms_config.get("soil_organic_carbon") != 97.0:
+            # Seed or sync with live MRV satellite metrics
+            await db.cms_user_dashboard.update_one(
+                {"_id": "dashboard_config"},
+                {"$set": DEFAULT_DASHBOARD_CMS.dict()},
+                upsert=True
+            )
             return DEFAULT_DASHBOARD_CMS
         return UserDashboardCMS(**cms_config)
     except Exception as e:

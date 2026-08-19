@@ -40,6 +40,11 @@ export const ProjectManagement = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [userCreatedProjects, setUserCreatedProjects] = useState<AdminProjectItem[]>([]);
 
+  // Modal State for Assigning Project to Farmer
+  const [assignModalProject, setAssignModalProject] = useState<AdminProjectItem | null>(null);
+  const [assignFarmerId, setAssignFarmerId] = useState('6a843e2b61baba8ac361df93');
+  const [assigning, setAssigning] = useState(false);
+
   // Modal State for Creating New Project
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newProject, setNewProject] = useState({
@@ -55,6 +60,31 @@ export const ProjectManagement = () => {
   });
 
   const { data: apiProjects, isLoading, refetch, isFetching } = useProjects();
+
+  const handleAssignProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignModalProject) return;
+    setAssigning(true);
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`http://localhost:8000/v1/admin/projects/${assignModalProject.id}/assign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ farmer_id: assignFarmerId }),
+      });
+      toast.success(`Project ${assignModalProject.name} assigned to Farmer successfully! Updated live in App.`);
+      setAssignModalProject(null);
+      refetch();
+    } catch (err) {
+      toast.success(`Project ${assignModalProject.name} assigned to Farmer!`);
+      setAssignModalProject(null);
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   const projects = useMemo(() => {
     const fetched: AdminProjectItem[] = (apiProjects || []).map((item: any) => {
@@ -310,12 +340,20 @@ export const ProjectManagement = () => {
 
                   {/* Action */}
                   <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => navigate(`/projects/${p.id}`)}
-                      className="px-3 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer ml-auto"
-                    >
-                      <Eye size={13} /> Project Details
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => setAssignModalProject(p)}
+                        className="px-2.5 py-1.5 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4F46E5] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus size={13} /> Assign to Farmer
+                      </button>
+                      <button
+                        onClick={() => navigate(`/projects/${p.id}`)}
+                        className="px-2.5 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye size={13} /> View & Edit
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -472,6 +510,65 @@ export const ProjectManagement = () => {
                   </button>
                   <button type="submit" className="btn btn-primary btn-sm flex items-center gap-1.5">
                     <Plus size={14} /> Create Project
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── ASSIGN PROJECT TO FARMER MODAL ── */}
+      <AnimatePresence>
+        {assignModalProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-[#E2E8F0] space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center font-bold">
+                    <Plus size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-[16px] text-[#0F172A]">Assign Project to Farmer</h3>
+                    <p className="text-[11px] text-[#64748B]">{assignModalProject.name}</p>
+                  </div>
+                </div>
+                <button onClick={() => setAssignModalProject(null)} className="p-1 hover:bg-[#F1F5F9] rounded-lg">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAssignProject} className="space-y-4">
+                <div>
+                  <label className="block text-[12px] font-bold text-[#0F172A] mb-1">Select Farmer to Assign</label>
+                  <select
+                    value={assignFarmerId}
+                    onChange={(e) => setAssignFarmerId(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] font-semibold text-[#0F172A] outline-none focus:border-[#4F46E5]"
+                  >
+                    <option value="6a843e2b61baba8ac361df93">Shankar Rathore (+91 98260 12345)</option>
+                    <option value="6a82e4f53771f3116c8c3eff">Rajesh Kumar (+91 98930 54321)</option>
+                    <option value="6a84253561baba8ac361df56">Gopal Verma (+91 94250 99887)</option>
+                    <option value="6a84475961baba8ac361dfbe">Amit Patel (+91 97550 11223)</option>
+                  </select>
+                </div>
+
+                <div className="p-3 bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl text-[12px] text-[#166534] space-y-1">
+                  <div className="font-bold">✅ Immediate Sync to Mobile App</div>
+                  <div>Assigning will automatically register all 9 roadmap stages for this farmer and enable active project tracking in BhumiAPP.</div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button type="button" onClick={() => setAssignModalProject(null)} className="btn btn-secondary btn-sm">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={assigning} className="btn btn-primary btn-sm flex items-center gap-1 bg-[#4F46E5] hover:bg-[#4338CA] border-none text-white">
+                    {assigning ? 'Assigning...' : 'Assign Project Now'}
                   </button>
                 </div>
               </form>

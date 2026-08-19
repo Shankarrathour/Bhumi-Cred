@@ -39,13 +39,27 @@ const api = axios.create({
 
 // ── Request logging & header adjustments ──────────────────────────────────────
 api.interceptors.request.use((config: any) => {
-  if (_accessToken) {
-    config.headers.Authorization = `Bearer ${_accessToken}`;
+  let token = _accessToken;
+  if (!token) {
+    try {
+      const authState = require('../store/authStore').useAuthStore.getState();
+      token = authState.accessToken;
+      if (token && !_accessToken) {
+        _accessToken = token;
+        _refreshToken = authState.refreshToken;
+      }
+    } catch (e) {}
+  }
+
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+    if (typeof config.headers?.set === 'function') {
+      config.headers.set('Authorization', `Bearer ${token}`);
+    }
   }
 
   // Remove explicit Content-Type header when sending FormData or multipart requests.
-  // In React Native, setting 'Content-Type': 'multipart/form-data' explicitly strips
-  // the required boundary string, causing immediate network errors.
   const isFormData = config.data && typeof FormData !== 'undefined' && config.data instanceof FormData;
   const isMultipart = config.headers && (
     (typeof config.headers['Content-Type'] === 'string' && config.headers['Content-Type'].includes('multipart/form-data')) ||

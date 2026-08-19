@@ -24,6 +24,7 @@ export const ProjectDetails = () => {
   >('Overview');
 
   const [projectEnrollments, setProjectEnrollments] = useState<any[]>([]);
+  const [isSoilModalOpen, setIsSoilModalOpen] = useState(false);
 
   useEffect(() => {
     adminApi.get('/admin/projects/enrollments')
@@ -200,6 +201,88 @@ export const ProjectDetails = () => {
               <KpiCard title="ENROLLED FARMERS" value={project.enrolledFarmers.toLocaleString()} icon={User} iconBg="#F0FDF4" iconColor="#16A34A" />
               <KpiCard title="PLANTED TREES" value={project.activeTrees.toLocaleString()} icon={Trees} iconBg="#F5F3FF" iconColor="#8B5CF6" />
               <KpiCard title="TOTAL REVENUE" value={`₹${project.revenueGeneratedLakhs} L`} icon={DollarSign} iconBg="#FEF2F2" iconColor="#EF4444" />
+            </div>
+
+            {/* GREEN SUSTAINABILITY MISSION CARD (Parity with Mobile App UI) */}
+            <div className="rounded-2xl p-6 bg-gradient-to-br from-[#064E3B] via-[#047857] to-[#065F46] text-white shadow-xl space-y-5 border border-[#10B981]/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                    <Trees size={24} className="text-[#34D399]" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#6EE7B7]">YOU ARE ACTIVELY PARTICIPATING IN THIS MISSION</span>
+                    <h2 className="text-[20px] font-black tracking-tight">{project.name}</h2>
+                  </div>
+                </div>
+                <span className="px-3 py-1 bg-[#10B981]/20 border border-[#34D399]/40 text-[#6EE7B7] text-[11px] font-mono font-bold rounded-lg uppercase tracking-wider">
+                  MISSION ACTIVE ✅
+                </span>
+              </div>
+
+              <p className="text-[13px] text-[#E6F4EA] leading-relaxed max-w-3xl">
+                This project focuses on restoring degraded land through large-scale tree plantation. Native tree species will be planted to improve biodiversity, capture atmospheric carbon, reduce soil erosion, and generate verified carbon credits while supporting local communities.
+              </p>
+
+              {/* Sub-Card Enrolled Parameters */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 bg-black/20 backdrop-blur-md rounded-xl border border-white/10 text-[12.5px]">
+                <div className="flex items-center gap-2 font-semibold">
+                  <CheckCircle size={16} className="text-[#34D399]" />
+                  <span>Land Parcel: <strong className="text-white">188.1 Acres Registered</strong></span>
+                </div>
+                <div className="flex items-center gap-2 font-semibold">
+                  <CheckCircle size={16} className="text-[#34D399]" />
+                  <span>Enrolled Trees: <strong className="text-white">0 saplings monitored</strong></span>
+                </div>
+                <div className="flex items-center gap-2 font-semibold">
+                  <ShieldCheck size={16} className="text-[#34D399]" />
+                  <span>Verification Team: <strong className="text-white">Bhopal East Agronomy Unit</strong></span>
+                </div>
+              </div>
+
+              {/* Key Indicators Grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-white/10 text-[12px]">
+                <div>
+                  <span className="text-[#A7F3D0] text-[10px] uppercase font-bold tracking-wider">ASSIGNED DATE</span>
+                  <div className="font-bold text-[14px] text-white mt-0.5 font-mono">2026-08-18</div>
+                </div>
+                <div>
+                  <span className="text-[#A7F3D0] text-[10px] uppercase font-bold tracking-wider">CURRENT STAGE</span>
+                  <div className="font-bold text-[14px] text-[#6EE7B7] mt-0.5">Stage 2: MRV Scheduled</div>
+                </div>
+                <div>
+                  <span className="text-[#A7F3D0] text-[10px] uppercase font-bold tracking-wider">EST. CARBON YIELD</span>
+                  <div className="font-bold text-[14px] text-[#FDE047] mt-0.5 font-mono">0.0 CO₂e</div>
+                </div>
+                <div>
+                  <span className="text-[#A7F3D0] text-[10px] uppercase font-bold tracking-wider">SUPPORTING NGO</span>
+                  <div className="font-bold text-[14px] text-white mt-0.5">Green Earth Foundation</div>
+                </div>
+              </div>
+
+              {/* Badges & Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-3 py-1 bg-[#10B981]/20 border border-[#34D399]/40 text-[#6EE7B7] text-[11px] font-bold rounded-lg flex items-center gap-1">
+                    <CheckCircle size={12} /> Land Verified
+                  </span>
+                  <span className="px-3 py-1 bg-[#10B981]/20 border border-[#34D399]/40 text-[#6EE7B7] text-[11px] font-bold rounded-lg flex items-center gap-1">
+                    <CheckCircle size={12} /> Trees Protected
+                  </span>
+                  <span className="px-3 py-1 bg-[#10B981]/20 border border-[#34D399]/40 text-[#6EE7B7] text-[11px] font-bold rounded-lg flex items-center gap-1">
+                    <CheckCircle size={12} /> Insurance Active
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => navigate('/mrv?tab=telemetry')}
+                    className="px-4 py-2 bg-[#047857] hover:bg-[#065F46] text-white font-bold text-[12px] rounded-xl transition-all border border-[#34D399]/50 flex items-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    Soil Testing 🧪
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
