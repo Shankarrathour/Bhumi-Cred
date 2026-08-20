@@ -95,6 +95,7 @@ class AdminBankResponse(BaseModel):
     ifsc_code: Optional[str] = None
     account_number: Optional[str] = None
     account_holder_name: Optional[str] = None
+    upi_id: Optional[str] = None
     is_verified: bool = False
     added_at: Optional[datetime] = None
 

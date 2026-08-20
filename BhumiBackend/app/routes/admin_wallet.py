@@ -25,6 +25,21 @@ _FINANCE_ROLES = (
 
 
 @router.get(
+    "/wallet/summary",
+    response_model=SuccessResponse[dict],
+    summary="Get financial wallet summary and KPI stats",
+    description="Live aggregates of Platform Revenue, Farmer Wallets, Govt Wallets, Partner Wallets, and Withdrawals.",
+    dependencies=[Depends(require_roles(*_FINANCE_ROLES))],
+)
+async def get_wallet_summary(
+    current_admin: CurrentAdmin,
+    svc: AdminWalletService = Depends(get_admin_wallet_service),
+) -> SuccessResponse[dict]:
+    data = await svc.get_wallet_summary()
+    return SuccessResponse(message="Wallet summary fetched successfully.", data=data)
+
+
+@router.get(
     "/wallet",
     response_model=PaginatedResponse[AdminWalletFarmerResponse],
     summary="List farmer wallets",

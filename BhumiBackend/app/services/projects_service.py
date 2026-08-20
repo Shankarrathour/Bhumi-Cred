@@ -436,6 +436,15 @@ class ProjectsService:
             if value is not None:
                 setattr(enrollment, field, value)
 
+        if data.registered_trees is not None:
+            enrollment.registered_trees = data.registered_trees
+
+        if data.land_area_acres is not None:
+            enrollment.land_area_acres = data.land_area_acres
+
+        if data.estimated_carbon_impact is not None:
+            enrollment.estimated_carbon_impact = data.estimated_carbon_impact
+
         if data.insured_trees is not None:
             if data.insured_trees > enrollment.registered_trees:
                 raise BadRequestException("Insured trees cannot exceed registered trees.", "INVALID_INSURED_TREES")
@@ -549,9 +558,15 @@ class ProjectsService:
             updated_at=now,
         )
 
-        # Add carbon credits to farmer immediately
-        farmer.carbon_credits_generated += enrollment.estimated_carbon_impact
-        await farmer.save()
+        # Update farmer's verified land parcels to PROJECT_ASSIGNED
+        parcels = await LandParcel.find(
+            {"farmer_id": str(farmer.id), "is_deleted": {"$ne": True}}
+        ).to_list()
+        for p in parcels:
+            if p.verification_status in (LandVerificationStatus.VERIFIED, LandVerificationStatus.APPROVED):
+                p.verification_status = LandVerificationStatus.PROJECT_ASSIGNED
+                p.updated_at = now
+                await p.save()
 
         await self._enrollments.create(enrollment)
         return EnrollmentResponse(
@@ -571,6 +586,20 @@ class ProjectsService:
         enrollment.is_active = False
         enrollment.updated_at = datetime.now(timezone.utc)
         await enrollment.save()
+
+        # Revert land parcels back to VERIFIED if no other active enrollments remain
+        remaining = await ProjectEnrollment.find(
+            {"farmer_id": enrollment.farmer_id, "is_active": True, "_id": {"$ne": enrollment.id}}
+        ).to_list()
+        if not remaining:
+            parcels = await LandParcel.find(
+                {"farmer_id": enrollment.farmer_id, "is_deleted": {"$ne": True}}
+            ).to_list()
+            for p in parcels:
+                if p.verification_status == LandVerificationStatus.PROJECT_ASSIGNED:
+                    p.verification_status = LandVerificationStatus.VERIFIED
+                    p.updated_at = datetime.now(timezone.utc)
+                    await p.save()
 
     async def admin_list_projects(self, include_inactive: bool = False) -> list[AdminProjectResponse]:
         projects = await self._projects.list_admin(include_inactive)
@@ -671,3 +700,16 @@ class ProjectsService:
         project.updated_at = datetime.now(timezone.utc)
         await project.save()
         return self._admin_project_response(project)
+
+    async def admin_delete_project(self, project_id: str) -> None:
+        from beanie import PydanticObjectId
+        project = None
+        if PydanticObjectId.is_valid(project_id):
+            project = await SustainabilityProject.get(PydanticObjectId(project_id))
+        if not project:
+            project = await self._projects.get_by_project_id(project_id, active_only=False)
+        if not project:
+            raise NotFoundException("Project not found", "PROJECT_NOT_FOUND")
+
+        await self._enrollments.model.find({"project_id": project.project_id}).delete()
+        await project.delete()

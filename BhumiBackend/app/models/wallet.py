@@ -33,6 +33,7 @@ class Wallet(Document):
     balance: float = 0.0
     total_earnings: float = 0.0   # cumulative lifetime credits received
     total_withdrawn: float = 0.0  # cumulative amount successfully disbursed
+    upi_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

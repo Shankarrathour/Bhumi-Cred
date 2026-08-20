@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from app.dependencies.auth import CurrentFarmer, CurrentAdmin
 from app.models.farmer_badge import FarmerBadge
-from app.models.land import LandParcel
+from app.models.land_parcel import LandParcel
 from app.models.soil_test import SoilTestBooking
 from app.models.project_enrollment import ProjectEnrollment
 from app.models.referral import FarmerReferral

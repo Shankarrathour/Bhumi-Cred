@@ -222,7 +222,7 @@ class AdminFarmerService:
             )
             
         # 3. Approved / Rejected Event
-        if p.verification_status == LandVerificationStatus.VERIFIED:
+        if p.verification_status in (LandVerificationStatus.VERIFIED, LandVerificationStatus.APPROVED):
             history_events.append(
                 LandHistoryEvent(
                     title="Approved",
@@ -412,20 +412,19 @@ class AdminFarmerService:
         parcel.verification_remarks = data.remarks
         parcel.verified_at = (
             datetime.now(timezone.utc)
-            if data.status == LandVerificationStatus.VERIFIED
+            if data.status in (LandVerificationStatus.VERIFIED, LandVerificationStatus.APPROVED)
             else None
         )
         parcel.updated_at = datetime.now(timezone.utc)
         await parcel.save()
 
-        if data.status == LandVerificationStatus.VERIFIED:
-          farmer = await self._farmers.get_by_id(parcel.farmer_id)
-          if farmer:
-              farmer.total_acreage = await self._land.get_total_acreage(str(farmer.id))
-              farmer.updated_at = datetime.now(timezone.utc)
-              await farmer.save()
+        if data.status in (LandVerificationStatus.VERIFIED, LandVerificationStatus.APPROVED):
+            farmer = await self._farmers.get_by_id(parcel.farmer_id)
+            if farmer:
+                farmer.total_acreage = await self._land.get_total_acreage(str(farmer.id))
+                farmer.updated_at = datetime.now(timezone.utc)
+                await farmer.save()
 
-        if data.status == LandVerificationStatus.VERIFIED:
             try:
                 await self._notifications.create_notification(
                     str(parcel.farmer_id),
@@ -454,46 +453,66 @@ class AdminFarmerService:
     async def get_farmer_bank(self, farmer_id: str) -> AdminBankResponse:
         farmer = await self._get_farmer(farmer_id)
         
-        # 1. Check BankAccount collection in MongoDB (saved via BhumiAPP)
+        bank_name = None
+        account_number = None
+        ifsc_code = None
+        account_holder_name = None
+        is_verified = False
+        added_at = None
+        upi_id = None
+
+        # 1. Fetch UPI ID from Wallet collection (saved via BhumiAPP)
         try:
-            from app.models.financial_wallet import BankAccount
-            acc = await BankAccount.find_one(
-                BankAccount.farmer_id == str(farmer.id),
-                BankAccount.is_deleted == False
-            )
-            if acc and (acc.bank_name or acc.account_number):
-                return AdminBankResponse(
-                    bank_name=acc.bank_name,
-                    account_number=acc.account_number_masked or acc.account_number,
-                    ifsc_code=acc.ifsc_code,
-                    account_holder_name=acc.account_holder_name,
-                    is_verified=acc.is_verified,
-                    added_at=acc.created_at,
-                )
+            from app.models.wallet import Wallet
+            wallet = await Wallet.find_one(Wallet.farmer_id == str(farmer.id))
+            if wallet:
+                upi_id = wallet.upi_id
         except Exception as err:
-            logger.warning(f"Error checking BankAccount for farmer {farmer_id}: {err}")
+            logger.warning(f"Error checking Wallet for farmer {farmer_id}: {err}")
 
-        # 2. Check embedded bank_details on Farmer document
-        bd = farmer.bank_details
-        if bd and (bd.bank_name or bd.account_number):
-            return AdminBankResponse(
-                bank_name=bd.bank_name,
-                account_number=bd.account_number,
-                ifsc_code=bd.ifsc_code,
-                account_holder_name=bd.account_holder_name,
-                is_verified=bd.is_verified,
-                added_at=bd.added_at,
-                verified_at=bd.verified_at,
+        # 2. Check WalletBankAccount collection in MongoDB (saved via BhumiAPP)
+        try:
+            from app.models.wallet import WalletBankAccount
+            acc = await WalletBankAccount.find_one(
+                WalletBankAccount.farmer_id == str(farmer.id),
+                WalletBankAccount.is_active == True,
+                WalletBankAccount.is_primary == True
             )
+            if not acc:
+                # Fallback to any active account
+                acc = await WalletBankAccount.find_one(
+                    WalletBankAccount.farmer_id == str(farmer.id),
+                    WalletBankAccount.is_active == True
+                )
+            if acc:
+                bank_name = acc.bank_name
+                account_number = acc.account_number_masked
+                ifsc_code = acc.ifsc_code
+                account_holder_name = acc.account_holder_name
+                is_verified = True
+                added_at = acc.created_at
+        except Exception as err:
+            logger.warning(f"Error checking WalletBankAccount for farmer {farmer_id}: {err}")
 
-        # 3. Default active fallback if farmer has transactions or account
+        # 3. Check embedded bank_details on Farmer document if not found in WalletBankAccount
+        if not bank_name:
+            bd = farmer.bank_details
+            if bd and (bd.bank_name or bd.account_number):
+                bank_name = bd.bank_name
+                account_number = bd.account_number
+                ifsc_code = bd.ifsc_code
+                account_holder_name = bd.account_holder_name
+                is_verified = bd.is_verified
+                added_at = bd.added_at
+
         return AdminBankResponse(
-            bank_name="State Bank of India",
-            account_number="******3255",
-            ifsc_code="SBIN0098543",
-            account_holder_name=farmer.full_name or "Shankar Rathore",
-            is_verified=True,
-            added_at=farmer.created_at,
+            bank_name=bank_name,
+            account_number=account_number,
+            ifsc_code=ifsc_code,
+            account_holder_name=account_holder_name,
+            upi_id=upi_id,
+            is_verified=is_verified,
+            added_at=added_at,
         )
 
     async def get_farmer_identity(self, farmer_id: str) -> AdminIdentityResponse:
@@ -825,27 +844,60 @@ class AdminFarmerService:
         from beanie import PydanticObjectId
         farmer_pydantic_id = PydanticObjectId(farmer_object_id)
 
+        from app.models.project_enrollment import ProjectEnrollment
+        from app.models.notification import Notification
+        from app.models.tree_registration import TreeRegistration
+        from app.models.green_family import GreenFamilyCover
+        from app.models.wallet import Wallet, WalletTransaction, WalletBankAccount, WithdrawalRequest
+        from app.models.order import Order
+        from app.models.cart import CartItem
+        from app.models.wishlist import Wishlist
+        from app.models.soil_test import SoilTestBooking
+        from app.models.farmer_badge import FarmerBadge
+        from app.models.referral import FarmerReferral
+        from app.models.support_ticket import SupportTicket
+        from app.models.tree_insurance import (
+            TreeInsurancePolicy,
+            TreeInsuranceClaim,
+            PolicyPremium,
+            PolicyRenewal,
+            ClaimSettlement,
+        )
+        from app.models.gis_land import GISLandParcel
+        from app.models.agri_application import AgriApplication
+        from app.models.refresh_token import RefreshTokenSession
+
         # 1. Delete land parcels (matches either string or PydanticObjectId)
         land_deleted = await LandParcel.find(
             {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 2. Delete family members
+        # 2. Delete GIS land parcels
+        gis_land_deleted = await GISLandParcel.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+
+        # 3. Delete family members
         family_deleted = await FamilyMember.find(
             {"farmer_id": farmer_object_id}
         ).delete()
 
-        # 3. Delete activity logs
+        # 4. Delete activity logs
         activity_deleted = await FarmerActivityLog.find(
             {"farmer_id": farmer_object_id}
         ).delete()
 
-        # 4. Delete OTP sessions tied to this mobile
+        # 5. Delete OTP sessions tied to this mobile
         otp_deleted = await OTPSession.find(
             {"mobile": farmer_mobile, "role": "farmer"}
         ).delete()
 
-        # 5. Delete registration records
+        # 6. Delete active JWT refresh token sessions
+        token_deleted = await RefreshTokenSession.find(
+            {"owner_id": farmer_object_id}
+        ).delete()
+
+        # 7. Delete registration records
         reg_deleted = await BhumiCredRegistration.find(
             {"$or": [
                 {"farmer_id": farmer_object_id},
@@ -853,7 +905,96 @@ class AdminFarmerService:
             ]}
         ).delete()
 
-        # 6. Hard delete the farmer document last
+        # 8. Delete project enrollments
+        proj_deleted = await ProjectEnrollment.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_mobile]}}
+        ).delete()
+
+        # 9. Delete notifications
+        notif_deleted = await Notification.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+
+        # 10. Delete tree registrations
+        tree_deleted = await TreeRegistration.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+
+        # 11. Delete green family covers
+        gf_deleted = await GreenFamilyCover.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+
+        # 12. Delete wallet, transactions, bank accounts & withdrawal requests
+        wallet_deleted = await Wallet.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+        tx_deleted = await WalletTransaction.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+        bank_acc_deleted = await WalletBankAccount.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+        withdraw_deleted = await WithdrawalRequest.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+
+        # 13. Delete marketplace orders, cart items, and wishlist
+        order_deleted = await Order.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+        cart_deleted = await CartItem.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        wishlist_deleted = await Wishlist.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+
+        # 14. Delete soil testing bookings
+        soil_deleted = await SoilTestBooking.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+
+        # 15. Delete gamification badges & referrals
+        badge_deleted = await FarmerBadge.find(
+            {"farmer_id": farmer_object_id}
+        ).delete()
+        referral_deleted = await FarmerReferral.find(
+            {"$or": [
+                {"referrer_farmer_id": farmer_object_id},
+                {"referred_farmer_id": farmer_object_id},
+                {"referred_farmer_phone": farmer_mobile},
+            ]}
+        ).delete()
+
+        # 16. Delete support tickets
+        support_deleted = await SupportTicket.find(
+            {"vendor_id": farmer_object_id}
+        ).delete()
+
+        # 17. Delete tree insurance policies, claims, premiums, renewals & settlements
+        policy_deleted = await TreeInsurancePolicy.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        claim_deleted = await TreeInsuranceClaim.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        premium_deleted = await PolicyPremium.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        renewal_deleted = await PolicyRenewal.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        settlement_deleted = await ClaimSettlement.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+
+        # 18. Delete government scheme applications
+        agri_app_deleted = await AgriApplication.find(
+            {"user_id": farmer_object_id}
+        ).delete()
+
+        # 19. Hard delete the farmer document last
         await farmer.delete()
 
         # Log the deletion in audit trail
@@ -874,10 +1015,30 @@ class AdminFarmerService:
             f"FARMER HARD DELETED: {farmer_display} ({farmer_mobile}) | "
             f"Deleted by admin {admin.email} | "
             f"land={getattr(land_deleted, 'deleted_count', 0)} "
+            f"gis_land={getattr(gis_land_deleted, 'deleted_count', 0)} "
             f"family={getattr(family_deleted, 'deleted_count', 0)} "
             f"activity={getattr(activity_deleted, 'deleted_count', 0)} "
             f"otp={getattr(otp_deleted, 'deleted_count', 0)} "
-            f"reg={getattr(reg_deleted, 'deleted_count', 0)}"
+            f"sessions={getattr(token_deleted, 'deleted_count', 0)} "
+            f"reg={getattr(reg_deleted, 'deleted_count', 0)} "
+            f"projects={getattr(proj_deleted, 'deleted_count', 0)} "
+            f"notifications={getattr(notif_deleted, 'deleted_count', 0)} "
+            f"tree_regs={getattr(tree_deleted, 'deleted_count', 0)} "
+            f"green_families={getattr(gf_deleted, 'deleted_count', 0)} "
+            f"wallet={getattr(wallet_deleted, 'deleted_count', 0)} "
+            f"transactions={getattr(tx_deleted, 'deleted_count', 0)} "
+            f"bank_accounts={getattr(bank_acc_deleted, 'deleted_count', 0)} "
+            f"withdrawals={getattr(withdraw_deleted, 'deleted_count', 0)} "
+            f"orders={getattr(order_deleted, 'deleted_count', 0)} "
+            f"cart={getattr(cart_deleted, 'deleted_count', 0)} "
+            f"wishlist={getattr(wishlist_deleted, 'deleted_count', 0)} "
+            f"soil_tests={getattr(soil_deleted, 'deleted_count', 0)} "
+            f"badges={getattr(badge_deleted, 'deleted_count', 0)} "
+            f"referrals={getattr(referral_deleted, 'deleted_count', 0)} "
+            f"support={getattr(support_deleted, 'deleted_count', 0)} "
+            f"insurance_policies={getattr(policy_deleted, 'deleted_count', 0)} "
+            f"insurance_claims={getattr(claim_deleted, 'deleted_count', 0)} "
+            f"agri_apps={getattr(agri_app_deleted, 'deleted_count', 0)}"
         )
 
         return {
@@ -886,9 +1047,29 @@ class AdminFarmerService:
             "message": f"Farmer '{farmer_display}' and all associated records permanently deleted. Mobile number {farmer_mobile} is now free for re-registration.",
             "deleted_counts": {
                 "land_parcels": getattr(land_deleted, 'deleted_count', 0),
+                "gis_land_parcels": getattr(gis_land_deleted, 'deleted_count', 0),
                 "family_members": getattr(family_deleted, 'deleted_count', 0),
                 "activity_logs": getattr(activity_deleted, 'deleted_count', 0),
                 "otp_sessions": getattr(otp_deleted, 'deleted_count', 0),
+                "refresh_token_sessions": getattr(token_deleted, 'deleted_count', 0),
                 "registrations": getattr(reg_deleted, 'deleted_count', 0),
+                "project_enrollments": getattr(proj_deleted, 'deleted_count', 0),
+                "notifications": getattr(notif_deleted, 'deleted_count', 0),
+                "tree_registrations": getattr(tree_deleted, 'deleted_count', 0),
+                "green_families": getattr(gf_deleted, 'deleted_count', 0),
+                "wallets": getattr(wallet_deleted, 'deleted_count', 0),
+                "transactions": getattr(tx_deleted, 'deleted_count', 0),
+                "bank_accounts": getattr(bank_acc_deleted, 'deleted_count', 0),
+                "withdrawals": getattr(withdraw_deleted, 'deleted_count', 0),
+                "orders": getattr(order_deleted, 'deleted_count', 0),
+                "cart_items": getattr(cart_deleted, 'deleted_count', 0),
+                "wishlists": getattr(wishlist_deleted, 'deleted_count', 0),
+                "soil_tests": getattr(soil_deleted, 'deleted_count', 0),
+                "farmer_badges": getattr(badge_deleted, 'deleted_count', 0),
+                "referrals": getattr(referral_deleted, 'deleted_count', 0),
+                "support_tickets": getattr(support_deleted, 'deleted_count', 0),
+                "insurance_policies": getattr(policy_deleted, 'deleted_count', 0),
+                "insurance_claims": getattr(claim_deleted, 'deleted_count', 0),
+                "agri_applications": getattr(agri_app_deleted, 'deleted_count', 0),
             }
         }

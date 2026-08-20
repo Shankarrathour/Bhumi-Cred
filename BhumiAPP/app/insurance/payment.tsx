@@ -142,6 +142,38 @@ export default function PremiumPaymentScreen() {
           transactions: [txnRecord, ...existingTxns.filter(t => t.id !== newTxn)]
         });
 
+        // Real Backend Tree Registration to MongoDB
+        try {
+          let photoUrls: string[] = [];
+          try {
+            if (params.photosData) {
+              const parsed = JSON.parse(params.photosData as string);
+              photoUrls = Object.values(parsed).filter(Boolean) as string[];
+            }
+          } catch (e) {}
+
+          const treePayload = {
+            tree_name: treeName || `${species || 'Teak'} Asset #${Math.floor(100 + Math.random() * 900)}`,
+            tree_species: species || 'Teak',
+            tree_count: mode === 'single' ? 1 : (treeCountVal || 5),
+            tree_age: parseInt(params.age as string || '2', 10) || 2,
+            plantation_year: new Date().getFullYear(),
+            land_id: (params.plotId as string) || null,
+            latitude: parseFloat(params.lat as string || '22.9734') || 22.9734,
+            longitude: parseFloat(params.lng as string || '78.6569') || 78.6569,
+            village: authUser?.village || 'Anuppur Khas',
+            district: authUser?.district || 'Anuppur',
+            state: authUser?.state || 'Madhya Pradesh',
+            photos: photoUrls,
+            insurance_required: true,
+            remarks: `Policy: ${policyName} (Cover: ₹${coverage}, Premium: ₹${premium}). Txn: ${newTxn}`
+          };
+
+          await api.post('/tree/register', treePayload);
+        } catch (apiErr) {
+          console.warn('[payment] /tree/register API call error:', apiErr);
+        }
+
         // Register trees with store if applicable
         if (mode !== 'land_only') {
           await registerTrees(policyId, mode === 'single' ? 1 : treeCountVal);

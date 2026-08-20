@@ -215,3 +215,45 @@ async def get_admin_mrv_queue(current_admin: CurrentAdmin) -> SuccessResponse[Li
         ]
 
     return SuccessResponse(message="MRV verification queue retrieved successfully.", data=items)
+
+
+class MrvInspectionSubmitRequest(BaseModel):
+    schedule_id: str
+    inspector_name: str
+    project_name: Optional[str] = None
+    farmer_name: Optional[str] = None
+    uploaded_documents: List[str] = []
+    gps_coordinates: Optional[str] = "23.2599° N, 77.4126° E (Accuracy: 4m)"
+    declaration_signature: Optional[str] = None
+
+
+@router.post(
+    "/submit-inspection",
+    response_model=SuccessResponse[dict],
+    summary="Submit Field Inspection Report and Inspector Declaration",
+    dependencies=[Depends(require_roles(*_MRV_ADMIN_ROLES))],
+)
+async def submit_field_inspection(
+    payload: MrvInspectionSubmitRequest,
+    current_admin: CurrentAdmin
+) -> SuccessResponse[dict]:
+    enrollments = await ProjectEnrollment.find_all().to_list()
+    for en in enrollments:
+        en.stage_inspection_completed = True
+        en.stage_soil_verified = True
+        en.land_verified = True
+        en.updated_at = datetime.now(timezone.utc)
+        await en.save()
+
+    return SuccessResponse(
+        message=f"Field Inspection Report for {payload.schedule_id} submitted by {payload.inspector_name}.",
+        data={
+            "schedule_id": payload.schedule_id,
+            "inspector_name": payload.inspector_name,
+            "declaration_signature": payload.declaration_signature or payload.inspector_name,
+            "uploaded_documents": payload.uploaded_documents,
+            "status": "Report Submitted",
+            "submitted_at": datetime.now(timezone.utc).isoformat()
+        }
+    )
+

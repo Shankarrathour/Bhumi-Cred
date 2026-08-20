@@ -139,13 +139,16 @@ class WalletService:
 
     async def _build_wallet_response(self, wallet: Wallet) -> WalletResponse:
         bank_account = await self._banks.get_active_by_farmer(wallet.farmer_id)
+        all_accounts = await self._banks.list_active_by_farmer(wallet.farmer_id)
         return WalletResponse(
             id=str(wallet.id),
             farmer_id=wallet.farmer_id,
             balance=wallet.balance,
             total_earnings=wallet.total_earnings,
             total_withdrawn=wallet.total_withdrawn,
+            upi_id=getattr(wallet, 'upi_id', None),
             bank_account=self._bank_response(bank_account) if bank_account else None,
+            bank_accounts=[self._bank_response(a) for a in all_accounts],
             created_at=wallet.created_at,
             updated_at=wallet.updated_at,
         )
@@ -155,6 +158,22 @@ class WalletService:
     async def get_wallet(self, farmer_id: str) -> WalletResponse:
         await self._get_farmer(farmer_id)
         wallet = await self._get_or_create_wallet(farmer_id)
+        return await self._build_wallet_response(wallet)
+
+    async def set_upi_id(self, farmer_id: str, upi_id: str) -> WalletResponse:
+        await self._get_farmer(farmer_id)
+        wallet = await self._get_or_create_wallet(farmer_id)
+        wallet.upi_id = upi_id.strip()
+        wallet.updated_at = datetime.now(timezone.utc)
+        await wallet.save()
+        return await self._build_wallet_response(wallet)
+
+    async def delete_upi_id(self, farmer_id: str) -> WalletResponse:
+        await self._get_farmer(farmer_id)
+        wallet = await self._get_or_create_wallet(farmer_id)
+        wallet.upi_id = None
+        wallet.updated_at = datetime.now(timezone.utc)
+        await wallet.save()
         return await self._build_wallet_response(wallet)
 
     # ── Transactions ──────────────────────────────────────────────────────────

@@ -113,3 +113,18 @@ async def admin_delete_enrollment(
 ) -> SuccessResponse[dict]:
     await svc.admin_delete_enrollment(enrollment_id)
     return SuccessResponse(message="Enrollment removed successfully.", data={"enrollment_id": enrollment_id})
+
+
+@router.delete(
+    "/{project_id}",
+    response_model=SuccessResponse[dict],
+    summary="Admin deletes a sustainability project",
+    dependencies=[Depends(require_roles(*_PROJECT_ADMIN_ROLES))],
+)
+async def delete_admin_project(
+    project_id: str,
+    current_admin: CurrentAdmin,
+    svc: ProjectsService = Depends(get_projects_service),
+) -> SuccessResponse[dict]:
+    await svc.admin_delete_project(project_id)
+    return SuccessResponse(message="Project deleted successfully.", data={"project_id": project_id})

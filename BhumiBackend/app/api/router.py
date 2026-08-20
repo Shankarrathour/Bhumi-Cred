@@ -164,3 +164,15 @@ api_router.include_router(referrals_router)
 # ── Module 24: Farmer Eco Badges & Cabinet ────────────────────────────────────
 from app.routes.farmer_badges import router as farmer_badges_router
 api_router.include_router(farmer_badges_router)
+
+# ── Module 25: Admin Reports & Analytics Stats ───────────────────────────────
+from app.routes.admin_reports import router as admin_reports_router
+api_router.include_router(admin_reports_router)
+
+# ── Module 26: Admin Carbon Registry Management ───────────────────────────────
+from app.routes.admin_carbon import router as admin_carbon_router
+api_router.include_router(admin_carbon_router)
+
+# ── Module 27: Admin CSR Project Management ───────────────────────────────────
+from app.routes.admin_csr import router as admin_csr_router
+api_router.include_router(admin_csr_router)

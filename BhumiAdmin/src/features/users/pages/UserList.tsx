@@ -144,13 +144,13 @@ export const UserList = () => {
     });
   }, [users, search, roleFilter, deptFilter, statusFilter]);
 
-  // Aggregated KPIs
-  const totalUsers       = 45231; // Total platform registered users across India
-  const activeUsers      = 42109;
-  const pendingInvites   = 89;
-  const suspendedUsers   = 12;
-  const onlineUsers      = 3410;
-  const inactiveUsers    = 3021;
+  // Aggregated KPIs calculated dynamically from real backend dataset
+  const totalUsers       = users.length;
+  const activeUsers      = users.filter(u => (u.status || '').toLowerCase() === 'active').length;
+  const pendingInvites   = users.filter(u => (u.status || '').toLowerCase() === 'pending').length;
+  const suspendedUsers   = users.filter(u => (u.status || '').toLowerCase() === 'suspended' || (u.status || '').toLowerCase() === 'blocked').length;
+  const onlineUsers      = users.filter(u => (u.online_status || '').toLowerCase() === 'online').length;
+  const inactiveUsers    = users.filter(u => (u.status || '').toLowerCase() === 'inactive').length;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);

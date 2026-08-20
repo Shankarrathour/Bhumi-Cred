@@ -14,6 +14,7 @@ class ProjectStatus(str, Enum):
     ACTIVE_TRACKING = "active_tracking"
     COMPLETED = "completed"
     SUSPENDED = "suspended"
+    AVAILABLE = "available"
 
 class ProjectStage(str, Enum):
     REGISTERED = "registered"

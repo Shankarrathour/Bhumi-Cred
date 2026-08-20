@@ -124,6 +124,11 @@ async def connect_db() -> None:
         TreeInsurancePolicy, TreeInsuranceClaim, InsuranceCompany, InsuranceSurveyor, ClaimSettlement,
         PolicyPremium, PolicyRenewal, InsuranceSpeciesRate, InsuranceSatelliteAudit, InsuranceReinsuranceAllocation, ClaimHistory
     )
+    from app.models.referral import FarmerReferral
+    from app.models.project_mgmt import Project
+    from app.models.carbon_registry import (
+        RegistryProject, CreditIssuance, CreditRetirement, CreditTransfer, CarbonBuyer, CarbonDeveloper
+    )
 
     # Rebuild Pydantic forward references for models using Link
     AdminUser.model_rebuild()
@@ -273,6 +278,14 @@ async def connect_db() -> None:
                     InsuranceSatelliteAudit,
                     InsuranceReinsuranceAllocation,
                     ClaimHistory,
+                    FarmerReferral,
+                    Project,
+                    RegistryProject,
+                    CreditIssuance,
+                    CreditRetirement,
+                    CreditTransfer,
+                    CarbonBuyer,
+                    CarbonDeveloper,
                 ],
                 allow_index_dropping=True,
             )

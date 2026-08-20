@@ -62,9 +62,9 @@ class AdminMarketplaceDashboardService:
         from app.models.financial_wallet import WalletWithdrawal, PayoutStatus
         from app.models.order import Order
 
-        # Farmers (role == "farmer" in farmers collection)
+        # Farmers (matching list_paginated in FarmerRepository)
         total_farmers_count = await Farmer.find({
-            "role": "farmer",
+            "$or": [{"role": "farmer"}, {"role": {"$exists": False}}, {"role": None}],
             "is_deleted": {"$ne": True}
         }).count()
 

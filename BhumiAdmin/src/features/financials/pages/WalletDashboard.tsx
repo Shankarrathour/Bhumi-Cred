@@ -13,7 +13,12 @@ import { PageHeader } from '../../../components/ui/PageHeader';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { EmptyState, SkeletonTable } from '../../../components/ui/EmptyState';
-import { useWithdrawals, useApproveWithdrawal, useRejectWithdrawal } from '../api/useWallet';
+import {
+  useWithdrawals,
+  useApproveWithdrawal,
+  useRejectWithdrawal,
+  useWalletSummary,
+} from '../api/useWallet';
 import { downloadPDFDocument, downloadCSVDocument } from '../../../utils/pdfExporter';
 import toast from 'react-hot-toast';
 
@@ -41,91 +46,27 @@ export interface WalletTransactionItem {
   status: 'Approved' | 'Pending' | 'Rejected';
 }
 
-const SEEDED_TRANSACTIONS: WalletTransactionItem[] = [
-  {
-    id: 'WLT-9001',
-    txn_id: 'TXN-CRB-9001',
-    user_name: 'Ramesh Patel',
-    user_id: 'FARM-MP-8091',
-    user_type: 'Farmer',
-    amount: 42500,
-    category: 'Carbon',
-    utr_number: 'UTR-2026-9021-SBIN',
-    bank_details: 'SBI A/C #XXXX9901 (IFSC: SBIN0001024)',
-    requested_at: '05 Aug 2026, 10:30 AM',
-    status: 'Approved',
-  },
-  {
-    id: 'WLT-9002',
-    txn_id: 'TXN-WTH-9002',
-    user_name: 'Suresh Verma',
-    user_id: 'FARM-MP-8092',
-    user_type: 'Farmer',
-    amount: 25000,
-    category: 'Withdrawal',
-    utr_number: 'UTR-2026-8802-HDFC',
-    bank_details: 'HDFC A/C #XXXX1234 (IFSC: HDFC0001024)',
-    requested_at: '04 Aug 2026, 02:15 PM',
-    status: 'Pending',
-  },
-  {
-    id: 'WLT-9003',
-    txn_id: 'TXN-MKT-9003',
-    user_name: 'AgriCorp Solutions Pvt Ltd',
-    user_id: 'PRT-1001',
-    user_type: 'Partner',
-    amount: 145000,
-    category: 'Marketplace',
-    utr_number: 'UTR-2026-7712-ICIC',
-    bank_details: 'ICICI Escrow A/C #XXXX4412',
-    requested_at: '03 Aug 2026, 11:45 AM',
-    status: 'Approved',
-  },
-  {
-    id: 'WLT-9004',
-    txn_id: 'TXN-INS-9004',
-    user_name: 'Sita Devi',
-    user_id: 'FARM-MP-8093',
-    user_type: 'Farmer',
-    amount: 18500,
-    category: 'Insurance',
-    utr_number: 'UTR-2026-5510-AXIS',
-    bank_details: 'Axis A/C #XXXX8810',
-    requested_at: '02 Aug 2026, 04:20 PM',
-    status: 'Approved',
-  },
-  {
-    id: 'WLT-9005',
-    txn_id: 'TXN-REF-9005',
-    user_name: 'Vijay Deshmukh',
-    user_id: 'FARM-MH-4011',
-    user_type: 'Farmer',
-    amount: 3500,
-    category: 'Referral',
-    utr_number: 'UTR-2026-3390-PAYT',
-    bank_details: 'Paytm Bank A/C #XXXX9912',
-    requested_at: '01 Aug 2026, 09:10 AM',
-    status: 'Approved',
-  },
-  {
-    id: 'WLT-9006',
-    txn_id: 'TXN-ADJ-9006',
-    user_name: 'MP Forest Dept Board',
-    user_id: 'GOVT-MP-401',
-    user_type: 'Govt',
-    amount: 250000,
-    category: 'Adjustment',
-    utr_number: 'UTR-2026-1100-GOVT',
-    bank_details: 'Treasury Govt A/C #XXXX4012',
-    requested_at: '28 Jul 2026, 05:00 PM',
-    status: 'Approved',
-  },
-];
+const formatCurrencyINR = (num?: number) => {
+  if (!num || isNaN(num) || num <= 0) return '₹0';
+  if (num >= 10000000) {
+    return `₹${(num / 10000000).toFixed(2)} Crore`;
+  }
+  if (num >= 100000) {
+    return `₹${(num / 100000).toFixed(1)} Lakhs`;
+  }
+  if (num >= 1000) {
+    return `₹${(num / 1000).toFixed(1)}k`;
+  }
+  return `₹${Math.round(num).toLocaleString('en-IN')}`;
+};
 
-const WALLET_TREND = [
-  { day: 'Mon', amount: 4.2 }, { day: 'Tue', amount: 6.1 }, { day: 'Wed', amount: 5.3 },
-  { day: 'Thu', amount: 8.4 }, { day: 'Fri', amount: 7.2 }, { day: 'Sat', amount: 9.8 }, { day: 'Sun', amount: 12.8 },
-];
+const formatShortCurrency = (num?: number) => {
+  if (!num || isNaN(num) || num <= 0) return '₹0';
+  if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)}Cr`;
+  if (num >= 100000) return `₹${(num / 100000).toFixed(1)}L`;
+  if (num >= 1000) return `₹${(num / 1000).toFixed(1)}k`;
+  return `₹${Math.round(num).toLocaleString('en-IN')}`;
+};
 
 export const WalletDashboard = () => {
   const navigate = useNavigate();
@@ -133,11 +74,11 @@ export const WalletDashboard = () => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  const [transactionsList, setTransactionsList] = useState<WalletTransactionItem[]>(SEEDED_TRANSACTIONS);
   const [utrModalTxn, setUtrModalTxn] = useState<WalletTransactionItem | null>(null);
   const [newUtrNumber, setNewUtrNumber] = useState('');
 
-  const { data: apiData, isLoading, refetch, isFetching } = useWithdrawals(1, 30);
+  const { data: apiData, isLoading, refetch, isFetching } = useWithdrawals(1, 50);
+  const { data: summaryData, isLoading: summaryLoading, refetch: refetchSummary } = useWalletSummary();
   const approveMutation = useApproveWithdrawal();
   const rejectMutation = useRejectWithdrawal();
 
@@ -149,7 +90,7 @@ export const WalletDashboard = () => {
           ? w.farmer_name
           : (w.farmer_id ? `Farmer (${w.farmer_id.slice(-6)})` : 'Beneficiary Farmer');
 
-        const isMarketplace = w.bank_name === 'Marketplace Order';
+        const isMarketplace = w.bank_name === 'Marketplace Order' || w.payment_method === 'UPI' || String(w.id || '').startsWith('AGR-');
         const category = isMarketplace ? 'Marketplace' : 'Withdrawal';
 
         const rawUtr = w.payout_reference || w.utr;
@@ -196,13 +137,19 @@ export const WalletDashboard = () => {
     });
   }, [transactions, search, categoryFilter, statusFilter]);
 
-  // 6 Specified KPI Cards (Platform Revenue, Farmer Wallet, Govt Wallet, Partner Wallet, Pending, Withdrawn)
-  const platformRevenue = '₹48.2 Lakhs';
-  const farmerWallet = '₹1.85 Crore';
-  const govtWallet = '₹65.0 Lakhs';
-  const partnerWallet = '₹42.8 Lakhs';
-  const pendingAmount = transactions.filter(t => t.status === 'Pending').reduce((acc, t) => acc + t.amount, 0);
-  const totalWithdrawn = transactions.filter(t => t.status === 'Approved').reduce((acc, t) => acc + t.amount, 0);
+  // 6 Live KPI Cards (Platform Revenue, Farmer Wallet, Govt Wallet, Partner Wallet, Pending, Withdrawn)
+  const platformRevenue = formatCurrencyINR(summaryData?.platform_revenue);
+  const farmerWallet = formatCurrencyINR(summaryData?.farmer_wallet_total);
+  const govtWallet = formatCurrencyINR(summaryData?.govt_wallet);
+  const partnerWallet = formatCurrencyINR(summaryData?.partner_wallet);
+  
+  const pendingAmount = summaryData?.pending_amount !== undefined
+    ? summaryData.pending_amount
+    : transactions.filter(t => t.status === 'Pending').reduce((acc, t) => acc + t.amount, 0);
+
+  const totalWithdrawn = summaryData?.total_withdrawn !== undefined
+    ? summaryData.total_withdrawn
+    : transactions.filter(t => t.status === 'Approved').reduce((acc, t) => acc + t.amount, 0);
 
   const handleApprove = (id: string) => {
     const isRealWithdrawal = id.length === 24;
@@ -212,6 +159,7 @@ export const WalletDashboard = () => {
         onSuccess: () => {
           toast.success("Withdrawal approved successfully!");
           refetch();
+          refetchSummary();
         },
         onError: (err: any) => {
           toast.error(err?.response?.data?.message || "Failed to approve withdrawal on server.");
@@ -282,13 +230,19 @@ export const WalletDashboard = () => {
       <PageHeader
         title="Wallet & Financial Operations"
         description="Platform revenue, farmer escrow wallets, Govt nodal balances, partner commissions, bank UTR transfer settlements, and withdrawal approvals."
-        badge={{ label: `₹${(totalWithdrawn / 100000).toFixed(1)} Lakhs Disbursed`, variant: 'success' }}
+        badge={{ label: `${formatCurrencyINR(totalWithdrawn)} Disbursed`, variant: 'success' }}
         icon={Wallet}
         iconColor="#16A34A"
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => refetch()} className="btn btn-secondary btn-sm gap-1.5 cursor-pointer">
-              <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} /> Sync Ledger
+            <button
+              onClick={() => {
+                refetch();
+                refetchSummary();
+              }}
+              className="btn btn-secondary btn-sm gap-1.5 cursor-pointer"
+            >
+              <RefreshCw size={13} className={isFetching || summaryLoading ? 'animate-spin' : ''} /> Sync Ledger
             </button>
             <button
               onClick={() => {
@@ -309,12 +263,12 @@ export const WalletDashboard = () => {
 
       {/* ── 6 SPECIFIED KPI CARDS (Platform Revenue, Farmer Wallet, Govt Wallet, Partner Wallet, Pending, Withdrawn) ── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard title="PLATFORM REVENUE" value={platformRevenue} icon={DollarSign} iconBg="#F0FDF4" iconColor="#16A34A" loading={isLoading} />
-        <KpiCard title="FARMER WALLET" value={farmerWallet} icon={Wallet} iconBg="#EFF6FF" iconColor="#2563EB" loading={isLoading} />
-        <KpiCard title="GOVT WALLET" value={govtWallet} icon={Building2} iconBg="#FFFBEB" iconColor="#D97706" loading={isLoading} />
-        <KpiCard title="PARTNER WALLET" value={partnerWallet} icon={Handshake} iconBg="#F5F3FF" iconColor="#8B5CF6" loading={isLoading} />
-        <KpiCard title="PENDING" value={`₹${(pendingAmount / 1000).toFixed(1)}k`} icon={Clock} iconBg="#FEF3C7" iconColor="#B45309" loading={isLoading} />
-        <KpiCard title="WITHDRAWN" value={`₹${(totalWithdrawn / 100000).toFixed(1)}L`} icon={CheckCircle} iconBg="#ECFDF5" iconColor="#059669" loading={isLoading} />
+        <KpiCard title="PLATFORM REVENUE" value={platformRevenue} icon={DollarSign} iconBg="#F0FDF4" iconColor="#16A34A" loading={summaryLoading} />
+        <KpiCard title="FARMER WALLET" value={farmerWallet} icon={Wallet} iconBg="#EFF6FF" iconColor="#2563EB" loading={summaryLoading} />
+        <KpiCard title="GOVT WALLET" value={govtWallet} icon={Building2} iconBg="#FFFBEB" iconColor="#D97706" loading={summaryLoading} />
+        <KpiCard title="PARTNER WALLET" value={partnerWallet} icon={Handshake} iconBg="#F5F3FF" iconColor="#8B5CF6" loading={summaryLoading} />
+        <KpiCard title="PENDING" value={formatShortCurrency(pendingAmount)} icon={Clock} iconBg="#FEF3C7" iconColor="#B45309" loading={summaryLoading} />
+        <KpiCard title="WITHDRAWN" value={formatShortCurrency(totalWithdrawn)} icon={CheckCircle} iconBg="#ECFDF5" iconColor="#059669" loading={summaryLoading} />
       </div>
 
       {/* ── 6 SPECIFIED TRANSACTION CATEGORY FILTERS (Carbon, Marketplace, Insurance, Referral, Adjustment, Withdrawal) ── */}

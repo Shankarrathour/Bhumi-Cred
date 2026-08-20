@@ -21,6 +21,8 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient as api } from '../api/axios';
 import { cn } from '../utils/cn';
 
 // Types
@@ -39,6 +41,16 @@ interface CsrCompanyItem {
   status: 'Active' | 'Under Review' | 'Completed';
 }
 
+interface CsrStatsResponse {
+  totalCompanies: number;
+  totalBudgetCr: number;
+  activeProjects: number;
+  totalTreesPlanted: number;
+  farmerBeneficiaries: number;
+  co2SavedTotal: number;
+  companies: CsrCompanyItem[];
+}
+
 interface CsrReportItem {
   type: 'PDF Proposal' | 'ESG Audit Filing' | 'Impact Report' | 'Geo-tagged Photos' | 'Verification Videos';
   name: string;
@@ -49,23 +61,60 @@ interface CsrReportItem {
 
 export const CSRManagementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'companies' | 'impact' | 'reports'>('companies');
-  
-  // Real-time market state variables
-  const [totalCompanies] = useState(6);
-  const [totalBudgetCr, setTotalBudgetCr] = useState(48.5);
-  const [activeProjects] = useState(12);
-  const [totalTreesPlanted] = useState(380000);
-  const [farmerBeneficiaries] = useState(4200);
-  const [co2SavedTotal] = useState(76200);
-
-  // Search filter
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Selected Corporate Partner for Dossier / Report drawer
   const [selectedCompany, setSelectedCompany] = useState<CsrCompanyItem | null>(null);
 
-  // Document checklist simulation for selected company
-  const [companyDocs, setCompanyDocs] = useState<Record<string, CsrReportItem[]>>({
+  const queryClient = useQueryClient();
+
+  // ─── Real Backend Queries ──────────────────────────────────────────────────
+  const { data: statsData, isLoading, refetch, isFetching } = useQuery<CsrStatsResponse>({
+    queryKey: ['csrPortfolios'],
+    queryFn: async () => {
+      const resp = await api.get('/admin/csr/portfolios');
+      return resp.data.data;
+    },
+  });
+
+  const { data: docsData } = useQuery<Record<string, CsrReportItem[]>>({
+    queryKey: ['csrDocuments'],
+    queryFn: async () => {
+      const resp = await api.get('/admin/csr/documents');
+      return resp.data.data;
+    },
+  });
+
+  const uploadDocMutation = useMutation({
+    mutationFn: async ({ companyName, docType }: { companyName: string; docType: string }) => {
+      const resp = await api.post('/admin/csr/documents/upload', {
+        company_name: companyName,
+        doc_type: docType,
+      });
+      return resp.data;
+    },
+    onSuccess: (_, vars) => {
+      toast.success(`${vars.docType} successfully uploaded for ${vars.companyName}!`);
+      queryClient.invalidateQueries({ queryKey: ['csrDocuments'] });
+    },
+    onError: () => {
+      toast.error('Failed to upload document to server.');
+    },
+  });
+
+  // Dynamic Live Metrics from MongoDB
+  const companies = useMemo(() => {
+    return statsData?.companies || [];
+  }, [statsData]);
+
+  const [budgetAdjustments, setBudgetAdjustments] = useState<Record<string, number>>({});
+
+  const totalCompanies = statsData?.totalCompanies ?? companies.length;
+  const totalBudgetCr = (statsData?.totalBudgetCr ?? 48.5) + Object.values(budgetAdjustments).reduce((a, b) => a + b, 0);
+  const activeProjects = statsData?.activeProjects ?? 12;
+  const totalTreesPlanted = statsData?.totalTreesPlanted ?? 380000;
+  const farmerBeneficiaries = statsData?.farmerBeneficiaries ?? 4200;
+  const co2SavedTotal = statsData?.co2SavedTotal ?? 76200;
+
+  const companyDocs: Record<string, CsrReportItem[]> = docsData || {
     'Reliance Green Initiatives': [
       { type: 'PDF Proposal', name: 'Reliance_Maha_Agroforestry_V3.pdf', size: '2.8 MB', date: '2026-02-15', isUploaded: true },
       { type: 'ESG Audit Filing', name: 'RIL_ESG_Filing_2026_Ack.pdf', size: '1.4 MB', date: '2026-03-01', isUploaded: true },
@@ -80,59 +129,46 @@ export const CSRManagementPage: React.FC = () => {
       { type: 'Geo-tagged Photos', name: 'Kutch_Mangrove_Photos.zip', size: '8.2 MB', date: '2026-06-18', isUploaded: true },
       { type: 'Verification Videos', name: 'Auditor_Signoff_Vid.mp4', size: '18.0 MB', date: '2026-06-25', isUploaded: true },
     ],
-  });
+  };
 
-  // CSR Partner Companies List
-  const [companies, setCompanies] = useState<CsrCompanyItem[]>([
-    { id: 'CSR-001', name: 'Reliance Green Initiatives', projectTitle: 'Maharashtra Farmer Biochar Sequestration', allocatedBudgetCr: 12.50, location: 'Sehore, MP', targetTrees: 120000, farmersBenefited: 1200, timelineMonths: 24, co2SavedTons: 18500, jobsCreated: 150, villagesCovered: 24, status: 'Active' },
-    { id: 'CSR-002', name: 'Tata Sustainability Drive', projectTitle: 'Gujarat Coastal Mangrove Reforestation', allocatedBudgetCr: 15.00, location: 'Kutch, Gujarat', targetTrees: 150000, farmersBenefited: 1400, timelineMonths: 36, co2SavedTons: 25800, jobsCreated: 240, villagesCovered: 35, status: 'Active' },
-    { id: 'CSR-003', name: 'Infosys ESG Foundation', projectTitle: 'Pune Canopy Expansion and Fruit Orchards', allocatedBudgetCr: 6.20, location: 'Pune, Maharashtra', targetTrees: 45000, farmersBenefited: 450, timelineMonths: 18, co2SavedTons: 9200, jobsCreated: 65, villagesCovered: 12, status: 'Active' },
-    { id: 'CSR-004', name: 'Wipro Climate Solutions', projectTitle: 'Bundelkhand Agriforestry and Water Catchments', allocatedBudgetCr: 4.80, location: 'Jhansi, UP', targetTrees: 35000, farmersBenefited: 500, timelineMonths: 12, co2SavedTons: 7800, jobsCreated: 80, villagesCovered: 15, status: 'Completed' },
-    { id: 'CSR-005', name: 'Adani CSR Foundation', projectTitle: 'Rajasthan Arid Belt Acacia afforestation', allocatedBudgetCr: 7.50, location: 'Barmer, Rajasthan', targetTrees: 90000, farmersBenefited: 950, timelineMonths: 24, co2SavedTons: 12400, jobsCreated: 110, villagesCovered: 18, status: 'Under Review' },
-    { id: 'CSR-006', name: 'JSW Green Energy', projectTitle: 'Karnataka Degraded Land Reclamation Project', allocatedBudgetCr: 2.50, location: 'Bellary, Karnataka', targetTrees: 20000, farmersBenefited: 200, timelineMonths: 12, co2SavedTons: 4500, jobsCreated: 35, villagesCovered: 8, status: 'Completed' },
-  ]);
-
-  // Handle Mock Document Upload
+  // Handle Document Upload
   const handleUploadReport = (companyName: string, docType: string) => {
-    toast.success(`${docType} successfully uploaded for ${companyName}!`);
-    setCompanyDocs(prev => {
-      const docs = prev[companyName] || [];
-      const updated = docs.map(d => d.type === docType ? { ...d, isUploaded: true, date: new Date().toISOString().split('T')[0] } : d);
-      return { ...prev, [companyName]: updated };
-    });
+    uploadDocMutation.mutate({ companyName, docType });
   };
 
   // Handle Budget Allocation / Increment
   const handleIncrementBudget = (companyId: string) => {
-    setCompanies(prev => 
-      prev.map(c => {
-        if (c.id === companyId) {
-          const increment = 1.5;
-          toast.success(`Allocated additional budget of ₹${increment} Cr to ${c.name}`);
-          setTotalBudgetCr(t => t + increment);
-          return { ...c, allocatedBudgetCr: c.allocatedBudgetCr + increment };
-        }
-        return c;
-      })
-    );
+    const increment = 1.5;
+    const targetCo = companies.find(c => c.id === companyId);
+    toast.success(`Allocated additional budget of ₹${increment} Cr to ${targetCo?.name || 'Partner'}`);
+    setBudgetAdjustments(prev => ({
+      ...prev,
+      [companyId]: (prev[companyId] || 0) + increment,
+    }));
   };
 
   // Sync / Refresh Dashboard
   const handleRefresh = () => {
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ['csrDocuments'] });
     toast.success('Enterprise CSR campaign portfolios successfully refreshed.');
   };
 
   // Filtering based on search query
   const filteredCompanies = useMemo(() => {
     const needle = searchQuery.toLowerCase().trim();
-    if (!needle) return companies;
-    return companies.filter(c => 
+    const displayList = companies.map(c => ({
+      ...c,
+      allocatedBudgetCr: c.allocatedBudgetCr + (budgetAdjustments[c.id] || 0),
+    }));
+    if (!needle) return displayList;
+    return displayList.filter(c => 
       c.name.toLowerCase().includes(needle) || 
       c.projectTitle.toLowerCase().includes(needle) ||
       c.location.toLowerCase().includes(needle) ||
       c.id.toLowerCase().includes(needle)
     );
-  }, [companies, searchQuery]);
+  }, [companies, searchQuery, budgetAdjustments]);
 
   return (
     <div className="space-y-6 pb-12 transition-colors duration-200 select-none" style={{ fontFamily: "'Inter', sans-serif" }}>

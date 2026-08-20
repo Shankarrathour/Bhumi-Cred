@@ -2,7 +2,7 @@ from typing import Optional
 
 from bson import ObjectId
 
-from app.models.project_enrollment import ProjectEnrollment
+from app.models.project_enrollment import EnrollmentStatus, ProjectEnrollment
 from app.repositories.base import BaseRepository
 
 
@@ -20,10 +20,18 @@ class ProjectEnrollmentRepository(BaseRepository[ProjectEnrollment]):
         )
 
     async def get_active_by_farmer(self, farmer_id: str) -> list[ProjectEnrollment]:
+        """Return only ADMIN-ASSIGNED (ACTIVE status) enrollments.
+
+        We intentionally filter by EnrollmentStatus.ACTIVE so that
+        PENDING_ADMIN_VERIFICATION records (created via the farmer join-request
+        flow) do NOT auto-appear as an active project in the Projects Hub before
+        admin explicitly approves/assigns them.
+        """
         return await (
             ProjectEnrollment.find(
                 ProjectEnrollment.farmer_id == farmer_id,
                 ProjectEnrollment.is_active == True,
+                ProjectEnrollment.status == EnrollmentStatus.ACTIVE,
             )
             .sort("-joined_at")
             .to_list()
@@ -41,9 +49,11 @@ class ProjectEnrollmentRepository(BaseRepository[ProjectEnrollment]):
         return doc
 
     async def get_active_enrollment(self, farmer_id: str) -> Optional[ProjectEnrollment]:
+        """Return the first ACTIVE enrollment for a farmer (admin-assigned only)."""
         return await ProjectEnrollment.find_one(
             ProjectEnrollment.farmer_id == farmer_id,
             ProjectEnrollment.is_active == True,
+            ProjectEnrollment.status == EnrollmentStatus.ACTIVE,
         )
 
     async def list_active(self) -> list[ProjectEnrollment]:

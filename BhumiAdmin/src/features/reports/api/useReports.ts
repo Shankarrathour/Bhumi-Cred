@@ -59,3 +59,25 @@ export const useAdminDashboard = () =>
       return res.data;
     },
   });
+
+export interface ReportsStats {
+  farmer_report: { total_farmers: number; total_acres: number };
+  govt_report: { total_mous: number; compliance_pct: number };
+  partner_report: { total_partners: number };
+  carbon_report: { total_projects: number; carbon_generated_tco2e: number; carbon_issued_tco2e: number };
+  revenue_report: { revenue_lakhs: number };
+  insurance_report: { total_trees_insured: number; coverage_lakhs: number };
+  wallet_report: { total_escrow_balance: number; total_withdrawn: number };
+  referral_report: { total_referrals: number; total_bonus_paid: number };
+}
+
+export const useReportsStats = () =>
+  useQuery<ReportsStats>({
+    queryKey: ['admin-reports-stats'],
+    queryFn: async () => {
+      const res = await apiClient.get('/admin/reports/stats');
+      return res.data.data;
+    },
+    refetchInterval: 30000,
+    staleTime: 15000,
+  });

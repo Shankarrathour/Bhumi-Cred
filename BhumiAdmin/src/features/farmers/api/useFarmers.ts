@@ -415,3 +415,27 @@ export const useDeleteFarmer = () => {
     },
   });
 };
+
+export const useFarmerEnrollments = () => {
+  return useQuery({
+    queryKey: ['admin-project-enrollments'],
+    queryFn: async (): Promise<any[]> => {
+      const response = await apiClient.get('/admin/projects/enrollments');
+      return response.data.data ?? [];
+    },
+    staleTime: 60 * 1000,
+  });
+};
+
+export const useUpdateFarmerEnrollment = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ enrollmentId, payload }: { enrollmentId: string; payload: any }) => {
+      const response = await apiClient.patch(`/projects/admin/enrollments/${enrollmentId}/review`, payload);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-project-enrollments'] });
+    },
+  });
+};

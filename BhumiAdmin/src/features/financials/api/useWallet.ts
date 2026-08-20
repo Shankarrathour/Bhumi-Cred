@@ -11,6 +11,29 @@ export interface AdminWithdrawalResponse {
   rejection_reason?: string;
 }
 
+export interface WalletSummaryResponse {
+  platform_revenue: number;
+  farmer_wallet_total: number;
+  govt_wallet: number;
+  partner_wallet: number;
+  pending_amount: number;
+  total_withdrawn: number;
+  pending_count: number;
+  approved_count: number;
+  total_wallets_count: number;
+  trend: Array<{ day: string; amount: number }>;
+}
+
+export const useWalletSummary = () => {
+  return useQuery({
+    queryKey: ['adminWalletSummary'],
+    queryFn: async (): Promise<WalletSummaryResponse> => {
+      const response = await api.get('/admin/wallet/summary');
+      return response.data.data;
+    },
+  });
+};
+
 export interface AdminWithdrawalListResponse {
   items: AdminWithdrawalResponse[];
   total: number;

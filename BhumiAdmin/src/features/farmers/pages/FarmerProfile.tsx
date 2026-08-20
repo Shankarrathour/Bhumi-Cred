@@ -5,7 +5,7 @@ import {
   User, ShieldCheck, Landmark, FileText, Cloud,
   Clock, Folder, Ban, Unlock, Trash2,
   Download, CheckSquare, Layers, AlertTriangle, Phone, Mail,
-  Activity, Trees, Home, Calendar, Globe, Zap
+  Activity, Trees, Home, Calendar, Globe, Zap, Plus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
@@ -21,7 +21,10 @@ import {
   useBlockFarmer,
   useUnblockFarmer,
   useDeleteFarmer,
+  useFarmerEnrollments,
+  useUpdateFarmerEnrollment,
 } from '../api/useFarmers';
+import { useProjects, useAssignFarmerProject, useDeleteEnrollment } from '../../projects/api/useProjects';
 import { useWithdrawals } from '../../financials/api/useWallet';
 import { downloadPDFDocument } from '../../../utils/pdfExporter';
 import toast from 'react-hot-toast';
@@ -58,8 +61,31 @@ export const FarmerProfile = () => {
   const [activeTab, setActiveTab] = useState<string>('Overview');
   const [actionModal, setActionModal] = useState<ActionType>(null);
   const [rejectRemarks, setRejectRemarks] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showSoilModal, setShowSoilModal] = useState(false);
-  const [currentStageNum, setCurrentStageNum] = useState(2);
+  const [showEditProjectModal, setShowEditProjectModal] = useState(false);
+  const [projectForm, setProjectForm] = useState<any>({
+    status: 'active',
+    current_stage: 'registered',
+    progress_percent: 0,
+    land_verified: false,
+    trees_verified: false,
+    mrv_verified: false,
+    insured_trees: 0,
+    estimated_carbon_impact: 0,
+    stage_project_assigned: false,
+    stage_land_registered: false,
+    stage_soil_verified: false,
+    stage_inspection_completed: false,
+    stage_trees_registered: false,
+    stage_insurance_activated: false,
+    stage_mrv_monitoring_started: false,
+    stage_carbon_estimation_running: false,
+    stage_reward_eligible: false,
+  });
+
+  const updateEnrollment = useUpdateFarmerEnrollment();
+
   const [soilDataState, setSoilDataState] = useState({
     soc: 1.45,
     n: 240,
@@ -79,6 +105,41 @@ export const FarmerProfile = () => {
   const { data: familyData, isLoading: familyLoading } = useFarmerFamily(id);
   const { data: landData, isLoading: landLoading } = useFarmerLand(id);
   const { data: allWithdrawalsData } = useWithdrawals(1, 100);
+  const { data: enrollmentsData, isLoading: enrollmentsLoading } = useFarmerEnrollments();
+  const { data: allProjectsList } = useProjects();
+  const assignProjectMutation = useAssignFarmerProject();
+  const deleteEnrollmentMutation = useDeleteEnrollment();
+  const [showAssignProjectModal, setShowAssignProjectModal] = useState(false);
+  const [assignForm, setAssignForm] = useState({
+    projectId: '',
+    landAreaAcres: 10,
+    treeCount: 40,
+  });
+
+  const farmerEnrollment = useMemo(() => {
+    if (!enrollmentsData || !farmerDetail) return null;
+    const fId = String(farmerDetail.id || farmerDetail._id || '').toLowerCase();
+    const fPublicId = String(farmerDetail.farmer_id || '').toLowerCase();
+    return enrollmentsData.find(
+      (e: any) =>
+        String(e.farmer_id || '').toLowerCase() === fId ||
+        String(e.farmer_id || '').toLowerCase() === fPublicId
+    );
+  }, [enrollmentsData, farmerDetail]);
+
+  const currentStageNum = useMemo(() => {
+    if (!farmerEnrollment) return 2;
+    if (farmerEnrollment.stage_reward_eligible) return 9;
+    if (farmerEnrollment.stage_carbon_estimation_running) return 8;
+    if (farmerEnrollment.stage_mrv_monitoring_started) return 7;
+    if (farmerEnrollment.stage_insurance_activated) return 6;
+    if (farmerEnrollment.stage_trees_registered) return 5;
+    if (farmerEnrollment.stage_inspection_completed) return 4;
+    if (farmerEnrollment.stage_soil_verified) return 3;
+    if (farmerEnrollment.stage_land_registered) return 2;
+    if (farmerEnrollment.stage_project_assigned) return 1;
+    return 1;
+  }, [farmerEnrollment]);
 
   const farmerTransactions = useMemo(() => {
     if (!farmerDetail) return [];
@@ -92,47 +153,11 @@ export const FarmerProfile = () => {
       return wFarmerId === fId || wFarmerId === fPublicId || (mobile && wFarmerName.includes(mobile));
     });
 
-    if (matched.length === 0) {
-      matched = [
-        {
-          id: '6a854de3d0ffaa2c533747a0',
-          farmer_id: fId,
-          farmer_name: farmerDetail.full_name || 'Shankar Rathore',
-          amount: 190,
-          type: 'DEBIT',
-          category: 'Marketplace Purchase (UPI Debit)',
-          payment_method: 'UPI',
-          bank_name: 'State Bank of India',
-          account_number_masked: '******3255',
-          ifsc_code: 'SBIN0098543',
-          upi_id: `${(farmerDetail.full_name || 'shankar').toLowerCase().replace(/\s+/g, '')}@upi`,
-          payout_reference: 'UPI-20260819-2C2PYP',
-          created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-          status: 'approved',
-        },
-        {
-          id: '6a854de3d0ffaa2c533747a1',
-          farmer_id: fId,
-          farmer_name: farmerDetail.full_name || 'Shankar Rathore',
-          amount: 1250,
-          type: 'CREDIT',
-          category: 'Carbon Subsidy Payout (Credit)',
-          payment_method: 'Bank Direct',
-          bank_name: 'State Bank of India',
-          account_number_masked: '******3255',
-          ifsc_code: 'SBIN0098543',
-          upi_id: `${(farmerDetail.full_name || 'shankar').toLowerCase().replace(/\s+/g, '')}@upi`,
-          payout_reference: 'UTR-20260818-8849-SBIN',
-          created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-          status: 'approved',
-        }
-      ];
-    }
     return matched;
   }, [allWithdrawalsData, farmerDetail, id]);
 
   const effectiveBank = useMemo(() => {
-    if (bankData && (bankData.bank_name || bankData.account_number || bankData.ifsc_code)) {
+    if (bankData && (bankData.bank_name || bankData.account_number || bankData.ifsc_code || bankData.upi_id)) {
       return bankData;
     }
     if (farmerDetail?.bank_details && (farmerDetail.bank_details.bank_name || farmerDetail.bank_details.account_number)) {
@@ -144,18 +169,8 @@ export const FarmerProfile = () => {
         is_verified: true,
       };
     }
-    if (farmerTransactions.length > 0 && farmerTransactions[0].bank_name) {
-      return {
-        bank_name: farmerTransactions[0].bank_name,
-        account_number: farmerTransactions[0].account_number_masked,
-        ifsc_code: farmerTransactions[0].ifsc_code,
-        account_holder_name: farmerTransactions[0].account_holder_name || farmerDetail?.full_name,
-        upi_id: farmerTransactions[0].upi_id,
-        is_verified: true,
-      };
-    }
     return null;
-  }, [bankData, farmerDetail, farmerTransactions]);
+  }, [bankData, farmerDetail]);
 
   // ─── Action Mutations ──────────────────────────────────────────────────────
   const approveMutation = useApproveFarmer();
@@ -644,12 +659,18 @@ export const FarmerProfile = () => {
               <h3 className="text-[15px] font-bold text-[#0F172A] flex items-center gap-2">
                 <Landmark size={18} className="text-[#16A34A]" /> Bank Account & Payout Details
               </h3>
-              <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2.5 py-0.5 rounded-full border border-[#DCFCE7]">
-                Primary Account Active
-              </span>
+              {effectiveBank?.bank_name ? (
+                <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2.5 py-0.5 rounded-full border border-[#DCFCE7]">
+                  Primary Account Active
+                </span>
+              ) : (
+                <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                  No Linked Payout Method
+                </span>
+              )}
             </div>
 
-            {/* Linked Payout Methods Cards (Bank Account Card + UPI ID Card App UI Match) */}
+            {/* Linked Payout Methods Cards */}
             <div className="space-y-3">
               <h4 className="text-[12px] font-extrabold text-[#0F172A] uppercase tracking-wider">Linked Payout Methods</h4>
               
@@ -658,52 +679,76 @@ export const FarmerProfile = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Card 1: Primary Bank Account */}
-                  <div className="p-4 bg-white border border-[#E2E8F0] rounded-2xl shadow-xs hover:border-[#16A34A] transition-all flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-2xl bg-[#F0FDF4] border border-[#DCFCE7] text-[#16A34A] flex items-center justify-center shrink-0">
+                  {effectiveBank?.bank_name ? (
+                    <div className="p-4 bg-white border border-[#E2E8F0] rounded-2xl shadow-xs hover:border-[#16A34A] transition-all flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-[#F0FDF4] border border-[#DCFCE7] text-[#16A34A] flex items-center justify-center shrink-0">
+                          <Landmark size={20} />
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="text-[14px] font-bold text-[#0F172A]">
+                              {effectiveBank.bank_name}
+                            </h4>
+                            <span className="bg-[#DCFCE7] text-[#15803D] text-[9.5px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                              PRIMARY
+                            </span>
+                          </div>
+                          <p className="text-[11.5px] font-mono text-[#475569]">
+                            A/C: <span className="font-bold text-[#0F172A]">{effectiveBank.account_number}</span> • IFSC: <span className="font-bold text-[#2563EB]">{effectiveBank.ifsc_code}</span>
+                          </p>
+                          <p className="text-[11px] text-[#64748B]">
+                            Holder: <strong className="text-[#0F172A]">{effectiveBank.account_holder_name || farmerDetail.full_name}</strong>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-slate-50 border border-dashed border-[#E2E8F0] rounded-2xl flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-2xl bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center shrink-0">
                         <Landmark size={20} />
                       </div>
                       <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h4 className="text-[14px] font-bold text-[#0F172A]">
-                            {effectiveBank?.bank_name || 'State Bank of India'}
-                          </h4>
-                          <span className="bg-[#DCFCE7] text-[#15803D] text-[9.5px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
-                            PRIMARY
-                          </span>
-                        </div>
-                        <p className="text-[11.5px] font-mono text-[#475569]">
-                          A/C: <span className="font-bold text-[#0F172A]">{effectiveBank?.account_number || '******3255'}</span> • IFSC: <span className="font-bold text-[#2563EB]">{effectiveBank?.ifsc_code || 'SBIN0098543'}</span>
-                        </p>
-                        <p className="text-[11px] text-[#64748B]">
-                          Holder: <strong className="text-[#0F172A]">{effectiveBank?.account_holder_name || farmerDetail.full_name || 'Shankar Rathore'}</strong>
-                        </p>
+                        <h4 className="text-[13px] font-bold text-slate-500">No Bank Account Linked</h4>
+                        <p className="text-[11px] text-slate-400">Payout bank details are not configured yet</p>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Card 2: UPI ID Card (Exact Mobile App UI Match) */}
-                  <div className="p-4 bg-white border border-[#E2E8F0] rounded-2xl shadow-xs hover:border-[#9333EA] transition-all flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-2xl bg-[#F3E8FF] border border-[#F0ABFC]/40 text-[#9333EA] flex items-center justify-center shrink-0">
-                        <Zap size={20} className="fill-[#9333EA]" />
-                      </div>
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="text-[14px] font-extrabold text-[#0F172A]">UPI ID</h4>
-                          <span className="bg-[#F3E8FF] text-[#9333EA] text-[9.5px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
-                            ACTIVE VPA
-                          </span>
+                  {effectiveBank?.upi_id ? (
+                    <div className="p-4 bg-white border border-[#E2E8F0] rounded-2xl shadow-xs hover:border-[#9333EA] transition-all flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-[#F3E8FF] border border-[#F0ABFC]/40 text-[#9333EA] flex items-center justify-center shrink-0">
+                          <Zap size={20} className="fill-[#9333EA]" />
                         </div>
-                        <p className="text-[13px] font-mono font-bold text-[#9333EA]">
-                          {effectiveBank?.upi_id || 'shankarrathour824@adl'}
-                        </p>
-                        <p className="text-[11px] text-[#64748B]">
-                          Instant UPI Payout VPA
-                        </p>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-[14px] font-extrabold text-[#0F172A]">UPI ID</h4>
+                            <span className="bg-[#F3E8FF] text-[#9333EA] text-[9.5px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">
+                              ACTIVE VPA
+                            </span>
+                          </div>
+                          <p className="text-[13px] font-mono font-bold text-[#9333EA]">
+                            {effectiveBank.upi_id}
+                          </p>
+                          <p className="text-[11px] text-[#64748B]">
+                            Instant UPI Payout VPA
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-4 bg-slate-50 border border-dashed border-[#E2E8F0] rounded-2xl flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-2xl bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center shrink-0">
+                        <Zap size={20} />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-[13px] font-bold text-slate-500">No UPI ID Linked</h4>
+                        <p className="text-[11px] text-slate-400">Instant UPI payout method is not configured yet</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -885,323 +930,827 @@ export const FarmerProfile = () => {
         {/* 7. PROJECTS */}
         {activeTab === 'Projects' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
-              <h3 className="text-[15px] font-bold text-[#0F172A] flex items-center gap-2">
-                <FileText size={18} className="text-[#16A34A]" /> Enrolled Carbon & Forestry Projects
-              </h3>
-              <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2.5 py-0.5 rounded-full border border-[#DCFCE7]">
-                1 Active Mission
-              </span>
-            </div>
-
-            {/* Enrolled Project Card (App UI Match) */}
-            <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl text-white shadow-xl space-y-5 relative overflow-hidden">
-              {/* Background gradient decorative glow */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
-                  <Trees size={24} />
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest block">
-                    YOU ARE ACTIVELY PARTICIPATING IN THIS MISSION
+            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <FileText size={18} className="text-[#16A34A]" />
+                <h3 className="text-[15px] font-bold text-[#0F172A]">Enrolled Carbon & Forestry Projects</h3>
+                {farmerEnrollment ? (
+                  <span className="text-[11px] font-bold text-[#16A34A] bg-[#F0FDF4] px-2.5 py-0.5 rounded-full border border-[#DCFCE7]">
+                    1 Active Mission
                   </span>
-                  <h4 className="text-[20px] font-black text-white">Green India Afforestation 2026</h4>
-                  <p className="text-[12.5px] text-slate-300 leading-relaxed max-w-3xl pt-1">
-                    This project focuses on restoring degraded land through large-scale tree plantation. Native tree species will be planted to improve biodiversity, capture atmospheric carbon, reduce soil erosion, and generate verified carbon credits while supporting local communities.
-                  </p>
-                </div>
+                ) : (
+                  <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                    0 Active Missions
+                  </span>
+                )}
               </div>
 
-              {/* Requirements & Mapped Verification */}
-              <div className="p-4 bg-slate-800/80 border border-slate-700/60 rounded-2xl space-y-2.5 text-[12.5px]">
-                <div className="flex items-center gap-2 text-emerald-400 font-semibold">
-                  <CheckCircle size={16} className="text-emerald-400 shrink-0" />
-                  <span>Land Parcel: <strong className="text-white">{farmerDetail.total_acreage || 188.1} Acres Registered</strong></span>
-                </div>
-                <div className="flex items-center gap-2 text-emerald-400 font-semibold">
-                  <CheckCircle size={16} className="text-emerald-400 shrink-0" />
-                  <span>Enrolled Trees: <strong className="text-white">{farmerDetail.total_trees || 0} saplings monitored</strong></span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-300 font-semibold">
-                  <User size={16} className="text-emerald-400 shrink-0" />
-                  <span>Verification Team: <strong className="text-white">Bhopal East Agronomy Unit</strong></span>
-                </div>
-              </div>
-
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px] pt-1">
-                <div className="space-y-1">
-                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">ASSIGNED DATE</p>
-                  <p className="font-bold text-white font-mono">{fmtDate(farmerDetail.created_at || '2026-08-18')}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">CURRENT STAGE</p>
-                  <p className="font-extrabold text-emerald-400">Stage 2: MRV Scheduled</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">EST. CARBON YIELD</p>
-                  <p className="font-bold text-amber-400">{farmerDetail.carbon_credits_generated || 0.0} tCO2e</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">SUPPORTING NGO</p>
-                  <p className="font-bold text-white">Green Earth Foundation</p>
-                </div>
-              </div>
-
-              {/* Action Buttons Row matching App UI (View Project Info & Soil Testing 🧪) */}
-              <div className="flex items-center gap-3 pt-3 border-t border-slate-800">
+              {/* Action Buttons in Header */}
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setShowSoilModal(true)}
-                  className="px-4 py-2 bg-emerald-800/80 hover:bg-emerald-700 text-white font-bold text-[12.5px] rounded-xl border border-emerald-600/50 flex items-center gap-2 transition-all shadow-sm"
+                  onClick={() => {
+                    const defaultProj = allProjectsList?.[0]?.id || allProjectsList?.[0]?.project_id || '';
+                    setAssignForm({
+                      projectId: defaultProj,
+                      landAreaAcres: farmerDetail.total_acreage || 10,
+                      treeCount: farmerDetail.total_trees || 40,
+                    });
+                    setShowAssignProjectModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] border border-[#DCFCE7] rounded-xl text-[12px] font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                 >
-                  Soil Testing 🧪
+                  <Plus size={14} /> {farmerEnrollment ? 'Switch / Change Project' : 'Assign Project'}
                 </button>
-                <span className="text-[11.5px] text-emerald-400 font-mono">
-                  Report No: {soilDataState.labReport} ({soilDataState.status})
-                </span>
+                {farmerEnrollment && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Are you sure you want to unassign "${farmerEnrollment.project_title}" from this farmer?`)) return;
+                      try {
+                        const enId = farmerEnrollment.enrollment_id || farmerEnrollment.id || farmerEnrollment._id;
+                        await deleteEnrollmentMutation.mutateAsync(enId);
+                        toast.success(`Farmer removed from project "${farmerEnrollment.project_title}".`);
+                      } catch (err: any) {
+                        toast.error(err?.response?.data?.message || 'Failed to remove project.');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[#DC2626] border border-[#FEE2E2] rounded-xl text-[12px] font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Trash2 size={13} /> Unassign Project
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* PROJECT MISSION OBJECTIVE & CARBON SEQUESTRATION INDICATORS (Matching App Project Info Screen) */}
-            <div className="p-6 bg-[#F0FDF4] border border-[#DCFCE7] rounded-3xl space-y-4 shadow-xs">
-              <div className="flex items-center justify-between border-b border-[#DCFCE7] pb-3 flex-wrap gap-2">
-                <div className="space-y-0.5">
-                  <span className="text-[10px] font-extrabold text-[#16A34A] uppercase tracking-wider block">SUSTAINABILITY MISSION</span>
-                  <h4 className="text-[16px] font-extrabold text-[#0F172A]">Green India Afforestation 2026</h4>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-0.5 bg-[#DCFCE7] text-[#15803D] text-[11px] font-bold rounded-lg font-mono">📅 3 Years</span>
-                  <span className="px-2.5 py-0.5 bg-[#DCFCE7] text-[#15803D] text-[11px] font-bold rounded-lg font-mono">📍 Dewas</span>
-                  <span className="px-2.5 py-0.5 bg-[#16A34A] text-white text-[11px] font-bold rounded-lg uppercase">PARTICIPATING</span>
-                </div>
-              </div>
+            {enrollmentsLoading ? (
+              <div className="h-64 bg-slate-100 animate-pulse rounded-3xl" />
+            ) : farmerEnrollment ? (
+              <>
+                {/* Enrolled Project Card (App UI Match) */}
+                <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl text-white shadow-xl space-y-5 relative overflow-hidden">
+                  {/* Background gradient decorative glow */}
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-              {/* Ecosystem Banner Box */}
-              <div className="p-4 bg-white/80 border border-[#DCFCE7] rounded-2xl space-y-1 text-[12px]">
-                <p className="text-[10.5px] font-extrabold text-[#16A34A] uppercase tracking-wider flex items-center gap-1.5">
-                  ⚡ BHUMICRED TWIN ONBOARDING ECOSYSTEM
-                </p>
-                <p className="text-[#475569] leading-relaxed">
-                  Both carbon auditing and tree insurance are operationally connected during land registrations. Your registered land coordinates feed directly into satellite carbon credit programs while cover policies protect trees sowed on the exact same plots.
-                </p>
-              </div>
-
-              {/* Mission Objective */}
-              <div className="space-y-1 text-[12.5px]">
-                <h5 className="text-[11px] font-extrabold text-[#0F172A] uppercase tracking-wider">PROJECT MISSION OBJECTIVE</h5>
-                <p className="text-[#334155] leading-relaxed">
-                  This project focuses on restoring degraded land through large-scale tree plantation. Native tree species will be planted to improve biodiversity, capture atmospheric carbon, reduce soil erosion, and generate verified carbon credits while supporting local communities.
-                </p>
-              </div>
-
-              {/* Carbon Sequestration Indicators */}
-              <div className="space-y-2 pt-1">
-                <h5 className="text-[11px] font-extrabold text-[#0F172A] uppercase tracking-wider">CARBON SEQUESTRATION INDICATORS</h5>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-2xl space-y-0.5">
-                    <p className="text-[9.5px] font-extrabold text-[#94A3B8] uppercase">REGISTERED LAND SCALE</p>
-                    <p className="text-[15px] font-black text-[#0F172A]">{farmerDetail.total_acreage || 600} Acres</p>
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
+                      <Trees size={24} />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest block">
+                        YOU ARE ACTIVELY PARTICIPATING IN THIS MISSION
+                      </span>
+                      <h4 className="text-[20px] font-black text-white">{farmerEnrollment.project_title}</h4>
+                      <p className="text-[12.5px] text-slate-300 leading-relaxed max-w-3xl pt-1">
+                        This project focuses on restoring degraded land through large-scale tree plantation. Native tree species will be planted to improve biodiversity, capture atmospheric carbon, reduce soil erosion, and generate verified carbon credits while supporting local communities.
+                      </p>
+                    </div>
                   </div>
-                  <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-2xl space-y-0.5">
-                    <p className="text-[9.5px] font-extrabold text-[#94A3B8] uppercase">TOTAL MAPPED TREES</p>
-                    <p className="text-[15px] font-black text-[#0F172A]">{farmerDetail.total_trees || 0} Trees</p>
-                  </div>
-                  <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-2xl space-y-0.5">
-                    <p className="text-[9.5px] font-extrabold text-[#94A3B8] uppercase">AGROFORESTRY ACTIVE</p>
-                    <p className="text-[13px] font-bold text-[#16A34A]">Yes (Canopy Sponges)</p>
-                  </div>
-                  <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-2xl space-y-0.5">
-                    <p className="text-[9.5px] font-extrabold text-[#94A3B8] uppercase">PLANTATION DENSITY</p>
-                    <p className="text-[12.5px] font-bold text-[#0F172A]">Baseline inspection complete</p>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* ROADMAP JOURNEY TIMELINE (Matching Image 3 & Image 4) */}
-            <div className="p-6 bg-white border border-[#E2E8F0] rounded-3xl space-y-4 shadow-xs">
-              <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
-                <div>
-                  <h4 className="text-[15px] font-bold text-[#0F172A]">ROADMAP JOURNEY TIMELINE</h4>
-                  <p className="text-[12px] text-[#64748B]">Expand nodes to review GIS Soil Organic Carbon (SOC) lab baselines.</p>
-                </div>
-                <span className="text-[12px] font-extrabold text-[#16A34A] bg-[#F0FDF4] px-3 py-1 rounded-full border border-[#DCFCE7]">
-                  {currentStageNum}/9 Completed
-                </span>
-              </div>
+                  {/* Requirements & Mapped Verification */}
+                  <div className="p-4 bg-slate-800/80 border border-slate-700/60 rounded-2xl space-y-2.5 text-[12.5px]">
+                    <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+                      <CheckCircle size={16} className="text-emerald-400 shrink-0" />
+                      <span>Land Parcel: <strong className="text-white">{farmerEnrollment.land_area_acres || farmerDetail.total_acreage || 0} Acres Registered</strong></span>
+                    </div>
+                    <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+                      <CheckCircle size={16} className="text-emerald-400 shrink-0" />
+                      <span>Enrolled Trees: <strong className="text-white">{farmerEnrollment.registered_trees || farmerDetail.total_trees || 0} saplings monitored</strong></span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-300 font-semibold">
+                      <User size={16} className="text-emerald-400 shrink-0" />
+                      <span>Verification Team: <strong className="text-white">Bhopal East Agronomy Unit</strong></span>
+                    </div>
+                  </div>
 
-              {/* 9-Step Roadmap List */}
-              <div className="space-y-3 pt-1">
-                {[
-                  { step: 1, name: '1. Project Assigned', desc: 'Enrollment initiated and project dashboard generated.' },
-                  { step: 2, name: '2. MRV Scheduled', desc: 'Remote sensing satellite scans and audit windows locked.' },
-                  { step: 3, name: '3. Soil Testing', desc: `Core soil NPK baseline checks: N=${soilDataState.n} P=${soilDataState.p} K=${soilDataState.k} kg/ha (SOC: ${soilDataState.soc}%).` },
-                  { step: 4, name: '4. Inspection', desc: 'On-site field verification by assigned inspector completed.' },
-                  { step: 5, name: '5. GIS Mapping', desc: 'Dynamic boundary geofencing synced in global ecological registry.' },
-                  { step: 6, name: '6. MRV Progress', desc: 'Active remote canopy monitoring and tree shield insurance active.' },
-                  { step: 7, name: '7. Carbon Calculation', desc: 'Live remote biomass calculation models active.' },
-                  { step: 8, name: '8. Registry', desc: 'Environmental credits registered under verification standard.' },
-                  { step: 9, name: '9. Credits Issued', desc: 'Carbon credit rewards minted and deposited in Eco-Wallet.' },
-                ].map((st) => {
-                  const isDone = st.step <= currentStageNum;
-                  const isCurrent = st.step === currentStageNum;
-                  return (
-                    <div
-                      key={st.step}
-                      onClick={() => setCurrentStageNum(st.step)}
-                      className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
-                        isCurrent
-                          ? 'bg-[#F0FDF4] border-[#16A34A] shadow-xs'
-                          : isDone
-                          ? 'bg-[#FAFCFF] border-[#DCFCE7]'
-                          : 'bg-[#F8FAFC] border-[#E2E8F0] opacity-60'
-                      }`}
+                  {/* Metrics Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px] pt-1">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-extrabold text-slate-400 tracking-wider">ASSIGNED DATE</p>
+                      <p className="font-bold text-white font-mono">{fmtDate(farmerEnrollment.joined_at || farmerDetail.created_at)}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-extrabold text-slate-400 tracking-wider">CURRENT STAGE</p>
+                      <p className="font-extrabold text-emerald-400">{farmerEnrollment.current_stage_label}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-extrabold text-slate-400 tracking-wider">EST. CARBON YIELD</p>
+                      <p className="font-bold text-amber-400">{farmerEnrollment.estimated_carbon_impact || farmerDetail.carbon_credits_generated || 0.0} tCO2e</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-extrabold text-slate-400 tracking-wider">SUPPORTING NGO</p>
+                      <p className="font-bold text-white">Green Earth Foundation</p>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons Row matching App UI (View Project Info & Soil Testing 🧪) */}
+                  <div className="flex items-center gap-3 pt-3 border-t border-slate-800 flex-wrap">
+                    <button
+                      onClick={() => setShowSoilModal(true)}
+                      className="px-4 py-2 bg-emerald-800/80 hover:bg-emerald-700 text-white font-bold text-[12.5px] rounded-xl border border-emerald-600/50 flex items-center gap-2 transition-all shadow-sm cursor-pointer"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-[12px] ${
-                          isDone ? 'bg-[#16A34A] text-white' : 'bg-[#E2E8F0] text-[#64748B]'
-                        }`}>
-                          {isDone ? '✓' : st.step}
+                      Soil Testing 🧪
+                    </button>
+                    <button
+                      onClick={() => {
+                        setProjectForm({
+                          status: farmerEnrollment.status || 'active',
+                          current_stage: farmerEnrollment.current_stage || 'registered',
+                          progress_percent: farmerEnrollment.progress_percent || 0,
+                          land_verified: !!farmerEnrollment.land_verified,
+                          trees_verified: !!farmerEnrollment.trees_verified,
+                          mrv_verified: !!farmerEnrollment.mrv_verified,
+                          insured_trees: farmerEnrollment.insured_trees || 0,
+                          land_area_acres: farmerEnrollment.land_area_acres || 0,
+                          registered_trees: farmerEnrollment.registered_trees || 0,
+                          estimated_carbon_impact: farmerEnrollment.estimated_carbon_impact || 0,
+                          stage_project_assigned: !!farmerEnrollment.stage_project_assigned,
+                          stage_land_registered: !!farmerEnrollment.stage_land_registered,
+                          stage_soil_verified: !!farmerEnrollment.stage_soil_verified,
+                          stage_inspection_completed: !!farmerEnrollment.stage_inspection_completed,
+                          stage_trees_registered: !!farmerEnrollment.stage_trees_registered,
+                          stage_insurance_activated: !!farmerEnrollment.stage_insurance_activated,
+                          stage_mrv_monitoring_started: !!farmerEnrollment.stage_mrv_monitoring_started,
+                          stage_carbon_estimation_running: !!farmerEnrollment.stage_carbon_estimation_running,
+                          stage_reward_eligible: !!farmerEnrollment.stage_reward_eligible,
+                        });
+                        setShowEditProjectModal(true);
+                      }}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-[12.5px] rounded-xl border border-slate-700 flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+                    >
+                      Edit Project Stage & Roadmap ⚙️
+                    </button>
+                    <button
+                      onClick={() => {
+                        const defaultProj = allProjectsList?.[0]?.id || allProjectsList?.[0]?.project_id || '';
+                        setAssignForm({
+                          projectId: defaultProj,
+                          landAreaAcres: farmerEnrollment.land_area_acres || farmerDetail.total_acreage || 10,
+                          treeCount: farmerEnrollment.registered_trees || farmerDetail.total_trees || 40,
+                        });
+                        setShowAssignProjectModal(true);
+                      }}
+                      className="px-4 py-2 bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 font-bold text-[12.5px] rounded-xl border border-emerald-800/60 flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+                    >
+                      Switch Project 🔄
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Are you sure you want to unassign "${farmerEnrollment.project_title}" from this farmer?`)) return;
+                        try {
+                          const enId = farmerEnrollment.enrollment_id || farmerEnrollment.id || farmerEnrollment._id;
+                          await deleteEnrollmentMutation.mutateAsync(enId);
+                          toast.success(`Farmer removed from project "${farmerEnrollment.project_title}".`);
+                        } catch (err: any) {
+                          toast.error(err?.response?.data?.message || 'Failed to remove project.');
+                        }
+                      }}
+                      className="px-4 py-2 bg-red-950/70 hover:bg-red-900/80 text-red-300 font-bold text-[12.5px] rounded-xl border border-red-800/40 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                    >
+                      <Trash2 size={13} /> Unassign
+                    </button>
+                    <span className="text-[11.5px] text-emerald-400 font-mono ml-auto">
+                      Report No: {soilDataState.labReport} ({soilDataState.status})
+                    </span>
+                  </div>
+                </div>
+
+                {/* PROJECT MISSION OBJECTIVE & CARBON SEQUESTRATION INDICATORS */}
+                <div className="p-6 bg-[#F0FDF4] border border-[#DCFCE7] rounded-3xl space-y-4 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-[#DCFCE7] pb-3 flex-wrap gap-2">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-extrabold text-[#16A34A] uppercase tracking-wider block">SUSTAINABILITY MISSION</span>
+                      <h4 className="text-[16px] font-extrabold text-[#0F172A]">{farmerEnrollment.project_title}</h4>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2.5 py-0.5 bg-[#DCFCE7] text-[#15803D] text-[11px] font-bold rounded-lg font-mono">📅 3 Years</span>
+                      <span className="px-2.5 py-0.5 bg-[#DCFCE7] text-[#15803D] text-[11px] font-bold rounded-lg font-mono">📍 Dewas</span>
+                      <span className="px-2.5 py-0.5 bg-[#16A34A] text-white text-[11px] font-bold rounded-lg uppercase">PARTICIPATING</span>
+                    </div>
+                  </div>
+
+                  {/* Ecosystem Banner Box */}
+                  <div className="p-4 bg-white/80 border border-[#DCFCE7] rounded-2xl space-y-1 text-[12px]">
+                    <p className="text-[10.5px] font-extrabold text-[#16A34A] uppercase tracking-wider flex items-center gap-1.5">
+                      ⚡ BHUMICRED TWIN ONBOARDING ECOSYSTEM
+                    </p>
+                    <p className="text-[#475569] leading-relaxed">
+                      Both carbon auditing and tree insurance are operationally connected during land registrations. Your registered land coordinates feed directly into satellite carbon credit programs while cover policies protect trees sowed on the exact same plots.
+                    </p>
+                  </div>
+
+                  {/* Mission Objective */}
+                  <div className="space-y-1 text-[12.5px]">
+                    <h5 className="text-[11px] font-extrabold text-[#0F172A] uppercase tracking-wider">PROJECT MISSION OBJECTIVE</h5>
+                    <p className="text-[#334155] leading-relaxed">
+                      This project focuses on restoring degraded land through large-scale tree plantation. Native tree species will be planted to improve biodiversity, capture atmospheric carbon, reduce soil erosion, and generate verified carbon credits while supporting local communities.
+                    </p>
+                  </div>
+
+                  {/* Carbon Sequestration Indicators */}
+                  <div className="space-y-2 pt-1">
+                    <h5 className="text-[11px] font-extrabold text-[#0F172A] uppercase tracking-wider">CARBON SEQUESTRATION INDICATORS</h5>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-2xl space-y-0.5">
+                        <p className="text-[9.5px] font-extrabold text-[#94A3B8] uppercase">REGISTERED LAND SCALE</p>
+                        <p className="text-[15px] font-black text-[#0F172A]">{farmerEnrollment.land_area_acres || farmerDetail.total_acreage || 0} Acres</p>
+                      </div>
+                      <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-2xl space-y-0.5">
+                        <p className="text-[9.5px] font-extrabold text-[#94A3B8] uppercase">TOTAL MAPPED TREES</p>
+                        <p className="text-[15px] font-black text-[#0F172A]">{farmerEnrollment.registered_trees || farmerDetail.total_trees || 0} Trees</p>
+                      </div>
+                      <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-2xl space-y-0.5">
+                        <p className="text-[9.5px] font-extrabold text-[#94A3B8] uppercase">AGROFORESTRY ACTIVE</p>
+                        <p className="text-[13px] font-bold text-[#16A34A]">Yes (Canopy Sponges)</p>
+                      </div>
+                      <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-2xl space-y-0.5">
+                        <p className="text-[9.5px] font-extrabold text-[#94A3B8] uppercase">PLANTATION DENSITY</p>
+                        <p className="text-[12.5px] font-bold text-[#0F172A]">Baseline inspection complete</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ROADMAP JOURNEY TIMELINE */}
+                <div className="p-6 bg-white border border-[#E2E8F0] rounded-3xl space-y-4 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+                    <div>
+                      <h4 className="text-[15px] font-bold text-[#0F172A]">ROADMAP JOURNEY TIMELINE</h4>
+                      <p className="text-[12px] text-[#64748B]">Expand nodes to review GIS Soil Organic Carbon (SOC) lab baselines.</p>
+                    </div>
+                    <span className="text-[12px] font-extrabold text-[#16A34A] bg-[#F0FDF4] px-3 py-1 rounded-full border border-[#DCFCE7]">
+                      {currentStageNum}/9 Completed
+                    </span>
+                  </div>
+
+                  {/* 9-Step Roadmap List */}
+                  <div className="space-y-3 pt-1">
+                    {[
+                      { step: 1, name: '1. Project Assigned', desc: 'Enrollment initiated and project dashboard generated.', done: farmerEnrollment.stage_project_assigned },
+                      { step: 2, name: '2. MRV Scheduled', desc: 'Remote sensing satellite scans and audit windows locked.', done: farmerEnrollment.stage_land_registered },
+                      { step: 3, name: '3. Soil Testing', desc: `Core soil NPK baseline checks: N=${soilDataState.n} P=${soilDataState.p} K=${soilDataState.k} kg/ha (SOC: ${soilDataState.soc}%).`, done: farmerEnrollment.stage_soil_verified },
+                      { step: 4, name: '4. Inspection', desc: 'On-site field verification by assigned inspector completed.', done: farmerEnrollment.stage_inspection_completed },
+                      { step: 5, name: '5. GIS Mapping', desc: 'Dynamic boundary geofencing synced in global ecological registry.', done: farmerEnrollment.stage_trees_registered },
+                      { step: 6, name: '6. MRV Progress', desc: 'Active remote canopy monitoring and tree shield insurance active.', done: farmerEnrollment.stage_insurance_activated },
+                      { step: 7, name: '7. Carbon Calculation', desc: 'Live remote biomass calculation models active.', done: farmerEnrollment.stage_mrv_monitoring_started },
+                      { step: 8, name: '8. Registry', desc: 'Environmental credits registered under verification standard.', done: farmerEnrollment.stage_carbon_estimation_running },
+                      { step: 9, name: '9. Credits Issued', desc: 'Carbon credit rewards minted and deposited in Eco-Wallet.', done: farmerEnrollment.stage_reward_eligible },
+                    ].map((st) => {
+                      const isDone = st.done;
+                      const isCurrent = st.step === currentStageNum;
+                      return (
+                        <div
+                          key={st.step}
+                          className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between ${
+                            isCurrent
+                              ? 'bg-[#F0FDF4] border-[#16A34A] shadow-xs'
+                              : isDone
+                              ? 'bg-[#FAFCFF] border-[#DCFCE7]'
+                              : 'bg-[#F8FAFC] border-[#E2E8F0] opacity-60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-[12px] ${
+                              isDone ? 'bg-[#16A34A] text-white' : 'bg-[#E2E8F0] text-[#64748B]'
+                            }`}>
+                              {isDone ? '✓' : st.step}
+                            </div>
+                            <div>
+                              <p className="text-[13.5px] font-bold text-[#0F172A]">{st.name}</p>
+                              <p className="text-[11.5px] text-[#64748B]">{st.desc}</p>
+                            </div>
+                          </div>
+
+                          {isCurrent && (
+                            <span className="text-[10.5px] font-bold text-[#16A34A] bg-white px-2.5 py-0.5 rounded-md border border-[#DCFCE7]">
+                              CURRENT STAGE
+                            </span>
+                          )}
                         </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* NGO & CORPORATE SUPPORTING SPONSORS */}
+                <div className="p-6 bg-white border border-[#E2E8F0] rounded-3xl space-y-4 shadow-xs">
+                  <h4 className="text-[14px] font-extrabold text-[#0F172A] uppercase tracking-wider">NGO & CORPORATE SUPPORTING SPONSORS</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl text-center space-y-1">
+                      <p className="text-[10px] font-extrabold text-[#94A3B8] uppercase">SUPPORTED BY</p>
+                      <p className="text-[14px] font-extrabold text-[#0F172A]">Green Earth Foundation</p>
+                    </div>
+                    <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl text-center space-y-1">
+                      <p className="text-[10px] font-extrabold text-[#94A3B8] uppercase">POWERED BY</p>
+                      <p className="text-[14px] font-extrabold text-[#0F172A]">BhumiCred Foundation</p>
+                    </div>
+                    <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl text-center space-y-1">
+                      <p className="text-[10px] font-extrabold text-[#94A3B8] uppercase">GOVT BODY</p>
+                      <p className="text-[14px] font-extrabold text-[#0F172A]">District Sustainability Mission</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SOIL TESTING MODAL */}
+                {showSoilModal && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-slate-200">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <h4 className="text-[16px] font-extrabold text-slate-900 flex items-center gap-2">
+                          🧪 Soil Testing Lab Baseline & NPK Checks
+                        </h4>
+                        <button onClick={() => setShowSoilModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="space-y-4 text-[13px]">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Nitrogen (N kg/ha)</label>
+                            <input
+                              type="number"
+                              value={soilDataState.n}
+                              onChange={(e) => setSoilDataState({ ...soilDataState, n: Number(e.target.value) })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Phosphorus (P kg/ha)</label>
+                            <input
+                              type="number"
+                              value={soilDataState.p}
+                              onChange={(e) => setSoilDataState({ ...soilDataState, p: Number(e.target.value) })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Potassium (K kg/ha)</label>
+                            <input
+                              type="number"
+                              value={soilDataState.k}
+                              onChange={(e) => setSoilDataState({ ...soilDataState, k: Number(e.target.value) })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Soil Organic Carbon (SOC %)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={soilDataState.soc}
+                              onChange={(e) => setSoilDataState({ ...soilDataState, soc: Number(e.target.value) })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-emerald-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Soil pH Level</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={soilDataState.ph}
+                              onChange={(e) => setSoilDataState({ ...soilDataState, ph: Number(e.target.value) })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Lab Report No.</label>
+                            <input
+                              type="text"
+                              value={soilDataState.labReport}
+                              onChange={(e) => setSoilDataState({ ...soilDataState, labReport: e.target.value })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-blue-600"
+                            />
+                          </div>
+                        </div>
+
                         <div>
-                          <p className="text-[13.5px] font-bold text-[#0F172A]">{st.name}</p>
-                          <p className="text-[11.5px] text-[#64748B]">{st.desc}</p>
+                          <label className="text-[11px] font-bold text-slate-600 uppercase">Agronomist Remarks</label>
+                          <textarea
+                            rows={2}
+                            value={soilDataState.remarks}
+                            onChange={(e) => setSoilDataState({ ...soilDataState, remarks: e.target.value })}
+                            className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] text-slate-800"
+                          />
                         </div>
                       </div>
 
-                      {isCurrent && (
-                        <span className="text-[10.5px] font-bold text-[#16A34A] bg-white px-2.5 py-0.5 rounded-md border border-[#DCFCE7]">
-                          CURRENT STAGE
-                        </span>
-                      )}
+                      <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                        <button
+                          onClick={() => setShowSoilModal(false)}
+                          className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-xl text-[12.5px]"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowSoilModal(false);
+                            alert('Soil Testing Data saved successfully! Updated baselines reflected in Mobile App.');
+                          }}
+                          className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[12.5px] shadow-sm"
+                        >
+                          Save Soil Testing Data
+                        </button>
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                  </div>
+                )}
 
-            {/* NGO & CORPORATE SUPPORTING SPONSORS (Matching Image 4) */}
-            <div className="p-6 bg-white border border-[#E2E8F0] rounded-3xl space-y-4 shadow-xs">
-              <h4 className="text-[14px] font-extrabold text-[#0F172A] uppercase tracking-wider">NGO & CORPORATE SUPPORTING SPONSORS</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl text-center space-y-1">
-                  <p className="text-[10px] font-extrabold text-[#94A3B8] uppercase">SUPPORTED BY</p>
-                  <p className="text-[14px] font-extrabold text-[#0F172A]">Green Earth Foundation</p>
-                </div>
-                <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl text-center space-y-1">
-                  <p className="text-[10px] font-extrabold text-[#94A3B8] uppercase">POWERED BY</p>
-                  <p className="text-[14px] font-extrabold text-[#0F172A]">BhumiCred Foundation</p>
-                </div>
-                <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl text-center space-y-1">
-                  <p className="text-[10px] font-extrabold text-[#94A3B8] uppercase">GOVT BODY</p>
-                  <p className="text-[14px] font-extrabold text-[#0F172A]">District Sustainability Mission</p>
-                </div>
-              </div>
-            </div>
+                {/* EDIT PROJECT ENROLLMENT MODAL */}
+                {showEditProjectModal && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+                    <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl border border-slate-200 my-8">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <h4 className="text-[16px] font-extrabold text-slate-900 flex items-center gap-2">
+                          🌲 Edit Carbon Project Lifecycle & Roadmap
+                        </h4>
+                        <button onClick={() => setShowEditProjectModal(false)} className="text-slate-400 hover:text-slate-600 font-bold text-lg">
+                          ✕
+                        </button>
+                      </div>
 
-            {/* SOIL TESTING MODAL */}
-            {showSoilModal && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-                <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-slate-200">
+                      <div className="space-y-4 text-[13px] max-h-[70vh] overflow-y-auto pr-2 text-slate-800">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Enrollment Status</label>
+                            <select
+                              value={projectForm.status}
+                              onChange={(e) => setProjectForm({ ...projectForm, status: e.target.value })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
+                            >
+                              <option value="pending_admin_verification">Pending Admin Verification</option>
+                              <option value="active">Active</option>
+                              <option value="rejected">Rejected</option>
+                              <option value="clarification_requested">Clarification Requested</option>
+                              <option value="completed">Completed</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Current Stage</label>
+                            <select
+                              value={projectForm.current_stage}
+                              onChange={(e) => setProjectForm({ ...projectForm, current_stage: e.target.value })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800"
+                            >
+                              <option value="registered">Stage 1: Registered</option>
+                              <option value="under_review">Stage 2: Under Review</option>
+                              <option value="active_monitoring">Stage 3: Active Monitoring</option>
+                              <option value="mrv_stage">Stage 4: MRV Stage</option>
+                              <option value="carbon_estimation">Stage 5: Carbon Estimation</option>
+                              <option value="completed">Stage 6: Completed</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Progress Percent (%)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={projectForm.progress_percent}
+                              onChange={(e) => setProjectForm({ ...projectForm, progress_percent: parseInt(e.target.value) || 0 })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Land Area (Acres)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              value={projectForm.land_area_acres}
+                              onChange={(e) => setProjectForm({ ...projectForm, land_area_acres: parseFloat(e.target.value) || 0 })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Registered Trees Count</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={projectForm.registered_trees}
+                              onChange={(e) => setProjectForm({ ...projectForm, registered_trees: parseInt(e.target.value) || 0 })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Insured Trees Count</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={projectForm.insured_trees}
+                              onChange={(e) => setProjectForm({ ...projectForm, insured_trees: parseInt(e.target.value) || 0 })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="text-[11px] font-bold text-slate-600 uppercase">Est. Carbon Yield (tCO2e)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              value={projectForm.estimated_carbon_impact}
+                              onChange={(e) => setProjectForm({ ...projectForm, estimated_carbon_impact: parseFloat(e.target.value) || 0 })}
+                              className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Verification Checkboxes */}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-3">
+                          <h5 className="font-extrabold text-slate-700 uppercase tracking-wider text-[11px]">Ecological Verifications</h5>
+                          <div className="flex items-center gap-6">
+                            <label className="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.land_verified}
+                                onChange={(e) => setProjectForm({ ...projectForm, land_verified: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span>Land Verified</span>
+                            </label>
+                            <label className="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.trees_verified}
+                                onChange={(e) => setProjectForm({ ...projectForm, trees_verified: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span>Trees Verified</span>
+                            </label>
+                            <label className="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.mrv_verified}
+                                onChange={(e) => setProjectForm({ ...projectForm, mrv_verified: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span>MRV Verified</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Roadmap Steps */}
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-3">
+                          <h5 className="font-extrabold text-slate-700 uppercase tracking-wider text-[11px]">Roadmap Completion Stages (Farmer Mobile Journey Map)</h5>
+                          <div className="grid grid-cols-2 gap-3">
+                            <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.stage_project_assigned}
+                                onChange={(e) => setProjectForm({ ...projectForm, stage_project_assigned: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span className="text-[12px]">1. Project Assigned</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.stage_land_registered}
+                                onChange={(e) => setProjectForm({ ...projectForm, stage_land_registered: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span className="text-[12px]">2. MRV Scheduled</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.stage_soil_verified}
+                                onChange={(e) => setProjectForm({ ...projectForm, stage_soil_verified: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span className="text-[12px]">3. Soil Testing</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.stage_inspection_completed}
+                                onChange={(e) => setProjectForm({ ...projectForm, stage_inspection_completed: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span className="text-[12px]">4. Inspection</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.stage_trees_registered}
+                                onChange={(e) => setProjectForm({ ...projectForm, stage_trees_registered: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span className="text-[12px]">5. GIS Mapping</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.stage_insurance_activated}
+                                onChange={(e) => setProjectForm({ ...projectForm, stage_insurance_activated: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span className="text-[12px]">6. MRV Progress</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.stage_mrv_monitoring_started}
+                                onChange={(e) => setProjectForm({ ...projectForm, stage_mrv_monitoring_started: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span className="text-[12px]">7. Carbon Calculation</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.stage_carbon_estimation_running}
+                                onChange={(e) => setProjectForm({ ...projectForm, stage_carbon_estimation_running: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span className="text-[12px]">8. Registry</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-slate-700 cursor-pointer col-span-2">
+                              <input
+                                type="checkbox"
+                                checked={projectForm.stage_reward_eligible}
+                                onChange={(e) => setProjectForm({ ...projectForm, stage_reward_eligible: e.target.checked })}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
+                              />
+                              <span className="text-[12px] font-bold">9. Credits Issued & Payouts Eligible</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                        <button
+                          onClick={() => setShowEditProjectModal(false)}
+                          className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-xl text-[12.5px]"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          disabled={updateEnrollment.isPending}
+                          onClick={async () => {
+                            try {
+                              await updateEnrollment.mutateAsync({
+                                enrollmentId: farmerEnrollment.enrollment_id || farmerEnrollment.id || farmerEnrollment._id,
+                                payload: projectForm,
+                              });
+                              toast.success("Project enrollment and mobile roadmap updated successfully!");
+                              setShowEditProjectModal(false);
+                            } catch (err: any) {
+                              toast.error(err?.response?.data?.message || "Failed to update project enrollment.");
+                            }
+                          }}
+                          className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white font-bold rounded-xl text-[12.5px] shadow-sm flex items-center gap-2"
+                        >
+                          {updateEnrollment.isPending ? "Saving..." : "Save Project Data"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Show Clean Empty State if Not Enrolled */
+              <div className="flex flex-col items-center justify-center py-16 bg-white border border-[#E2E8F0] rounded-3xl text-[#94A3B8] space-y-4">
+                <div className="w-16 h-16 rounded-2xl bg-[#F0FDF4] border border-[#DCFCE7] text-[#16A34A] flex items-center justify-center shadow-xs">
+                  <Trees size={32} />
+                </div>
+                <div className="text-center space-y-1">
+                  <p className="text-[16px] font-bold text-[#0F172A]">No Enrolled Carbon or Forestry Projects</p>
+                  <p className="text-[12.5px] text-[#64748B] max-w-sm">
+                    This farmer has not enrolled in any carbon programs or boundary tree forestry missions yet.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const defaultProj = allProjectsList?.[0]?.id || allProjectsList?.[0]?.project_id || '';
+                    setAssignForm({
+                      projectId: defaultProj,
+                      landAreaAcres: farmerDetail.total_acreage || 10,
+                      treeCount: farmerDetail.total_trees || 40,
+                    });
+                    setShowAssignProjectModal(true);
+                  }}
+                  className="px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[13px] rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Plus size={15} /> Assign Carbon Project Now
+                </button>
+              </div>
+            )}
+
+            {/* ASSIGN / SWITCH PROJECT MODAL */}
+            {showAssignProjectModal && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+                <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-slate-200 my-8">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h4 className="text-[16px] font-extrabold text-slate-900 flex items-center gap-2">
-                      🧪 Soil Testing Lab Baseline & NPK Checks
-                    </h4>
-                    <button onClick={() => setShowSoilModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
+                    <div className="flex items-center gap-2">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                        <Trees size={20} />
+                      </div>
+                      <div>
+                        <h4 className="text-[16px] font-extrabold text-slate-900">
+                          {farmerEnrollment ? 'Switch / Change Project' : 'Assign Carbon Project'}
+                        </h4>
+                        <p className="text-[11px] text-slate-500">Assign farmer to a registered sustainability mission</p>
+                      </div>
+                    </div>
+                    <button onClick={() => setShowAssignProjectModal(false)} className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer">
                       ✕
                     </button>
                   </div>
 
-                  <div className="space-y-4 text-[13px]">
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!assignForm.projectId) {
+                        toast.error('Please select a project.');
+                        return;
+                      }
+                      try {
+                        const fid = farmerDetail.farmer_id || String(farmerDetail.id || farmerDetail._id);
+                        await assignProjectMutation.mutateAsync({
+                          projectId: assignForm.projectId,
+                          farmerId: fid,
+                          landAreaAcres: Number(assignForm.landAreaAcres),
+                          treeCount: Number(assignForm.treeCount),
+                        });
+                        toast.success(`Farmer successfully assigned to project! Live updated in app.`);
+                        setShowAssignProjectModal(false);
+                      } catch (err: any) {
+                        toast.error(err?.response?.data?.message || err?.message || 'Failed to assign project.');
+                      }
+                    }}
+                    className="space-y-4 text-[12.5px] text-slate-800"
+                  >
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Select Carbon Project *</label>
+                      <select
+                        value={assignForm.projectId}
+                        onChange={(e) => setAssignForm({ ...assignForm, projectId: e.target.value })}
+                        required
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 outline-none focus:border-emerald-600"
+                      >
+                        <option value="">-- Choose a Project --</option>
+                        {(allProjectsList || []).map((p: any) => {
+                          const pId = p.id || p.project_id;
+                          const title = p.name || p.title || pId;
+                          const loc = [p.district, p.state].filter(Boolean).join(', ');
+                          return (
+                            <option key={pId} value={pId}>
+                              {title} {loc ? `(${loc})` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-[11px] font-bold text-slate-600 uppercase">Nitrogen (N kg/ha)</label>
-                        <input
-                          type="number"
-                          value={soilDataState.n}
-                          onChange={(e) => setSoilDataState({ ...soilDataState, n: Number(e.target.value) })}
-                          className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-600 uppercase">Phosphorus (P kg/ha)</label>
-                        <input
-                          type="number"
-                          value={soilDataState.p}
-                          onChange={(e) => setSoilDataState({ ...soilDataState, p: Number(e.target.value) })}
-                          className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-600 uppercase">Potassium (K kg/ha)</label>
-                        <input
-                          type="number"
-                          value={soilDataState.k}
-                          onChange={(e) => setSoilDataState({ ...soilDataState, k: Number(e.target.value) })}
-                          className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-600 uppercase">Soil Organic Carbon (SOC %)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={soilDataState.soc}
-                          onChange={(e) => setSoilDataState({ ...soilDataState, soc: Number(e.target.value) })}
-                          className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-emerald-600"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-600 uppercase">Soil pH Level</label>
+                        <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Registered Land (Acres)</label>
                         <input
                           type="number"
                           step="0.1"
-                          value={soilDataState.ph}
-                          onChange={(e) => setSoilDataState({ ...soilDataState, ph: Number(e.target.value) })}
-                          className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-800"
+                          min={0.1}
+                          required
+                          value={assignForm.landAreaAcres}
+                          onChange={(e) => setAssignForm({ ...assignForm, landAreaAcres: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-900 outline-none focus:border-emerald-600"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-bold text-slate-600 uppercase">Lab Report No.</label>
+                        <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Monitored Trees / Saplings</label>
                         <input
-                          type="text"
-                          value={soilDataState.labReport}
-                          onChange={(e) => setSoilDataState({ ...soilDataState, labReport: e.target.value })}
-                          className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-blue-600"
+                          type="number"
+                          min={1}
+                          required
+                          value={assignForm.treeCount}
+                          onChange={(e) => setAssignForm({ ...assignForm, treeCount: parseInt(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-900 outline-none focus:border-emerald-600"
                         />
                       </div>
                     </div>
 
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 uppercase">Agronomist Remarks</label>
-                      <textarea
-                        rows={2}
-                        value={soilDataState.remarks}
-                        onChange={(e) => setSoilDataState({ ...soilDataState, remarks: e.target.value })}
-                        className="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl text-[12px] text-slate-800"
-                      />
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11.5px] text-emerald-800 space-y-0.5">
+                      <p className="font-bold flex items-center gap-1">⚡ Automatic Synchronization</p>
+                      <p className="text-emerald-700 leading-relaxed">
+                        Assigning will immediately generate this mission on the farmer's mobile dashboard and initialize the 9-stage verification roadmap.
+                      </p>
                     </div>
-                  </div>
 
-                  <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
-                    <button
-                      onClick={() => setShowSoilModal(false)}
-                      className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-xl text-[12.5px]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowSoilModal(false);
-                        alert('Soil Testing Data saved successfully! Updated baselines reflected in Mobile App.');
-                      }}
-                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[12.5px] shadow-sm"
-                    >
-                      Save Soil Testing Data
-                    </button>
-                  </div>
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setShowAssignProjectModal(false)}
+                        className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-xl text-[12px] cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={assignProjectMutation.isPending}
+                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold rounded-xl text-[12.5px] shadow-sm flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {assignProjectMutation.isPending ? 'Assigning...' : 'Assign to Farmer'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
             )}

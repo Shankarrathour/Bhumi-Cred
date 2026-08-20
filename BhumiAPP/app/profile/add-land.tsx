@@ -919,11 +919,9 @@ export default function AddLandScreen() {
       setCurrentStep(6);
     } else if (currentStep === 6) {
       const hasLandProof = docStates.landProof === 'Uploaded' || docStates.landProof === 'Approved';
-      const hasKhasraProof = docStates.khasraProof === 'Uploaded' || docStates.khasraProof === 'Approved';
-      const hasIdProof = docStates.idProof === 'Uploaded' || docStates.idProof === 'Approved';
 
-      if (!hasLandProof || !hasKhasraProof || !hasIdProof) {
-        setErrors({ docs: 'Land Ownership, Khasra, and ID proof documents are mandatory.' });
+      if (!hasLandProof) {
+        setErrors({ docs: 'Land Ownership / Registry Proof document is mandatory.' });
         if (fieldPositions.current['docs'] !== undefined) {
           scrollViewRef.current?.scrollToPosition(0, Math.max(0, fieldPositions.current['docs'] - 20), true);
         }
@@ -1901,14 +1899,14 @@ export default function AddLandScreen() {
               title: 'Khasra / Khatauni / 7/12',
               subtitle: 'Local land authority record copy',
               icon: 'text-box-search-outline',
-              mandatory: true
+              mandatory: false
             })}
             {renderDocCard({
               key: 'idProof',
               title: 'Identity Proof',
               subtitle: 'Aadhaar Card, PAN, or Voter ID',
               icon: 'card-account-details-outline',
-              mandatory: true
+              mandatory: false
             })}
             {renderDocCard({
               key: 'otherProof',

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Pressable, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Pressable, TextInput, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
 import { COLORS, SHADOWS, TYPOGRAPHY } from '../theme/theme';
 
 interface Props {
@@ -12,13 +13,13 @@ interface Props {
 }
 
 const POPULAR_CITIES = [
-  { id: '1', name: 'Bhopal Rural', icon: 'home-city' },
-  { id: '2', name: 'Sihore block', icon: 'sprout' },
-  { id: '3', name: 'Vidisha block', icon: 'tractor' },
-  { id: '4', name: 'Hoshangabad', icon: 'water' },
-  { id: '5', name: 'Raisen village', icon: 'tree' },
-  { id: '6', name: 'Jabalpur block', icon: 'leaf' },
-  { id: '7', name: 'Indore sector', icon: 'corn' },
+  { id: '1', name: 'Indore sector', icon: 'corn' },
+  { id: '2', name: 'Bhopal Rural', icon: 'home-city' },
+  { id: '3', name: 'Sihore block', icon: 'sprout' },
+  { id: '4', name: 'Vidisha block', icon: 'tractor' },
+  { id: '5', name: 'Hoshangabad', icon: 'water' },
+  { id: '6', name: 'Raisen village', icon: 'tree' },
+  { id: '7', name: 'Jabalpur block', icon: 'leaf' },
   { id: '8', name: 'Gwalior block', icon: 'flower' },
 ];
 
@@ -26,14 +27,47 @@ export function LocationPickerModal({ visible, onClose, onSelect, currentLocatio
   const [searchQuery, setSearchQuery] = useState('');
   const [isLocating, setIsLocating] = useState(false);
 
-  const handleUseLiveLocation = () => {
+  const handleUseLiveLocation = async () => {
     setIsLocating(true);
-    // Simulate hyper-accurate GPS acquisition latency
-    setTimeout(() => {
-      setIsLocating(false);
-      onSelect('Bhopal Rural, MP');
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location Permission Required',
+          'Please allow location access to automatically detect your current farm or city.',
+          [{ text: 'OK' }]
+        );
+        setIsLocating(false);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const geocodes = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+
+      if (geocodes && geocodes.length > 0) {
+        const geo = geocodes[0];
+        const cityName = geo.city || geo.district || geo.subregion || geo.name || 'Current Farm';
+        const stateName = geo.region || 'MP';
+        const formatted = `${cityName}, ${stateName}`;
+        onSelect(formatted);
+        onClose();
+      } else {
+        onSelect('Indore, MP');
+        onClose();
+      }
+    } catch (error) {
+      console.warn('Live location retrieval error:', error);
+      onSelect('Indore, MP');
       onClose();
-    }, 1400);
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   const handleSelectCity = (city: string) => {

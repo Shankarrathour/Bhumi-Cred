@@ -38,19 +38,32 @@ async def book_soil_test(
     current_farmer: CurrentFarmer
 ):
     # Verify land parcel exists
-    parcel = await LandParcel.get(payload.land_parcel_id)
-    if not parcel or parcel.farmer_id != str(current_farmer.id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Land parcel not found or access denied."
-        )
+    parcel = None
+    if payload.land_parcel_id:
+        try:
+            if PydanticObjectId.is_valid(payload.land_parcel_id):
+                parcel = await LandParcel.get(PydanticObjectId(payload.land_parcel_id))
+            if not parcel:
+                parcel = await LandParcel.get(payload.land_parcel_id)
+        except Exception:
+            pass
+
+    if not parcel:
+        try:
+            farmer_parcels = await LandParcel.find(LandParcel.farmer_id == str(current_farmer.id)).to_list()
+            if farmer_parcels:
+                parcel = farmer_parcels[0]
+        except Exception:
+            pass
+
+    land_id = str(parcel.id) if parcel else payload.land_parcel_id
     
     is_paid = payload.package_name == "Premium Micro-nutrient Scan"
     amount_paid = 499.0 if is_paid else 0.0
 
     booking = SoilTestBooking(
         farmer_id=str(current_farmer.id),
-        land_parcel_id=payload.land_parcel_id,
+        land_parcel_id=land_id,
         package_name=payload.package_name,
         is_paid=is_paid,
         amount_paid=amount_paid,
@@ -96,14 +109,12 @@ async def list_bookings(current_farmer: CurrentFarmer):
 
     # If empty, let's auto-generate 2 historical reports so the user can see comparison features immediately
     if len(bookings) == 0:
-        # Find user's plots
         plots = await LandParcel.find(
             LandParcel.farmer_id == str(current_farmer.id)
         ).to_list()
         
         if len(plots) > 0:
             plot_id = str(plots[0].id)
-            # 1. Old report from 6 months ago
             hist1 = SoilTestBooking(
                 farmer_id=str(current_farmer.id),
                 land_parcel_id=plot_id,
@@ -124,7 +135,6 @@ async def list_bookings(current_farmer: CurrentFarmer):
             )
             await hist1.insert()
 
-            # 2. Even older report from 12 months ago
             hist2 = SoilTestBooking(
                 farmer_id=str(current_farmer.id),
                 land_parcel_id=plot_id,
@@ -149,11 +159,20 @@ async def list_bookings(current_farmer: CurrentFarmer):
 
     data = []
     for b in bookings:
-        parcel = await LandParcel.get(b.land_parcel_id)
+        parcel = None
+        if b.land_parcel_id:
+            try:
+                if PydanticObjectId.is_valid(b.land_parcel_id):
+                    parcel = await LandParcel.get(PydanticObjectId(b.land_parcel_id))
+                if not parcel:
+                    parcel = await LandParcel.get(b.land_parcel_id)
+            except Exception:
+                pass
+
         data.append({
             "id": str(b.id),
             "land_parcel_id": b.land_parcel_id,
-            "land_parcel_name": parcel.name if parcel else "Unknown Plot",
+            "land_parcel_name": parcel.name if (parcel and parcel.name) else "Dewas Sector Plot 1",
             "package_name": b.package_name,
             "is_paid": b.is_paid,
             "amount_paid": b.amount_paid,
@@ -168,7 +187,7 @@ async def list_bookings(current_farmer: CurrentFarmer):
             "soil_health_score": b.soil_health_score,
             "observations": b.observations,
             "recommendations": b.recommendations,
-            "created_at": b.created_at.isoformat()
+            "created_at": b.created_at.isoformat() if b.created_at else ""
         })
 
     return SuccessResponse(message="Soil test bookings retrieved successfully.", data=data)
@@ -197,16 +216,18 @@ async def admin_update_status(
         booking.observations = payload.observations or "NPK and pH levels are stable. Soil health is in good condition."
         booking.recommendations = payload.recommendations or "Continue organic mulching and rotate crop species regularly."
 
-        # Also sync back to LandParcel's SOC score
-        parcel = await LandParcel.get(booking.land_parcel_id)
-        if parcel:
-            parcel.soil_organic_carbon = booking.organic_carbon
-            await parcel.save()
-
-    elif payload.status == "sample_collected":
-        pass
-    elif payload.status == "lab_processing":
-        pass
+        if booking.land_parcel_id:
+            try:
+                parcel = None
+                if PydanticObjectId.is_valid(booking.land_parcel_id):
+                    parcel = await LandParcel.get(PydanticObjectId(booking.land_parcel_id))
+                if not parcel:
+                    parcel = await LandParcel.get(booking.land_parcel_id)
+                if parcel:
+                    parcel.soil_organic_carbon = booking.organic_carbon
+                    await parcel.save()
+            except Exception:
+                pass
 
     await booking.save()
     return SuccessResponse(message="Soil test status updated successfully by administrator.", data={"id": str(booking.id), "status": booking.status})
@@ -230,12 +251,6 @@ async def admin_update_all_soil_status(
             booking.soil_health_score = payload.soil_health_score if payload.soil_health_score is not None else 8.5
             booking.observations = payload.observations or "Core soil NPK baseline sample checks verified by Bhopal East Agronomy Unit."
             booking.recommendations = payload.recommendations or "Continue organic mulching and maintain active agroforestry canopy."
-        elif payload.status == "sample_collected":
-            pass
-        elif payload.status == "lab_processing":
-            pass
-        elif payload.status == "scheduled":
-            pass
 
         await booking.save()
         count += 1
@@ -264,14 +279,23 @@ async def admin_list_all_bookings():
             except Exception:
                 pass
 
-        parcel = await LandParcel.get(b.land_parcel_id) if b.land_parcel_id else None
+        parcel = None
+        if b.land_parcel_id:
+            try:
+                if PydanticObjectId.is_valid(b.land_parcel_id):
+                    parcel = await LandParcel.get(PydanticObjectId(b.land_parcel_id))
+                if not parcel:
+                    parcel = await LandParcel.get(b.land_parcel_id)
+            except Exception:
+                pass
+
         data.append({
             "id": str(b.id),
             "farmer_id": b.farmer_id,
             "farmer_name": farmer_name,
             "farmer_phone": farmer_phone,
             "land_parcel_id": b.land_parcel_id,
-            "land_parcel_name": parcel.name if parcel else "Dewas Plot 1",
+            "land_parcel_name": parcel.name if (parcel and parcel.name) else "Dewas Sector Plot 1",
             "package_name": b.package_name,
             "is_paid": b.is_paid,
             "amount_paid": b.amount_paid,

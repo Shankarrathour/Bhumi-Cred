@@ -396,29 +396,46 @@ class BhumiCredRegistrationService:
             else:
                 center_coords = GeoCoords(latitude=23.0225, longitude=77.0124)
 
-            land_parcel = LandParcel(
-                farmer_id=reg.farmer_id if reg.farmer_id else "unknown_farmer",
-                survey_number=reg_number,
-                khasra_number=reg_number,
-                area_acres=area_acres if area_acres > 0 else 1.0,
-                ownership_type=OwnershipType.OWN if reg.belongs_to_self else OwnershipType.LEASED,
-                is_irrigated=False,
-                state=reg.state or "Madhya Pradesh",
-                district=reg.district or "Sehore",
-                village=reg.village or "Ichhawar",
-                gram_panchayat=reg.gram_panchayat,
-                tehsil=reg.tehsil,
-                coordinates=center_coords,
-                boundary_polygon=coords_list,
-                tree_stock_count=reg.tree_stock_count or 0,
-                plantation_area_acres=reg.plantation_area or 0.0,
-                verification_status=LandVerificationStatus.PENDING,
-                is_active=True,
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc)
+            existing_parcel = await LandParcel.find_one(
+                LandParcel.farmer_id == reg.farmer_id,
+                (LandParcel.survey_number == None) | (LandParcel.survey_number == "")
             )
-            await land_parcel.insert()
-            logger.info(f"Automatically created LandParcel for submitted registration: {reg_number}")
+            if existing_parcel:
+                existing_parcel.survey_number = reg_number
+                existing_parcel.khasra_number = reg_number
+                existing_parcel.area_acres = area_acres if area_acres > 0 else existing_parcel.area_acres
+                existing_parcel.coordinates = center_coords
+                existing_parcel.boundary_polygon = coords_list
+                existing_parcel.tree_stock_count = reg.tree_stock_count or existing_parcel.tree_stock_count
+                existing_parcel.plantation_area_acres = reg.plantation_area or existing_parcel.plantation_area_acres
+                existing_parcel.verification_status = LandVerificationStatus.PENDING
+                existing_parcel.updated_at = datetime.now(timezone.utc)
+                await existing_parcel.save()
+                logger.info(f"Updated existing LandParcel for submitted registration: {reg_number}")
+            else:
+                land_parcel = LandParcel(
+                    farmer_id=reg.farmer_id if reg.farmer_id else "unknown_farmer",
+                    survey_number=reg_number,
+                    khasra_number=reg_number,
+                    area_acres=area_acres if area_acres > 0 else 1.0,
+                    ownership_type=OwnershipType.OWN if reg.belongs_to_self else OwnershipType.LEASED,
+                    is_irrigated=False,
+                    state=reg.state or "Madhya Pradesh",
+                    district=reg.district or "Sehore",
+                    village=reg.village or "Ichhawar",
+                    gram_panchayat=reg.gram_panchayat,
+                    tehsil=reg.tehsil,
+                    coordinates=center_coords,
+                    boundary_polygon=coords_list,
+                    tree_stock_count=reg.tree_stock_count or 0,
+                    plantation_area_acres=reg.plantation_area or 0.0,
+                    verification_status=LandVerificationStatus.PENDING,
+                    is_active=True,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc)
+                )
+                await land_parcel.insert()
+                logger.info(f"Automatically created LandParcel for submitted registration: {reg_number}")
         except Exception as e:
             logger.error(f"Failed to automatically create LandParcel for registration {reg_number}: {e}", exc_info=True)
 
