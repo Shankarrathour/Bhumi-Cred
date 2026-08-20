@@ -105,12 +105,17 @@ class TransactionResponse(BaseModel):
 
 # ── Farmer: wallet ────────────────────────────────────────────────────────────
 
+class AddUpiRequest(BaseModel):
+    upi_id: str
+
+
 class WalletResponse(BaseModel):
     id: str
     farmer_id: str
     balance: float
     total_earnings: float
     total_withdrawn: float
+    upi_id: Optional[str] = None
     bank_account: Optional[BankAccountResponse] = None       # primary account (backward compat)
     bank_accounts: list[BankAccountResponse] = []             # all accounts (up to 3)
     created_at: Optional[datetime] = None

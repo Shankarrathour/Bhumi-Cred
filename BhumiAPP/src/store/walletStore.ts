@@ -86,6 +86,7 @@ export const useWalletStore = create<WalletState>()(
           set({
             balance: w.balance,
             totalEarnings: w.total_earnings,
+            upiId: w.upi_id ?? get().upiId,
           });
         } catch {
           // Keep existing cached state on error
@@ -98,9 +99,18 @@ export const useWalletStore = create<WalletState>()(
           const items: any[] = data.data ?? [];
           const transactions: Transaction[] = items.map((tx) => ({
             id: tx.id,
-            date: tx.created_at
-              ? new Date(tx.created_at).toISOString().split('T')[0]
-              : '',
+            date: (() => {
+              if (!tx.created_at) return '';
+              try {
+                const d = new Date(tx.created_at);
+                if (isNaN(d.getTime())) {
+                  return String(tx.created_at).split('T')[0];
+                }
+                return d.toISOString().split('T')[0];
+              } catch {
+                return String(tx.created_at).split('T')[0];
+              }
+            })(),
             description: tx.description,
             amount: tx.amount,
             type: tx.type as 'credit' | 'debit',
@@ -204,12 +214,23 @@ export const useWalletStore = create<WalletState>()(
       },
 
       addUpiId: async (upi) => {
-        // UPI payouts are not yet supported by the backend — stored locally only.
-        set({ upiId: upi });
+        set({ isLoading: true });
+        try {
+          await api.post('/farmer/wallet/upi', { upi_id: upi });
+          set({ upiId: upi, isLoading: false });
+        } catch (error) {
+          set({ upiId: upi, isLoading: false });
+        }
       },
 
-      removeUpiId: () => {
-        set({ upiId: null });
+      removeUpiId: async () => {
+        set({ isLoading: true });
+        try {
+          await api.delete('/farmer/wallet/upi');
+          set({ upiId: null, isLoading: false });
+        } catch (error) {
+          set({ upiId: null, isLoading: false });
+        }
       },
 
       requestWithdrawal: async (amount, method, options) => {

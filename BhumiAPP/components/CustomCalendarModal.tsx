@@ -18,30 +18,53 @@ interface CustomCalendarModalProps {
   mode?: 'dob' | 'general' | 'plantation';
 }
 
-const YEARS = Array.from({ length: 77 }, (_, i) => 1950 + i); // 1950 to 2026
+const YEARS = Array.from({ length: 86 }, (_, i) => 2035 - i); // 2035 down to 1950
+
+const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 export default function CustomCalendarModal({ visible, onClose, onSelectDate, initialDate, mode = 'dob' }: CustomCalendarModalProps) {
-  const today = new Date();
-  const [currYear, setCurrYear] = useState(2000);
-  const [currMonth, setCurrMonth] = useState(0); // 0 = January
+  const now = new Date();
+  const defaultYear = 2026;
+  const defaultMonth = now.getMonth(); // Current month
+  const [currYear, setCurrYear] = useState(defaultYear);
+  const [currMonth, setCurrMonth] = useState(defaultMonth);
   const [isManualEdit, setIsManualEdit] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [manualDate, setManualDate] = useState('');
 
   useEffect(() => {
     if (visible) {
-      if (initialDate && initialDate !== 'Select Date' && initialDate.includes('/')) {
-        const parts = initialDate.split('/');
+      if (initialDate && initialDate !== 'Select Date' && (initialDate.includes('/') || initialDate.includes('-'))) {
+        const delimiter = initialDate.includes('/') ? '/' : '-';
+        const parts = initialDate.split(delimiter);
         if (parts.length === 3) {
-          const m = parseInt(parts[1], 10) - 1;
-          const y = parseInt(parts[2], 10);
-          if (!isNaN(m) && !isNaN(y) && m >= 0 && m <= 11 && y > 1900) {
-            setCurrMonth(m);
-            setCurrYear(y);
-            setManualDate(initialDate);
-            setIsManualEdit(false);
-            setShowYearPicker(false);
-            return;
+          // If format is YYYY-MM-DD
+          if (parts[0].length === 4) {
+            const y = parseInt(parts[0], 10);
+            const m = parseInt(parts[1], 10) - 1;
+            const d = parseInt(parts[2], 10);
+            if (!isNaN(m) && !isNaN(y) && m >= 0 && m <= 11) {
+              setCurrMonth(m);
+              setCurrYear(y);
+              const dd = d < 10 ? '0' + d : d;
+              const mm = (m + 1) < 10 ? '0' + (m + 1) : (m + 1);
+              setManualDate(`${dd}/${mm}/${y}`);
+              setIsManualEdit(false);
+              setShowYearPicker(false);
+              return;
+            }
+          } else {
+            // DD/MM/YYYY
+            const m = parseInt(parts[1], 10) - 1;
+            const y = parseInt(parts[2], 10);
+            if (!isNaN(m) && !isNaN(y) && m >= 0 && m <= 11 && y > 1900) {
+              setCurrMonth(m);
+              setCurrYear(y);
+              setManualDate(initialDate);
+              setIsManualEdit(false);
+              setShowYearPicker(false);
+              return;
+            }
           }
         }
       }
@@ -53,13 +76,14 @@ export default function CustomCalendarModal({ visible, onClose, onSelectDate, in
         setCurrMonth(0); // January
         setManualDate('15/01/2000');
       } else {
-        // General / Plantation mode: default to current date/month/year
-        const now = new Date();
-        setCurrYear(now.getFullYear());
-        setCurrMonth(now.getMonth());
+        // General / Plantation mode: explicitly open to year 2026
+        const targetYear = 2026;
+        const targetMonth = now.getMonth();
         const d = now.getDate() < 10 ? '0' + now.getDate() : now.getDate();
-        const m = (now.getMonth() + 1) < 10 ? '0' + (now.getMonth() + 1) : (now.getMonth() + 1);
-        setManualDate(`${d}/${m}/${now.getFullYear()}`);
+        const m = (targetMonth + 1) < 10 ? '0' + (targetMonth + 1) : (targetMonth + 1);
+        setCurrYear(targetYear);
+        setCurrMonth(targetMonth);
+        setManualDate(`${d}/${m}/${targetYear}`);
       }
       setIsManualEdit(false);
       setShowYearPicker(false);
@@ -67,6 +91,9 @@ export default function CustomCalendarModal({ visible, onClose, onSelectDate, in
   }, [visible, initialDate, mode]);
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const firstDayIndex = getFirstDayOfMonth(currYear, currMonth);
   const daysArray = Array.from({ length: getDaysInMonth(currYear, currMonth) }, (_, i) => i + 1);
 
   const handleSelectDay = (day: number) => {
@@ -184,8 +211,20 @@ export default function CustomCalendarModal({ visible, onClose, onSelectDate, in
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[styles.pickerLabel, { marginTop: 20, marginBottom: 12 }]}>SELECT DAY</Text>
+                {/* Weekday labels */}
+                <View style={[styles.daysMatrix, { marginTop: 16, marginBottom: 6 }]}>
+                  {WEEKDAYS.map((wd) => (
+                    <View key={wd} style={styles.weekdayCell}>
+                      <Text style={styles.weekdayText}>{wd}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Days Grid */}
                 <View style={styles.daysMatrix}>
+                  {Array.from({ length: firstDayIndex }).map((_, i) => (
+                    <View key={`empty-${i}`} style={styles.dayCell} />
+                  ))}
                   {daysArray.map((d) => (
                     <TouchableOpacity 
                       key={d} 
@@ -270,6 +309,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -4,
+  },
+  weekdayCell: {
+    width: (width - 56) / 7,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: 4,
+  },
+  weekdayText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
   },
   dayCell: {
     width: (width - 56) / 7,

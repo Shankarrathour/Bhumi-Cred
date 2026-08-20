@@ -1,6 +1,9 @@
 from typing import Optional, List
 from datetime import datetime, timezone
+import logging
 from fastapi import APIRouter, Depends, Query, Request
+
+logger = logging.getLogger(__name__)
 
 from app.config.settings import settings
 from app.core.rbac import RequirePermission
@@ -203,28 +206,38 @@ async def get_farmer_activity(
             )
 
             # KYC Submissions & Approvals
+            try:
+                # Use local logs list if defined to check for duplicates
+                logs_list = logs if 'logs' in locals() else []
+            except Exception:
+                logs_list = []
+
             if farmer.onboarding_completed or farmer.kyc_status != "unverified":
-                items.append(
-                    FarmerActivityLogResponse(
-                        id=f"act-kyc-{farmer.id}",
-                        activity_type="KYC_SUBMITTED",
-                        title="KYC Documents Uploaded 📑",
-                        description="Aadhaar Card, PAN Card & Farmer Photograph submitted for identity verification.",
-                        timestamp=_ensure_utc(farmer.created_at or created_dt),
+                has_kyc_upload_log = any(getattr(l, "activity_type", "").upper() == "KYC_SUBMITTED" for l in logs_list)
+                if not has_kyc_upload_log:
+                    items.append(
+                        FarmerActivityLogResponse(
+                            id=f"act-kyc-{farmer.id}",
+                            activity_type="KYC_SUBMITTED",
+                            title="KYC Documents Uploaded 📑",
+                            description="Aadhaar Card, PAN Card & Farmer Photograph submitted for identity verification.",
+                            timestamp=_ensure_utc(farmer.created_at or created_dt),
+                        )
                     )
-                )
 
             if farmer.kyc_status and str(getattr(farmer.kyc_status, 'value', farmer.kyc_status)) != "unverified":
                 st_val = str(getattr(farmer.kyc_status, 'value', farmer.kyc_status)).upper()
-                items.append(
-                    FarmerActivityLogResponse(
-                        id=f"act-kyc-status-{farmer.id}",
-                        activity_type=st_val,
-                        title="Profile Verified by Admin ✅" if st_val == "APPROVED" else f"KYC Status: {st_val}",
-                        description=farmer.kyc_remarks or f"KYC approved by admin {farmer.kyc_reviewed_by or 'Super Admin'}.",
-                        timestamp=_ensure_utc(farmer.kyc_reviewed_at or created_dt),
+                has_matching_log = any(getattr(l, "activity_type", "").upper() == st_val for l in logs_list)
+                if not has_matching_log:
+                    items.append(
+                        FarmerActivityLogResponse(
+                            id=f"act-kyc-status-{farmer.id}",
+                            activity_type=st_val,
+                            title="Profile Verified by Admin ✅" if st_val == "APPROVED" else f"KYC Status: {st_val}",
+                            description=farmer.kyc_remarks or f"KYC approved by admin {farmer.kyc_reviewed_by or 'Super Admin'}.",
+                            timestamp=_ensure_utc(farmer.kyc_reviewed_at or created_dt),
+                        )
                     )
-                )
 
             # Bank Account & UPI Bindings
             if farmer.bank_details and farmer.bank_details.bank_name:
@@ -258,14 +271,18 @@ async def get_farmer_activity(
             # Project Enrollments
             try:
                 from app.models.project_enrollment import ProjectEnrollment
+                from app.models.sustainability_project import SustainabilityProject
                 enrollments = await ProjectEnrollment.find({"farmer_id": {"$in": ids_to_check}}).to_list()
                 for en in enrollments:
+                    proj = await SustainabilityProject.find_one(SustainabilityProject.project_id == en.project_id)
+                    p_title = f"Assigned to {proj.title} 🌲" if proj else "Assigned to Carbon Project 🌲"
+                    p_desc = proj.description if proj else "Enrolled in Carbon & Forestry restoration mission."
                     items.append(
                         FarmerActivityLogResponse(
                             id=f"act-proj-{en.id}",
                             activity_type="PROJECT_ENROLLED",
-                            title="Assigned to Green India Afforestation 2026 🌲",
-                            description="Enrolled in Carbon & Forestry restoration mission under Bhopal East Agronomy Unit.",
+                            title=p_title,
+                            description=p_desc,
                             timestamp=_ensure_utc(getattr(en, 'joined_at', None) or created_dt),
                         )
                     )

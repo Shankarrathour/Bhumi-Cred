@@ -5,6 +5,8 @@ import { LogBox } from 'react-native';
 
 import { GlobalSchedulerOverlay } from '../src/components/GlobalSchedulerOverlay';
 import { useAuthStore } from '../src/store/authStore';
+import { Provider } from 'react-redux';
+import { store } from '../src/store';
 
 // Suppress network/server/Axios warnings and console error red-boxes in development
 LogBox.ignoreLogs([

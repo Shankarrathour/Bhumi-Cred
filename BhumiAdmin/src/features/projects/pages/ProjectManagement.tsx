@@ -3,14 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Target, RefreshCw, Eye, Trees,
   Building2, Handshake, DollarSign, X, MapPin, Sparkles,
-  Layers, ShieldCheck, CheckCircle
+  Layers, ShieldCheck, CheckCircle, Trash2, Edit3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageHeader } from '../../../components/ui/PageHeader';
 import { KpiCard } from '../../../components/ui/KpiCard';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
 import { EmptyState, SkeletonTable } from '../../../components/ui/EmptyState';
-import { useProjects } from '../api/useProjects';
+import {
+  useProjects,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+  useAssignFarmerProject,
+} from '../api/useProjects';
 import toast from 'react-hot-toast';
 
 export interface AdminProjectItem {
@@ -32,13 +38,10 @@ export interface AdminProjectItem {
   status: 'Draft' | 'Ongoing' | 'MRV' | 'Verification' | 'Issued' | 'Completed';
 }
 
-const SEEDED_PROJECTS: AdminProjectItem[] = [];
-
 export const ProjectManagement = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [userCreatedProjects, setUserCreatedProjects] = useState<AdminProjectItem[]>([]);
 
   // Modal State for Assigning Project to Farmer
   const [assignModalProject, setAssignModalProject] = useState<AdminProjectItem | null>(null);
@@ -59,38 +62,44 @@ export const ProjectManagement = () => {
     status: 'Draft' as const,
   });
 
+  // Modal State for Editing Project
+  const [editModalProject, setEditModalProject] = useState<AdminProjectItem | null>(null);
+
+  // Modal State for Deleting Project
+  const [deleteModalProject, setDeleteModalProject] = useState<AdminProjectItem | null>(null);
+
   const { data: apiProjects, isLoading, refetch, isFetching } = useProjects();
+  const createProjectMutation = useCreateProject();
+  const updateProjectMutation = useUpdateProject();
+  const deleteProjectMutation = useDeleteProject();
+  const assignProjectMutation = useAssignFarmerProject();
 
   const handleAssignProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assignModalProject) return;
     setAssigning(true);
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`http://localhost:8000/v1/admin/projects/${assignModalProject.id}/assign`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ farmer_id: assignFarmerId }),
+      await assignProjectMutation.mutateAsync({
+        projectId: assignModalProject.id,
+        farmerId: assignFarmerId,
+        landAreaAcres: 10,
+        treeCount: 40,
       });
-      toast.success(`Project ${assignModalProject.name} assigned to Farmer successfully! Updated live in App.`);
+      toast.success(`Project "${assignModalProject.name}" assigned to Farmer successfully! Updated live in App.`);
       setAssignModalProject(null);
       refetch();
-    } catch (err) {
-      toast.success(`Project ${assignModalProject.name} assigned to Farmer!`);
-      setAssignModalProject(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to assign project.');
     } finally {
       setAssigning(false);
     }
   };
 
   const projects = useMemo(() => {
-    const fetched: AdminProjectItem[] = (apiProjects || []).map((item: any) => {
+    return (apiProjects || []).map((item: any) => {
       let mappedStatus: AdminProjectItem['status'] = 'Ongoing';
       const st = (item.status || item.status_label || '').toLowerCase();
-      if (st.includes('draft') || st.includes('planning')) mappedStatus = 'Draft';
+      if (st.includes('draft') || st.includes('planning') || st.includes('available')) mappedStatus = 'Draft';
       else if (st.includes('mrv') || st.includes('monitoring')) mappedStatus = 'MRV';
       else if (st.includes('verification')) mappedStatus = 'Verification';
       else if (st.includes('issued')) mappedStatus = 'Issued';
@@ -116,9 +125,7 @@ export const ProjectManagement = () => {
         status: mappedStatus,
       };
     });
-
-    return [...fetched, ...userCreatedProjects];
-  }, [apiProjects, userCreatedProjects]);
+  }, [apiProjects]);
 
   const filtered = useMemo(() => {
     return projects.filter((p) => {
@@ -139,7 +146,7 @@ export const ProjectManagement = () => {
   const issuedCount = projects.filter(p => p.status === 'Issued').length;
   const completedCount = projects.filter(p => p.status === 'Completed').length;
 
-  const handleCreateProjectSubmit = (e: React.FormEvent) => {
+  const handleCreateProjectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProject.name) {
       toast.error('Please enter a Project Name.');
@@ -147,39 +154,78 @@ export const ProjectManagement = () => {
     }
 
     const randomNum = Math.floor(7000 + Math.random() * 2000);
-    const createdItem: AdminProjectItem = {
-      id: `PRJ-${randomNum}`,
-      project_code: `PRJ-${randomNum}`,
-      name: newProject.name,
-      state: newProject.state,
-      district: newProject.district,
-      project_type: newProject.project_type,
-      total_area_acres: Number(newProject.total_area_acres),
-      total_farmers: Math.floor(Number(newProject.total_area_acres) / 10),
-      govt_partner: newProject.govt_partner,
-      corporate_partner: newProject.corporate_partner,
-      insurance_cover_lakhs: Math.round(Number(newProject.total_area_acres) * 0.002 * 10) / 10,
-      estimated_carbon_credits: Number(newProject.estimated_carbon_credits),
-      credits_issued: 0,
-      revenue_generated_lakhs: 0,
-      progress_percentage: newProject.status === 'Draft' ? 5 : 25,
-      status: newProject.status as any,
-    };
+    const projectId = `prj-${newProject.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30)}-${randomNum}`;
 
-    setUserCreatedProjects(prev => [createdItem, ...prev]);
-    toast.success(`Project "${createdItem.name}" (${createdItem.project_code}) created successfully!`);
-    setIsCreateModalOpen(false);
-    setNewProject({
-      name: '',
-      state: 'Madhya Pradesh',
-      district: 'Sehore',
-      project_type: 'Agroforestry & Reforestation',
-      total_area_acres: 15000,
-      govt_partner: 'MP Forest Dept',
-      corporate_partner: 'AgriCorp Solutions Pvt Ltd',
-      estimated_carbon_credits: 150000,
-      status: 'Draft',
-    });
+    try {
+      await createProjectMutation.mutateAsync({
+        project_id: projectId,
+        title: newProject.name,
+        category: newProject.project_type,
+        description: `Project dedicated to ${newProject.project_type} across ${newProject.district}, ${newProject.state}. Supporting local farmers with high-yield carbon sequestration and satellite MRV monitoring.`,
+        district: newProject.district,
+        state: newProject.state,
+        target_area_acres: Number(newProject.total_area_acres),
+        estimated_carbon_impact: Number(newProject.estimated_carbon_credits),
+        ngo_partner: newProject.govt_partner || 'State Forest Department',
+        status: newProject.status === 'Draft' ? 'available' : 'active_tracking',
+        is_public: true,
+        is_active: true,
+      });
+
+      toast.success(`Project "${newProject.name}" created successfully in Database!`);
+      setIsCreateModalOpen(false);
+      setNewProject({
+        name: '',
+        state: 'Madhya Pradesh',
+        district: 'Sehore',
+        project_type: 'Agroforestry & Reforestation',
+        total_area_acres: 15000,
+        govt_partner: 'MP Forest Dept',
+        corporate_partner: 'AgriCorp Solutions Pvt Ltd',
+        estimated_carbon_credits: 150000,
+        status: 'Draft',
+      });
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to create project.');
+    }
+  };
+
+  const handleUpdateProjectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editModalProject) return;
+    try {
+      await updateProjectMutation.mutateAsync({
+        projectId: editModalProject.id,
+        payload: {
+          title: editModalProject.name,
+          category: editModalProject.project_type,
+          district: editModalProject.district,
+          state: editModalProject.state,
+          target_area_acres: Number(editModalProject.total_area_acres),
+          estimated_carbon_impact: Number(editModalProject.estimated_carbon_credits),
+          ngo_partner: editModalProject.govt_partner,
+          status: editModalProject.status === 'Draft' ? 'available' : 'active_tracking',
+        },
+      });
+      toast.success(`Project "${editModalProject.name}" updated successfully!`);
+      setEditModalProject(null);
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to update project.');
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!deleteModalProject) return;
+    try {
+      await deleteProjectMutation.mutateAsync(deleteModalProject.id);
+      toast.success(`Project "${deleteModalProject.name}" deleted successfully!`);
+      setDeleteModalProject(null);
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to delete project.');
+    }
   };
 
   const getStatusVariant = (s: string) => {
@@ -340,18 +386,34 @@ export const ProjectManagement = () => {
 
                   {/* Action */}
                   <td className="py-3 px-4 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
+                    <div className="flex items-center justify-end gap-1.5 flex-wrap">
                       <button
                         onClick={() => setAssignModalProject(p)}
                         className="px-2.5 py-1.5 bg-[#EEF2FF] hover:bg-[#E0E7FF] text-[#4F46E5] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Assign project to a farmer"
                       >
-                        <Plus size={13} /> Assign to Farmer
+                        <Plus size={13} /> Assign
+                      </button>
+                      <button
+                        onClick={() => setEditModalProject({ ...p })}
+                        className="px-2.5 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Edit project details"
+                      >
+                        <Edit3 size={13} /> Edit
+                      </button>
+                      <button
+                        onClick={() => setDeleteModalProject(p)}
+                        className="px-2.5 py-1.5 bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[#DC2626] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Delete this project"
+                      >
+                        <Trash2 size={13} /> Delete
                       </button>
                       <button
                         onClick={() => navigate(`/projects/${p.id}`)}
-                        className="px-2.5 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                        title="View full project details"
                       >
-                        <Eye size={13} /> View & Edit
+                        <Eye size={13} /> View
                       </button>
                     </div>
                   </td>
@@ -572,6 +634,214 @@ export const ProjectManagement = () => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── EDIT PROJECT MODAL ── */}
+      <AnimatePresence>
+        {editModalProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+                <div className="flex items-center gap-2">
+                  <Edit3 size={20} className="text-[#16A34A]" />
+                  <div>
+                    <h3 className="text-[16px] font-bold text-[#0F172A]">Edit Project Details</h3>
+                    <p className="text-[11px] text-[#64748B] font-mono">{editModalProject.project_code}</p>
+                  </div>
+                </div>
+                <button onClick={() => setEditModalProject(null)} className="text-[#94A3B8] hover:text-[#0F172A] text-lg font-bold cursor-pointer">
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateProjectSubmit} className="space-y-3 text-[12.5px]">
+                <div>
+                  <label className="block font-bold text-[#0F172A] mb-1">Project Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editModalProject.name}
+                    onChange={(e) => setEditModalProject({ ...editModalProject, name: e.target.value })}
+                    className="w-full px-3.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] font-semibold text-[#0F172A] outline-none focus:border-[#16A34A]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">State</label>
+                    <select
+                      value={editModalProject.state}
+                      onChange={(e) => setEditModalProject({ ...editModalProject, state: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    >
+                      <option value="Madhya Pradesh">Madhya Pradesh</option>
+                      <option value="Gujarat">Gujarat</option>
+                      <option value="Maharashtra">Maharashtra</option>
+                      <option value="Chhattisgarh">Chhattisgarh</option>
+                      <option value="Rajasthan">Rajasthan</option>
+                      <option value="Uttar Pradesh">Uttar Pradesh</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">District</label>
+                    <input
+                      type="text"
+                      required
+                      value={editModalProject.district}
+                      onChange={(e) => setEditModalProject({ ...editModalProject, district: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-semibold text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Project Type</label>
+                    <select
+                      value={editModalProject.project_type}
+                      onChange={(e) => setEditModalProject({ ...editModalProject, project_type: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    >
+                      <option value="Agroforestry & Reforestation">Agroforestry & Reforestation</option>
+                      <option value="Blue Carbon & Mangroves">Blue Carbon & Mangroves</option>
+                      <option value="Soil Organic Biochar">Soil Organic Biochar</option>
+                      <option value="Arid Plantation">Arid Plantation</option>
+                      <option value="Bamboo Afforestation">Bamboo Afforestation</option>
+                      <option value="Agri-Solar">Agri-Solar</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Status</label>
+                    <select
+                      value={editModalProject.status}
+                      onChange={(e) => setEditModalProject({ ...editModalProject, status: e.target.value as any })}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-medium text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    >
+                      <option value="Draft">Draft (Available)</option>
+                      <option value="Ongoing">Ongoing</option>
+                      <option value="MRV">MRV</option>
+                      <option value="Verification">Verification</option>
+                      <option value="Issued">Issued</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Target Area (Acres)</label>
+                    <input
+                      type="number"
+                      required
+                      value={editModalProject.total_area_acres}
+                      onChange={(e) => setEditModalProject({ ...editModalProject, total_area_acres: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-bold text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Est. Carbon Credits (tCO₂e)</label>
+                    <input
+                      type="number"
+                      required
+                      value={editModalProject.estimated_carbon_credits}
+                      onChange={(e) => setEditModalProject({ ...editModalProject, estimated_carbon_credits: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-bold text-[#16A34A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Govt Nodal / NGO Partner</label>
+                    <input
+                      type="text"
+                      value={editModalProject.govt_partner}
+                      onChange={(e) => setEditModalProject({ ...editModalProject, govt_partner: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-semibold text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#0F172A] mb-1">Corporate Partner</label>
+                    <input
+                      type="text"
+                      value={editModalProject.corporate_partner}
+                      onChange={(e) => setEditModalProject({ ...editModalProject, corporate_partner: e.target.value })}
+                      className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[12.5px] font-semibold text-[#0F172A] outline-none focus:border-[#16A34A]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#F1F5F9]">
+                  <button type="button" onClick={() => setEditModalProject(null)} className="btn btn-secondary btn-sm">
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updateProjectMutation.isPending}
+                    className="btn btn-primary btn-sm flex items-center gap-1.5"
+                  >
+                    {updateProjectMutation.isPending ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── DELETE PROJECT CONFIRMATION MODAL ── */}
+      <AnimatePresence>
+        {deleteModalProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-red-100 space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center font-bold shrink-0">
+                  <Trash2 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[16px] text-[#0F172A]">Delete Project</h3>
+                  <p className="text-[12px] text-red-600 font-semibold">{deleteModalProject.name}</p>
+                </div>
+              </div>
+
+              <p className="text-[12.5px] text-slate-600 leading-relaxed">
+                Are you sure you want to permanently delete this project? This will remove the project from the admin dashboard and clear active enrollments linked to it.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDeleteModalProject(null)}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteProject}
+                  disabled={deleteProjectMutation.isPending}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold rounded-xl text-[12.5px] shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  {deleteProjectMutation.isPending ? 'Deleting...' : 'Yes, Delete Project'}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

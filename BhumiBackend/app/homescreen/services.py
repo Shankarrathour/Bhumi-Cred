@@ -164,68 +164,187 @@ class EcologicalService:
         )
 
     async def get_journey_map(self, farmer: Farmer) -> List[JourneyStep]:
+        from app.models.land_parcel import LandVerificationStatus
+        from app.models.green_family import GreenFamilyCover
+
+        # Fetch all relevant information for the farmer dynamically
+        farmer_id_str = str(farmer.id)
+        
+        # Step 1: Farmer Registered
+        step1_status = "completed"
+
+        # Step 2: KYC Verified
+        is_kyc_approved = farmer.kyc_status == KYCStatus.APPROVED or getattr(farmer.kyc_status, "value", "").lower() == "approved"
+        if is_kyc_approved:
+            step2_status = "completed"
+        else:
+            step2_status = "active"
+
+        # Step 3: Land Approved
+        # Look for approved/verified land parcels
+        parcels = await LandParcel.find(
+            LandParcel.farmer_id == farmer_id_str,
+            LandParcel.is_deleted == False
+        ).to_list()
+        
+        approved_parcel_statuses = {
+            LandVerificationStatus.APPROVED, 
+            LandVerificationStatus.VERIFIED, 
+            LandVerificationStatus.PROJECT_ASSIGNED
+        }
+        has_approved_land = any(
+            p.verification_status in approved_parcel_statuses or 
+            getattr(p.verification_status, "value", "").lower() in ["approved", "verified", "project_assigned"]
+            for p in parcels
+        )
+
+        if has_approved_land:
+            step3_status = "completed"
+        elif step2_status == "completed":
+            step3_status = "active"
+        else:
+            step3_status = "locked"
+
+        # Step 4: Plantation Added
+        # Total tree stock count or items inside trees list is greater than 0
+        from app.models.tree_registration import TreeRegistration, TreeRegistrationStatus
+        has_trees_registered = await TreeRegistration.find(
+            TreeRegistration.farmer_id == farmer_id_str,
+            TreeRegistration.status == TreeRegistrationStatus.APPROVED
+        ).count() > 0
+
+        has_trees = any(
+            (p.tree_stock_count or 0) > 0 or len(p.trees or []) > 0
+            for p in parcels
+        ) or has_trees_registered
+
+        if has_approved_land and has_trees:
+            step4_status = "completed"
+        elif step3_status == "completed":
+            step4_status = "active"
+        else:
+            step4_status = "locked"
+
+        # Step 5: Green Family Created
+        covers = await GreenFamilyCover.find(
+            GreenFamilyCover.farmer_id == farmer_id_str
+        ).to_list()
+        has_green_family = any(
+            c.status == "Verified" or getattr(c.status, "value", "").lower() == "verified"
+            for c in covers
+        )
+
+        if has_green_family:
+            step5_status = "completed"
+        elif step4_status == "completed":
+            step5_status = "active"
+        else:
+            step5_status = "locked"
+
+        # Step 6: Sustainability Score Active
+        enrollments = await self.enrollment_repo.get_active_by_farmer(farmer_id_str)
+        active_enrollment = enrollments[0] if enrollments else None
+        eco_index = active_enrollment.sustainability_score if active_enrollment else (farmer.sustainability_score or 0)
+        
+        if eco_index > 0:
+            step6_status = "completed"
+        elif step5_status == "completed":
+            step6_status = "active"
+        else:
+            step6_status = "locked"
+
+        # Step 7: Carbon Program Joined
+        project_title = "Zero-tillage program locked."
+        if active_enrollment is not None:
+            from app.models.sustainability_project import SustainabilityProject
+            proj = await SustainabilityProject.find_one(SustainabilityProject.project_id == active_enrollment.project_id)
+            project_title = f"Joined: {proj.title}" if proj else f"Joined: {active_enrollment.project_id}"
+
+        if active_enrollment is not None:
+            step7_status = "completed"
+        elif step6_status == "completed":
+            step7_status = "active"
+        else:
+            step7_status = "locked"
+
+        # Step 8: Community Contributor
+        if step7_status == "completed":
+            step8_status = "active"
+        else:
+            step8_status = "locked"
+
+        # Step 9: Sustainability Leader
+        if step8_status == "completed" and eco_index >= 95:
+            step9_status = "completed"
+        elif step8_status == "completed":
+            step9_status = "active"
+        else:
+            step9_status = "locked"
+
+        total_trees_count = sum((p.tree_stock_count or len(p.trees or [])) for p in parcels)
+
         return [
             JourneyStep(
                 id="step_registered",
                 name="Farmer Registered",
                 description="Welcome to BhumiCred network.",
-                status="completed",
+                status=step1_status,
                 step_number=1,
             ),
             JourneyStep(
                 id="step_kyc",
                 name="KYC Verified",
                 description="Secure aadhaar mapping active.",
-                status="completed",
+                status=step2_status,
                 step_number=2,
             ),
             JourneyStep(
                 id="step_land",
                 name="Land Approved",
                 description="Satellite scanning baseline set.",
-                status="completed",
+                status=step3_status,
                 step_number=3,
             ),
             JourneyStep(
                 id="step_plantation",
                 name="Plantation Added",
-                description="30 boundary trees tag registered.",
-                status="completed",
+                description="30 boundary trees tag registered." if not has_trees else f"{total_trees_count} boundary trees tag registered.",
+                status=step4_status,
                 step_number=4,
             ),
             JourneyStep(
                 id="step_family",
                 name="Green Family Created",
                 description="Tree sponge units active.",
-                status="completed",
+                status=step5_status,
                 step_number=5,
             ),
             JourneyStep(
                 id="step_score",
                 name="Sustainability Score Active",
-                description="Current: 85/100 score.",
-                status="active",
+                description=f"Current: {eco_index}/100 score.",
+                status=step6_status,
                 step_number=6,
             ),
             JourneyStep(
                 id="step_carbon",
                 name="Carbon Program Joined",
-                description="Zero-tillage program locked.",
-                status="locked",
+                description=project_title,
+                status=step7_status,
                 step_number=7,
             ),
             JourneyStep(
                 id="step_community",
                 name="Community Contributor",
                 description="Help 3 neighbours register.",
-                status="locked",
+                status=step8_status,
                 step_number=8,
             ),
             JourneyStep(
                 id="step_leader",
                 name="Sustainability Leader",
                 description="Achieve District Rank #1.",
-                status="locked",
+                status=step9_status,
                 step_number=9,
             ),
         ]

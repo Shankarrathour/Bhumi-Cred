@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
-  Cloud, DownloadCloud, RefreshCw, CheckCircle2,
-  Eye, Leaf, Sparkles, DollarSign, Plus, X,
-  FileText, ShieldCheck, Map, Activity, Shield, Upload, FileSignature
+  Cloud, RefreshCw, CheckCircle2,
+  Leaf, Sparkles, DollarSign, Plus, X,
+  FileText, ShieldCheck, Shield, Upload, FileSignature
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -16,7 +16,17 @@ import { EmptyState, SkeletonTable }   from '../../../components/ui/EmptyState';
 import { StatusBadge }  from '../../../components/ui/StatusBadge';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { useTreeRegistrations } from '../api/useCarbonRegistry';
+import {
+  useTreeRegistrations,
+  useCarbonStats,
+  useCarbonProjects,
+  useCarbonBatches,
+  useCreateCarbonProject,
+  useMintCarbonBatch,
+  useRetireCarbonBatch,
+  RegistryProjectItem,
+  CarbonBatchItem
+} from '../api/useCarbonRegistry';
 
 const ISSUANCE_TREND = [
   { month: 'Sep', issued: 18400, sold: 14200, available: 4200 },
@@ -36,57 +46,48 @@ const ISSUANCE_TREND = [
 const PAGE_SIZE = 10;
 const fmtTCO2e = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}K` : n.toFixed(1);
 
-// ── Types ──
-export interface CarbonBatchItem {
-  id: string; batch_id: string; project_name: string; project_code: string; vintage_year: number; species: string; location: string;
-  volume_tco2: number; credits_issued: number; credits_sold: number; credits_available: number; buyer_name: string;
-  price_per_tco2_usd: number; revenue_lakhs: number; verification_standard: string; status: 'Issued' | 'Sold' | 'Pending Verification' | 'Retired'; created_at: string;
-}
-
-export interface RegistryProjectItem {
-  project_id: string; project_name: string; registry: string; methodology: string; country: string; status: 'Draft' | 'Submitted' | 'Under Validation' | 'Under Verification' | 'Registered';
-  developer: string; submission_date: string;
-}
-
-// ── Mocks ──
-const MOCK_REGISTRY_PROJECTS: RegistryProjectItem[] = [
-  { project_id: 'PRJ-1042', project_name: 'MP Agroforestry Carbon Sink Drive', registry: 'Verra', methodology: 'VM0042', country: 'India', status: 'Registered', developer: 'BhumiCred Core', submission_date: '10 Jan 2026' },
-  { project_id: 'PRJ-2089', project_name: 'Gujarat Coastal Mangrove Reforestation', registry: 'Gold Standard', methodology: 'AR-AM0014', country: 'India', status: 'Under Verification', developer: 'EcoDev NGO', submission_date: '05 Mar 2026' },
-  { project_id: 'PRJ-3041', project_name: 'Maharashtra Farmer Biochar Sequestration', registry: 'Puro.earth', methodology: 'Biochar V1.1', country: 'India', status: 'Under Validation', developer: 'BhumiCred SoilTech', submission_date: '22 May 2026' },
-  { project_id: 'PRJ-4012', project_name: 'Rajasthan Arid Agro-Forestry Belt', registry: 'Verra', methodology: 'ARR Protocol', country: 'India', status: 'Submitted', developer: 'Green Desert Initiative', submission_date: '12 Jul 2026' },
-  { project_id: 'PRJ-5099', project_name: 'UP Bamboo Biomass Generation', registry: 'U.N. CDM', methodology: 'AMS-III.D', country: 'India', status: 'Draft', developer: 'BhumiCred Core', submission_date: '-' },
-];
-
-const SEEDED_BATCHES: CarbonBatchItem[] = [
-  { id: 'CRD-9001', batch_id: 'BCH-CRD-9001', project_name: 'MP Agroforestry Carbon Sink Drive', project_code: 'PRJ-1042', vintage_year: 2025, species: 'Teak & Bamboo', location: 'Sehore, MP', volume_tco2: 150000, credits_issued: 150000, credits_sold: 120000, credits_available: 30000, buyer_name: 'AgriCorp Offtaker Solutions', price_per_tco2_usd: 18.5, revenue_lakhs: 222.0, verification_standard: 'Verra VM0042 Standard', status: 'Issued', created_at: '01 Aug 2026' },
-  { id: 'CRD-9002', batch_id: 'BCH-CRD-9002', project_name: 'Gujarat Coastal Mangrove Reforestation', project_code: 'PRJ-2089', vintage_year: 2025, species: 'Avicennia Mangroves', location: 'Kutch, Gujarat', volume_tco2: 85000, credits_issued: 85000, credits_sold: 85000, credits_available: 0, buyer_name: 'EcoShield Climate Corp', price_per_tco2_usd: 22.0, revenue_lakhs: 149.6, verification_standard: 'Gold Standard Blue Carbon', status: 'Sold', created_at: '28 Jul 2026' },
-  { id: 'CRD-9003', batch_id: 'BCH-CRD-9003', project_name: 'Maharashtra Farmer Biochar Sequestration', project_code: 'PRJ-3041', vintage_year: 2026, species: 'Soil Biochar Organic', location: 'Nashik, MH', volume_tco2: 60000, credits_issued: 60000, credits_sold: 25000, credits_available: 35000, buyer_name: 'CarbonX Global Offtakers', price_per_tco2_usd: 19.0, revenue_lakhs: 91.2, verification_standard: 'Puro.earth Biochar Standard', status: 'Issued', created_at: '15 Jul 2026' },
-  { id: 'CRD-9004', batch_id: 'BCH-CRD-9004', project_name: 'Rajasthan Arid Agro-Forestry Belt', project_code: 'PRJ-4012', vintage_year: 2024, species: 'Acacia & Khejri', location: 'Barmer, RJ', volume_tco2: 45000, credits_issued: 45000, credits_sold: 45000, credits_available: 0, buyer_name: 'GreenFields Sustainability Fund', price_per_tco2_usd: 16.5, revenue_lakhs: 59.4, verification_standard: 'Verra ARR Protocol', status: 'Retired', created_at: '02 Jun 2026' },
-];
-
 export const CarbonRegistry = () => {
   const navigate = useNavigate();
-  const { isLoading, refetch } = useTreeRegistrations();
   
+  // Real backend queries
+  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useCarbonStats();
+  const { data: projectsData, isLoading: projectsLoading, refetch: refetchProjects } = useCarbonProjects();
+  const { data: batchesData, isLoading: batchesLoading, refetch: refetchBatches } = useCarbonBatches();
+
+  // Real backend mutations
+  const createProjectMutation = useCreateCarbonProject();
+  const mintBatchMutation = useMintCarbonBatch();
+  const retireBatchMutation = useRetireCarbonBatch();
+
+  const isDataLoading = statsLoading || projectsLoading || batchesLoading;
+
+  const handleSyncAll = () => {
+    refetchStats();
+    refetchProjects();
+    refetchBatches();
+    toast.success("Synchronized carbon registry data with database!");
+  };
+
   // Tabs: overview, projects, credits
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'credits'>('overview');
 
-  const [projects] = useState<RegistryProjectItem[]>(MOCK_REGISTRY_PROJECTS);
-  const [batches, setBatches] = useState<CarbonBatchItem[]>(SEEDED_BATCHES);
-
-  // Stats for Dashboard Tab
+  // Stats fallback
   const stats = useMemo(() => {
+    if (statsData) return statsData;
     return {
-      draftProjects: projects.filter(p => p.status === 'Draft').length,
-      submittedProjects: projects.filter(p => p.status === 'Submitted').length,
-      underValidation: projects.filter(p => p.status === 'Under Validation').length,
-      underVerification: projects.filter(p => p.status === 'Under Verification').length,
-      registeredProjects: projects.filter(p => p.status === 'Registered').length,
-      creditsIssued: batches.reduce((acc, b) => acc + (b.credits_issued || 0), 0),
-      creditsRetired: batches.filter(b => b.status === 'Retired').reduce((acc, b) => acc + (b.volume_tco2 || 0), 0),
-      creditsSold: batches.reduce((acc, b) => acc + (b.credits_sold || 0), 0),
+      draftProjects: 0,
+      submittedProjects: 0,
+      underValidation: 0,
+      underVerification: 0,
+      registeredProjects: 0,
+      creditsIssued: 0,
+      creditsRetired: 0,
+      creditsSold: 0
     };
-  }, [projects, batches]);
+  }, [statsData]);
+
+  const projects = projectsData || [];
+  const batches = batchesData || [];
 
   // Modals state
   const [submissionModalProj, setSubmissionModalProj] = useState<RegistryProjectItem | null>(null);
@@ -95,37 +96,74 @@ export const CarbonRegistry = () => {
   const [retireBuyer, setRetireBuyer] = useState('');
 
   const [isMintModalOpen, setIsMintModalOpen] = useState(false);
-  const [newMint, setNewMint] = useState({ project_name: 'MP Agroforestry Carbon Sink Drive', vintage_year: 2026, volume_tco2: 25000, price_per_tco2_usd: 18.5, verification_standard: 'Verra VM0042 Standard', buyer_name: 'AgriCorp Offtaker Solutions' });
+  const [newMint, setNewMint] = useState({ project_name: '', vintage_year: 2026, volume_tco2: 25000, price_per_tco2_usd: 18.5, verification_standard: 'Verra VM0042 Standard', buyer_name: 'AgriCorp Offtaker Solutions' });
+
+  // Pre-fill Mint Origin Project when modal opens or projects load
+  useMemo(() => {
+    if (projects.length > 0 && !newMint.project_name) {
+      setNewMint(prev => ({ ...prev, project_name: projects[0].project_name }));
+    }
+  }, [projects, newMint.project_name]);
 
   const [uploadedDocs, setUploadedDocs] = useState<Record<string, boolean>>({});
 
-  // ── Functions ──
+  // Create Project Modal
+  const [isCreateProjModalOpen, setIsCreateProjModalOpen] = useState(false);
+  const [newProj, setNewProj] = useState({ project_id: '', project_name: '', registry: 'Verra', methodology: '', country: 'India', developer_name: 'BhumiCred Core' });
+
+  // ── Handlers ──
   const handleFileUpload = (docName: string) => {
     toast.success(`${docName} uploaded successfully!`);
     setUploadedDocs(prev => ({ ...prev, [docName]: true }));
   };
-  const handleMintSubmit = (e: React.FormEvent) => {
+
+  const handleMintSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const created: CarbonBatchItem = {
-      id: `CRD-${Math.floor(9000 + Math.random() * 900)}`, batch_id: `BCH-CRD-${Math.floor(9000 + Math.random() * 900)}`,
-      project_name: newMint.project_name, project_code: 'PRJ-1042', vintage_year: Number(newMint.vintage_year),
-      species: 'Mixed', location: 'India', volume_tco2: Number(newMint.volume_tco2), credits_issued: Number(newMint.volume_tco2),
-      credits_sold: 0, credits_available: Number(newMint.volume_tco2), buyer_name: newMint.buyer_name, price_per_tco2_usd: Number(newMint.price_per_tco2_usd),
-      revenue_lakhs: (Number(newMint.volume_tco2) * Number(newMint.price_per_tco2_usd) * 80) / 100000,
-      verification_standard: newMint.verification_standard, status: 'Issued',
-      created_at: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-    };
-    setBatches(prev => [created, ...prev]);
-    toast.success(`Minted ${created.volume_tco2.toLocaleString()} tCO₂e!`);
-    setIsMintModalOpen(false);
+    try {
+      await mintBatchMutation.mutateAsync({
+        project_name: newMint.project_name,
+        vintage_year: Number(newMint.vintage_year),
+        volume_tco2: Number(newMint.volume_tco2),
+        price_per_tco2_usd: Number(newMint.price_per_tco2_usd),
+        verification_standard: newMint.verification_standard,
+        buyer_name: newMint.buyer_name,
+      });
+      toast.success(`Minted & Sold ${Number(newMint.volume_tco2).toLocaleString()} tCO₂e!`);
+      setIsMintModalOpen(false);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Error minting credits.");
+    }
   };
 
-  const handleRetireSubmit = (e: React.FormEvent) => {
+  const handleRetireSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (retirementModalBatch) {
-      setBatches(prev => prev.map(b => b.id === retirementModalBatch.id ? { ...b, status: 'Retired', credits_available: 0, credits_sold: b.credits_issued } : b));
-      toast.success(`Carbon Credits from ${retirementModalBatch.batch_id} successfully retired for ${retireBuyer || 'Self'}. Certificate generated!`);
-      setRetirementModalBatch(null);
+      try {
+        await retireBatchMutation.mutateAsync({
+          issuance_id: retirementModalBatch.id,
+          quantity_retired: retirementModalBatch.credits_available,
+          retirement_reason: retireReason || "Corporate Net Zero Claim",
+          buyer_name: retireBuyer || "Self",
+        });
+        toast.success(`Retired credits successfully for ${retireBuyer}!`);
+        setRetirementModalBatch(null);
+        setRetireReason('');
+        setRetireBuyer('');
+      } catch (err: any) {
+        toast.error(err?.response?.data?.detail || "Error retiring credits.");
+      }
+    }
+  };
+
+  const handleCreateProjSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createProjectMutation.mutateAsync(newProj);
+      toast.success("Carbon Registry Project created!");
+      setIsCreateProjModalOpen(false);
+      setNewProj({ project_id: '', project_name: '', registry: 'Verra', methodology: '', country: 'India', developer_name: 'BhumiCred Core' });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Error creating project.");
     }
   };
 
@@ -140,14 +178,7 @@ export const CarbonRegistry = () => {
     if (s === 'Registered') return 'success';
     if (s === 'Under Verification' || s === 'Under Validation') return 'warning';
     if (s === 'Submitted') return 'info';
-    return 'default';
-  };
-  
-  const getBatchStatusVariant = (s: string) => {
-    if (s === 'Issued') return 'success';
-    if (s === 'Sold') return 'info';
-    if (s === 'Retired') return 'purple';
-    return 'warning';
+    return 'neutral';
   };
 
   return (
@@ -160,7 +191,9 @@ export const CarbonRegistry = () => {
         icon={Cloud} iconColor="#16A34A"
         actions={
           <div className="flex items-center gap-2">
-            <button onClick={() => refetch()} className="btn btn-secondary btn-sm gap-1.5"><RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} /> Sync All</button>
+            <button onClick={handleSyncAll} className="btn btn-secondary btn-sm gap-1.5">
+              <RefreshCw size={13} className={isDataLoading ? 'animate-spin' : ''} /> Sync All
+            </button>
           </div>
         }
       />
@@ -191,23 +224,35 @@ export const CarbonRegistry = () => {
              <div className="w-1 h-4 bg-[#2563EB] rounded-full"></div>
              <h3 className="font-bold text-[#0F172A]">Project Pipeline KPIs</h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <KpiCard title="Draft Projects" value={stats.draftProjects} icon={FileText} iconBg="#F1F5F9" iconColor="#64748B" />
-            <KpiCard title="Submitted Projects" value={stats.submittedProjects} icon={Cloud} iconBg="#EFF6FF" iconColor="#2563EB" />
-            <KpiCard title="Under Validation" value={stats.underValidation} icon={Shield} iconBg="#FFFBEB" iconColor="#D97706" />
-            <KpiCard title="Under Verification" value={stats.underVerification} icon={ShieldCheck} iconBg="#FEF2F2" iconColor="#EF4444" />
-            <KpiCard title="Registered Projects" value={stats.registeredProjects} icon={CheckCircle2} iconBg="#F0FDF4" iconColor="#16A34A" />
-          </div>
+          {isDataLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+              {[...Array(5)].map((_, i) => <div key={i} className="h-24 bg-slate-100 animate-pulse rounded-2xl" />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <KpiCard title="Draft Projects" value={stats.draftProjects} icon={FileText} iconBg="#F1F5F9" iconColor="#64748B" />
+              <KpiCard title="Submitted Projects" value={stats.submittedProjects} icon={Cloud} iconBg="#EFF6FF" iconColor="#2563EB" />
+              <KpiCard title="Under Validation" value={stats.underValidation} icon={ShieldCheck} iconBg="#FFFBEB" iconColor="#D97706" />
+              <KpiCard title="Under Verification" value={stats.underVerification} icon={ShieldCheck} iconBg="#FEF2F2" iconColor="#EF4444" />
+              <KpiCard title="Registered Projects" value={stats.registeredProjects} icon={CheckCircle2} iconBg="#F0FDF4" iconColor="#16A34A" />
+            </div>
+          )}
 
           <div className="flex items-center gap-2 mt-6 mb-2">
              <div className="w-1 h-4 bg-[#16A34A] rounded-full"></div>
              <h3 className="font-bold text-[#0F172A]">Carbon Credit Economics</h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <KpiCard title="Total Carbon Credits Issued" value={`${fmtTCO2e(stats.creditsIssued)} tCO₂e`} icon={Sparkles} iconBg="#F0FDF4" iconColor="#16A34A" />
-            <KpiCard title="Carbon Credits Sold" value={`${fmtTCO2e(stats.creditsSold)} tCO₂e`} icon={DollarSign} iconBg="#EFF6FF" iconColor="#2563EB" />
-            <KpiCard title="Carbon Credits Retired" value={`${fmtTCO2e(stats.creditsRetired)} tCO₂e`} icon={Leaf} iconBg="#FAF5FF" iconColor="#9333EA" />
-          </div>
+          {isDataLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-slate-100 animate-pulse rounded-2xl" />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <KpiCard title="Total Carbon Credits Issued" value={`${fmtTCO2e(stats.creditsIssued)} tCO₂e`} icon={Sparkles} iconBg="#F0FDF4" iconColor="#16A34A" />
+              <KpiCard title="Carbon Credits Sold" value={`${fmtTCO2e(stats.creditsSold)} tCO₂e`} icon={DollarSign} iconBg="#EFF6FF" iconColor="#2563EB" />
+              <KpiCard title="Carbon Credits Retired" value={`${fmtTCO2e(stats.creditsRetired)} tCO₂e`} icon={Leaf} iconBg="#FAF5FF" iconColor="#9333EA" />
+            </div>
+          )}
 
           <ChartCard title="Registry Issuance vs Monetization" subtitle="Monthly tCO₂e trajectory" height={260}>
             <ResponsiveContainer width="100%" height="100%">
@@ -236,127 +281,198 @@ export const CarbonRegistry = () => {
               <FileText size={16} className="text-[#2563EB]" />
               <h3 className="text-[14px] font-bold text-[#0F172A]">Registry Projects Database</h3>
             </div>
-            <button className="btn btn-primary btn-sm gap-1.5"><Plus size={14} /> Draft New Project</button>
+            <button onClick={() => setIsCreateProjModalOpen(true)} className="btn btn-primary btn-sm gap-1.5">
+              <Plus size={14} /> Draft New Project
+            </button>
           </div>
           
-          <table className="ent-table min-w-[1000px]">
-            <thead>
-              <tr>
-                <th>Project ID & Name</th>
-                <th>Registry</th>
-                <th>Methodology</th>
-                <th>Country</th>
-                <th>Developer</th>
-                <th>Status</th>
-                <th>Submission Date</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {projects.map(p => (
-                <tr key={p.project_id}>
-                  <td>
-                    <div className="font-bold text-[13px] text-[#0F172A]">{p.project_name}</div>
-                    <div className="font-mono text-[11px] text-[#64748B]">{p.project_id}</div>
-                  </td>
-                  <td><span className="font-semibold text-[#0F172A] text-[12px]">{p.registry}</span></td>
-                  <td><span className="bg-[#F1F5F9] px-2 py-0.5 rounded text-[11.5px] font-mono">{p.methodology}</span></td>
-                  <td>{p.country}</td>
-                  <td><div className="text-[12px]">{p.developer}</div></td>
-                  <td><StatusBadge label={p.status} variant={getProjStatusVariant(p.status) as any} size="sm" /></td>
-                  <td className="text-[#64748B] text-[12.5px]">{p.submission_date}</td>
-                  <td className="text-right">
-                    <button 
-                      onClick={() => setSubmissionModalProj(p)}
-                      className="px-3 py-1.5 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1 ml-auto"
-                    >
-                      <Upload size={13} /> Registry Submission
-                    </button>
-                  </td>
+          {isDataLoading ? (
+            <SkeletonTable rows={5} cols={7} />
+          ) : projects.length === 0 ? (
+            <EmptyState title="No Projects Found" description="Create a registry project to start tracking carbon lifecycle." />
+          ) : (
+            <table className="ent-table min-w-[1000px]">
+              <thead>
+                <tr>
+                  <th>Project ID & Name</th>
+                  <th>Registry</th>
+                  <th>Methodology</th>
+                  <th>Country</th>
+                  <th>Developer</th>
+                  <th>Status</th>
+                  <th>Submission Date</th>
+                  <th className="text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {projects.map((p) => (
+                  <tr key={p.project_id}>
+                    <td>
+                      <div>
+                        <div className="text-[13.5px] font-bold text-[#0F172A]">{p.project_name}</div>
+                        <div className="text-[11px] font-mono text-[#64748B] mt-0.5">{p.project_id}</div>
+                      </div>
+                    </td>
+                    <td className="text-[13px] font-medium text-[#475569]">{p.registry}</td>
+                    <td className="text-[12.5px] font-mono font-bold text-[#1E293B]">{p.methodology}</td>
+                    <td className="text-[13px] text-[#475569]">{p.country}</td>
+                    <td className="text-[13px] text-[#475569] font-medium">{p.developer}</td>
+                    <td>
+                      <StatusBadge label={p.status} variant={getProjStatusVariant(p.status)} size="sm" />
+                    </td>
+                    <td className="text-[12.5px] text-[#64748B]">{p.submission_date}</td>
+                    <td className="text-right">
+                      {p.status === 'Draft' && (
+                        <button onClick={() => setSubmissionModalProj(p)} className="btn btn-secondary btn-xs text-[#2563EB] gap-1">
+                          <Cloud size={11} /> Submit Registry
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
-      {/* ── TAB: CREDIT LIFECYCLE ── */}
+      {/* ── TAB: CREDITS LIFECYCLE ── */}
       {activeTab === 'credits' && (
         <div className="ent-card overflow-hidden animate-in fade-in duration-300">
           <div className="p-4 border-b border-[#F1F5F9] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Leaf size={16} className="text-[#16A34A]" />
-              <h3 className="text-[14px] font-bold text-[#0F172A]">Credit Issuance & Retirement Ledger</h3>
+              <h3 className="text-[14px] font-bold text-[#0F172A]">Minted Carbon Batches & Sales Inventory</h3>
             </div>
-            <button onClick={() => setIsMintModalOpen(true)} className="btn btn-primary btn-sm gap-1.5">
-              <Plus size={14} /> Issue New Credit Batch
+            <button onClick={() => setIsMintModalOpen(true)} className="btn btn-primary btn-sm gap-1.5" disabled={projects.length === 0}>
+              <Plus size={14} /> Mint Credits Batch
             </button>
           </div>
-          
-          <table className="ent-table min-w-[1100px]">
-            <thead>
-              <tr>
-                <th>Batch / Serial No.</th>
-                <th>Project & Vintage</th>
-                <th>Volume (tCO₂e)</th>
-                <th>Corporate Buyer</th>
-                <th>Standard</th>
-                <th>Status</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {batches.map(b => (
-                <tr key={b.id}>
-                  <td>
-                    <span className="font-mono text-[12px] text-[#2563EB] font-bold bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#DBEAFE]">
-                      {b.batch_id}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="text-[13px] font-bold text-[#0F172A]">{b.project_name}</div>
-                    <div className="text-[11px] font-mono text-[#64748B]">Vintage {b.vintage_year}</div>
-                  </td>
-                  <td>
-                    <div className="text-[13.5px] font-extrabold text-[#16A34A]">{b.volume_tco2.toLocaleString()} tCO₂e</div>
-                    <div className="text-[10.5px] text-[#94A3B8] font-mono">Available: {b.credits_available.toLocaleString()}</div>
-                  </td>
-                  <td>
-                    <div className="text-[12.5px] font-bold text-[#0F172A]">{b.buyer_name}</div>
-                  </td>
-                  <td><span className="px-2 py-0.5 bg-[#F8FAFC] text-[#0F172A] border border-[#CBD5E1] rounded-md text-[11px] font-bold">{b.verification_standard}</span></td>
-                  <td><StatusBadge label={b.status} variant={getBatchStatusVariant(b.status) as any} size="sm" /></td>
-                  <td className="text-right flex items-center justify-end gap-2">
-                    {b.status !== 'Retired' && (
-                      <button 
-                        onClick={() => setRetirementModalBatch(b)}
-                        className="px-3 py-1.5 bg-[#FAF5FF] hover:bg-[#F3E8FF] text-[#9333EA] text-[11.5px] font-bold rounded-lg transition-colors flex items-center gap-1"
-                      >
-                        <Shield size={13} /> Retire Credits
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => navigate(`/carbon/${b.id}`)}
-                      className="p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded-lg transition-colors"
-                    >
-                      <Eye size={16} />
-                    </button>
-                  </td>
+
+          {isDataLoading ? (
+            <SkeletonTable rows={5} cols={8} />
+          ) : batches.length === 0 ? (
+            <EmptyState title="No Minted Batches" description="Mint a carbon credit batch to create sellable carbon inventory." />
+          ) : (
+            <table className="ent-table min-w-[1200px]">
+              <thead>
+                <tr>
+                  <th>Batch Reference ID</th>
+                  <th>Project Details</th>
+                  <th>Vintage</th>
+                  <th>Volume (tCO₂e)</th>
+                  <th>Sold Volume</th>
+                  <th>Price / tCO₂</th>
+                  <th>Gross Sales Value</th>
+                  <th>Active Corporate Offtaker</th>
+                  <th>Status</th>
+                  <th className="text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {batches.map((b) => (
+                  <tr key={b.id}>
+                    <td>
+                      <div>
+                        <div className="text-[13.5px] font-bold text-[#9333EA] font-mono">{b.batch_id}</div>
+                        <div className="text-[10px] text-[#64748B] mt-0.5 font-mono">{b.verification_standard}</div>
+                      </div>
+                    </td>
+                    <td>
+                      <div>
+                        <div className="text-[13px] font-bold text-[#0F172A]">{b.project_name}</div>
+                        <div className="text-[11px] text-[#64748B] mt-0.5">{b.location} • {b.species}</div>
+                      </div>
+                    </td>
+                    <td className="text-[13px] font-medium text-[#475569]">{b.vintage_year}</td>
+                    <td className="text-[13px] font-bold text-[#0F172A]">{b.volume_tco2.toLocaleString()}</td>
+                    <td className="text-[13px] text-[#475569]">{b.credits_sold.toLocaleString()}</td>
+                    <td className="text-[13px] font-mono text-[#2563EB] font-bold">${b.price_per_tco2_usd.toFixed(2)}</td>
+                    <td className="text-[13px] font-bold text-[#16A34A]">₹{b.revenue_lakhs.toFixed(2)} Lakhs</td>
+                    <td className="text-[12.5px] text-[#475569] font-medium">{b.buyer_name || '—'}</td>
+                    <td>
+                      <StatusBadge label={b.status} variant={b.status === 'Retired' ? 'purple' : b.status === 'Sold' ? 'info' : 'success'} size="sm" />
+                    </td>
+                    <td className="text-right">
+                      {b.status !== 'Retired' && b.credits_available > 0 && (
+                        <button onClick={() => setRetirementModalBatch(b)} className="btn btn-secondary btn-xs text-[#9333EA] gap-1">
+                          <Shield size={11} /> Retire Credits
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
       {/* ── MODALS ── */}
 
-      {/* Registry Submission Side Modal */}
+      {/* Draft New Project Modal */}
+      <AnimatePresence>
+        {isCreateProjModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#E8EDF5] space-y-4">
+              <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+                <div className="flex items-center gap-2">
+                  <FileText size={18} className="text-[#2563EB]" />
+                  <h3 className="text-[16px] font-bold text-[#0F172A]">Draft New Carbon Registry Project</h3>
+                </div>
+                <button onClick={() => setIsCreateProjModalOpen(false)} className="text-[#94A3B8] hover:text-[#0F172A]"><X size={18} /></button>
+              </div>
+              <form onSubmit={handleCreateProjSubmit} className="space-y-3 text-[13px]">
+                <div>
+                  <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Project Code ID</label>
+                  <input type="text" required placeholder="e.g. PRJ-1042" value={newProj.project_id} onChange={e => setNewProj({ ...newProj, project_id: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Project Name</label>
+                  <input type="text" required placeholder="e.g. MP Agroforestry Carbon Sink Drive" value={newProj.project_name} onChange={e => setNewProj({ ...newProj, project_name: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Carbon Registry</label>
+                    <select value={newProj.registry} onChange={e => setNewProj({ ...newProj, registry: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none">
+                      <option value="Verra">Verra VCS</option>
+                      <option value="Gold Standard">Gold Standard</option>
+                      <option value="UNFCCC CDM">UNFCCC CDM</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Methodology Code</label>
+                    <input type="text" required placeholder="e.g. VM0042" value={newProj.methodology} onChange={e => setNewProj({ ...newProj, methodology: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Host Country</label>
+                    <input type="text" required placeholder="e.g. India" value={newProj.country} onChange={e => setNewProj({ ...newProj, country: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Project Developer</label>
+                    <input type="text" required placeholder="e.g. BhumiCred Core" value={newProj.developer_name} onChange={e => setNewProj({ ...newProj, developer_name: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#F1F5F9]">
+                  <button type="button" onClick={() => setIsCreateProjModalOpen(false)} className="btn btn-secondary btn-sm">Cancel</button>
+                  <button type="submit" className="btn btn-primary btn-sm flex items-center gap-1">
+                    <Plus size={14} /> Create Draft
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Registry Document Upload / Submission Modal */}
       <AnimatePresence>
         {submissionModalProj && (
           <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs">
             <motion.div
-              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ bounce: 0, duration: 0.25 }}
+              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'tween', duration: 0.25 }}
               className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col"
             >
               <div className="p-5 border-b border-[#E2E8F0] flex justify-between items-center bg-[#F8FAFC]">
@@ -454,7 +570,7 @@ export const CarbonRegistry = () => {
         )}
       </AnimatePresence>
 
-      {/* Mint Modal (Existing) */}
+      {/* Mint Modal */}
       <AnimatePresence>
         {isMintModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -464,14 +580,21 @@ export const CarbonRegistry = () => {
                 <button onClick={() => setIsMintModalOpen(false)} className="text-[#94A3B8] hover:text-[#0F172A]"><X size={18} /></button>
               </div>
               <form onSubmit={handleMintSubmit} className="space-y-3 text-[13px]">
-                <div><label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Origin Project</label><select value={newMint.project_name} onChange={e => setNewMint({ ...newMint, project_name: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"><option value="MP Agroforestry Carbon Sink Drive">PRJ-1042 MP Agroforestry Carbon Sink Drive</option></select></div>
+                <div>
+                  <label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Origin Project</label>
+                  <select value={newMint.project_name} onChange={e => setNewMint({ ...newMint, project_name: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none">
+                    {projects.map(p => (
+                      <option key={p.project_id} value={p.project_name}>{p.project_id} {p.project_name}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Vintage Year</label><input type="number" value={newMint.vintage_year} onChange={e => setNewMint({ ...newMint, vintage_year: Number(e.target.value) })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" /></div>
                   <div><label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Volume (tCO₂e)</label><input type="number" value={newMint.volume_tco2} onChange={e => setNewMint({ ...newMint, volume_tco2: Number(e.target.value) })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Price per tCO₂ ($)</label><input type="number" step="0.5" value={newMint.price_per_tco2_usd} onChange={e => setNewMint({ ...newMint, price_per_tco2_usd: Number(e.target.value) })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" /></div>
-                  <div><label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Verification Standard</label><select value={newMint.verification_standard} onChange={e => setNewMint({ ...newMint, verification_standard: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none"><option value="Verra VM0042 Standard">Verra VM0042 Standard</option></select></div>
+                  <div><label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Verification Standard (Serial Range)</label><input type="text" value={newMint.verification_standard} onChange={e => setNewMint({ ...newMint, verification_standard: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" /></div>
                 </div>
                 <div><label className="block text-[11.5px] font-bold text-[#0F172A] mb-1">Assigned Corporate Offtaker</label><input type="text" value={newMint.buyer_name} onChange={e => setNewMint({ ...newMint, buyer_name: e.target.value })} className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-medium outline-none" /></div>
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#F1F5F9]"><button type="button" onClick={() => setIsMintModalOpen(false)} className="btn btn-secondary btn-sm">Cancel</button><button type="submit" className="btn btn-primary btn-sm flex items-center gap-1"><Sparkles size={14} /> Mint Credit Batch</button></div>

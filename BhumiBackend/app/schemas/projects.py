@@ -138,6 +138,9 @@ class AdminProjectReviewRequest(BaseModel):
     trees_verified: Optional[bool] = None
     mrv_verified: Optional[bool] = None
     insured_trees: Optional[int] = Field(None, ge=0, le=1000000)
+    land_area_acres: Optional[float] = Field(None, ge=0.0)
+    registered_trees: Optional[int] = Field(None, ge=0)
+    estimated_carbon_impact: Optional[float] = Field(None, ge=0.0)
     rejection_reason: Optional[str] = Field(None, max_length=500)
     clarification_note: Optional[str] = Field(None, max_length=500)
 

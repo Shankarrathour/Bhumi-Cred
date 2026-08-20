@@ -19,6 +19,14 @@ from app.core.logging import setup_logging
 from app.database.connection import connect_db, disconnect_db, ping_db, reconnect_db
 from app.middleware.request_logging import RequestLoggingMiddleware
 
+from beanie.odm.fields import PydanticObjectId
+from bson import ObjectId
+from fastapi.encoders import ENCODERS_BY_TYPE
+
+# Global FastAPI encoders for Beanie & PyMongo ObjectIds
+ENCODERS_BY_TYPE[PydanticObjectId] = str
+ENCODERS_BY_TYPE[ObjectId] = str
+
 # ── Logging setup (must be first) ────────────────────────────────────────────
 setup_logging(level=settings.LOG_LEVEL, fmt=settings.LOG_FORMAT)
 logger = logging.getLogger(__name__)

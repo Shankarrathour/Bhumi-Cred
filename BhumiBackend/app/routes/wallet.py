@@ -8,6 +8,7 @@ from app.schemas.farmer_profile import FarmerProfileResponse
 from app.schemas.wallet import (
     AddBankAccountRequest,
     UpdateBankAccountRequest,
+    AddUpiRequest,
     BankAccountResponse,
     TransactionResponse,
     WalletResponse,
@@ -35,6 +36,25 @@ async def get_wallet(
 ) -> SuccessResponse[WalletResponse]:
     data = await svc.get_wallet(str(current_farmer.id))
     return SuccessResponse(message="Wallet fetched successfully.", data=data)
+
+
+@router.post("/upi", response_model=SuccessResponse[WalletResponse], summary="Save UPI ID to wallet")
+async def save_upi_id(
+    payload: AddUpiRequest,
+    current_farmer: CurrentFarmer,
+    svc: WalletService = Depends(get_wallet_service),
+) -> SuccessResponse[WalletResponse]:
+    data = await svc.set_upi_id(str(current_farmer.id), payload.upi_id)
+    return SuccessResponse(message="UPI ID saved successfully.", data=data)
+
+
+@router.delete("/upi", response_model=SuccessResponse[WalletResponse], summary="Remove UPI ID from wallet")
+async def remove_upi_id(
+    current_farmer: CurrentFarmer,
+    svc: WalletService = Depends(get_wallet_service),
+) -> SuccessResponse[WalletResponse]:
+    data = await svc.delete_upi_id(str(current_farmer.id))
+    return SuccessResponse(message="UPI ID removed successfully.", data=data)
 
 
 @router.get(

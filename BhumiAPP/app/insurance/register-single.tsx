@@ -227,6 +227,8 @@ export default function RegisterSingleTreeScreen() {
         height,
         landDetails,
         uniqueSign,
+        lat: geoCoords?.latitude || 22.9734,
+        lng: geoCoords?.longitude || 78.6591,
         premium: selectedPolicy.price,
         coverage: selectedPolicy.cover,
         policyId: selectedPolicy._id,
@@ -237,6 +239,8 @@ export default function RegisterSingleTreeScreen() {
       }
     });
   };
+
+  const farmerVillageBlock = [authUser?.village, authUser?.tehsil || authUser?.district, authUser?.state].filter(Boolean).join(', ') || 'Anuppur Khas Village, MP';
 
   return (
     <View style={styles.container}>
@@ -280,7 +284,7 @@ export default function RegisterSingleTreeScreen() {
           </View>
           <View style={[styles.gridCell, { marginTop: 10 }]}>
             <Text style={styles.disabledLabel}>Village & Block</Text>
-            <Text style={styles.disabledValue}>Budhni Village, Bhopal Rural, MP</Text>
+            <Text style={styles.disabledValue}>{farmerVillageBlock}</Text>
           </View>
         </View>
 

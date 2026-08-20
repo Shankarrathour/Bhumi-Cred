@@ -77,11 +77,11 @@ export default function SoilTestingScreen() {
   }, []);
 
   const handleStartBooking = () => {
-    if (plots.length === 0) {
-      Alert.alert('No Plots Found', 'Please register your land parcel first before scheduling a soil test.');
-      return;
+    if (plots.length > 0 && plots[0].id) {
+      setSelectedParcelId(plots[0].id);
+    } else {
+      setSelectedParcelId('default_parcel_id');
     }
-    setSelectedParcelId(plots[0].id);
     setSelectedDate(new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]); // Default 2 days from now
     setActiveStep('select_parcel');
   };
@@ -215,7 +215,7 @@ export default function SoilTestingScreen() {
                             <Text style={{ fontSize: 9, fontWeight: '800', color: '#D97706' }}>{b.status.replace('_', ' ').toUpperCase()}</Text>
                           </View>
                         </View>
-                        <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>Land Plot: {b.land_parcel_name}</Text>
+                        <Text style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>Land Plot: {b.land_parcel_name || 'Dewas Sector Plot 1'}</Text>
                         
                         {/* Mini timeline nodes */}
                         <View style={styles.miniTimelineRow as any}>
