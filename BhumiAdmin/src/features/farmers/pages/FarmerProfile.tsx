@@ -512,52 +512,67 @@ export const FarmerProfile = () => {
         )}
 
         {/* 2. PERSONAL DETAILS */}
-        {activeTab === 'Personal' && (
-          <div className="space-y-6">
-            <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
-              <User size={16} className="text-[#16A34A]" /> Personal & Residential Profile
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <InfoRow label="Full Name" value={val(farmerDetail.full_name)} />
-              <InfoRow label="Father / Spouse Name" value={val(farmerDetail.father_name)} />
-              <InfoRow label="Date of Birth" value={fmtDate(farmerDetail.dob)} />
-              <InfoRow label="Gender" value={val(farmerDetail.gender)} />
-              <InfoRow label="Mobile Number" value={farmerDetail.mobile} />
-              <InfoRow label="Email Address" value={val(farmerDetail.email)} />
-              <InfoRow label="Village" value={val(farmerDetail.village)} />
-              <InfoRow label="Tehsil" value={val(farmerDetail.tehsil)} />
-              <InfoRow label="Gram Panchayat" value={val(farmerDetail.gram_panchayat)} />
-              <InfoRow label="Vikash Khand" value={val(farmerDetail.vikash_khand)} />
-              <InfoRow label="District" value={val(farmerDetail.district)} />
-              <InfoRow label="State" value={val(farmerDetail.state)} />
-              <InfoRow label="Pincode" value={val(farmerDetail.pincode)} />
-              <InfoRow label="City" value={val(farmerDetail.city)} />
-              {farmerDetail.full_address && (
-                <div className="md:col-span-3">
-                  <InfoRow label="Full Residential Address" value={farmerDetail.full_address} />
+        {activeTab === 'Personal' && (() => {
+          const currAddr = (farmerDetail as any)?.current_address || {};
+          const fullNameVal = farmerDetail.full_name || (farmerDetail as any)?.fullName;
+          const fatherNameVal = farmerDetail.father_name || (farmerDetail as any)?.fatherName || (farmerDetail as any)?.fathers_name;
+          const villageVal = farmerDetail.village || currAddr.village;
+          const tehsilVal = farmerDetail.tehsil || currAddr.tehsil;
+          const gramPanchayatVal = farmerDetail.gram_panchayat || currAddr.gram_panchayat;
+          const vikashKhandVal = farmerDetail.vikash_khand || currAddr.vikash_khand || currAddr.block;
+          const districtVal = farmerDetail.district || currAddr.district;
+          const stateVal = farmerDetail.state || currAddr.state;
+          const pincodeVal = farmerDetail.pincode || currAddr.pincode;
+          const cityVal = farmerDetail.city || currAddr.city;
+          const fullAddressVal = farmerDetail.full_address || currAddr.full_address;
+
+          return (
+            <div className="space-y-6">
+              <h3 className="text-[15px] font-bold text-[#0F172A] border-b border-[#F1F5F9] pb-3 flex items-center gap-2">
+                <User size={16} className="text-[#16A34A]" /> Personal & Residential Profile
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <InfoRow label="Full Name" value={val(fullNameVal)} />
+                <InfoRow label="Father / Spouse Name" value={val(fatherNameVal)} />
+                <InfoRow label="Date of Birth" value={fmtDate(farmerDetail.dob)} />
+                <InfoRow label="Gender" value={val(farmerDetail.gender)} />
+                <InfoRow label="Mobile Number" value={farmerDetail.mobile} />
+                <InfoRow label="Email Address" value={val(farmerDetail.email)} />
+                <InfoRow label="Village" value={val(villageVal)} />
+                <InfoRow label="Tehsil" value={val(tehsilVal)} />
+                <InfoRow label="Gram Panchayat" value={val(gramPanchayatVal)} />
+                <InfoRow label="Vikash Khand" value={val(vikashKhandVal)} />
+                <InfoRow label="District" value={val(districtVal)} />
+                <InfoRow label="State" value={val(stateVal)} />
+                <InfoRow label="Pincode" value={val(pincodeVal)} />
+                <InfoRow label="City" value={val(cityVal)} />
+                {fullAddressVal && (
+                  <div className="md:col-span-3">
+                    <InfoRow label="Full Residential Address" value={fullAddressVal} />
+                  </div>
+                )}
+              </div>
+
+              {/* Permanent Address */}
+              {farmerDetail.permanent_address && (
+                <div className="p-4 bg-[#FAFCFF] border border-[#F1F5F9] rounded-2xl space-y-4">
+                  <h4 className="text-[13px] font-bold text-[#0F172A]">Permanent Address</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <InfoRow label="Village" value={val(farmerDetail.permanent_address.village)} />
+                    <InfoRow label="District" value={val(farmerDetail.permanent_address.district)} />
+                    <InfoRow label="State" value={val(farmerDetail.permanent_address.state)} />
+                    <InfoRow label="Pincode" value={val(farmerDetail.permanent_address.pincode)} />
+                    {farmerDetail.permanent_address.full_address && (
+                      <div className="md:col-span-3">
+                        <InfoRow label="Full Address" value={farmerDetail.permanent_address.full_address} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-
-            {/* Permanent Address */}
-            {farmerDetail.permanent_address && (
-              <div className="p-4 bg-[#FAFCFF] border border-[#F1F5F9] rounded-2xl space-y-4">
-                <h4 className="text-[13px] font-bold text-[#0F172A]">Permanent Address</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <InfoRow label="Village" value={val(farmerDetail.permanent_address.village)} />
-                  <InfoRow label="District" value={val(farmerDetail.permanent_address.district)} />
-                  <InfoRow label="State" value={val(farmerDetail.permanent_address.state)} />
-                  <InfoRow label="Pincode" value={val(farmerDetail.permanent_address.pincode)} />
-                  {farmerDetail.permanent_address.full_address && (
-                    <div className="md:col-span-3">
-                      <InfoRow label="Full Address" value={farmerDetail.permanent_address.full_address} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* 3. KYC */}
         {activeTab === 'KYC' && (
