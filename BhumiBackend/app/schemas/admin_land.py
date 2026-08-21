@@ -32,6 +32,8 @@ class AdminLandParcelResponse(BaseModel):
     soil_organic_carbon: float
     
     land_document_url: Optional[str] = None
+    land_photo_urls: Optional[list[str]] = None
+    trees: Optional[list[dict]] = None
     verification_status: str
     remarks: Optional[str] = None
     verified_date: Optional[datetime] = None
@@ -40,3 +42,4 @@ class AdminLandParcelResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+

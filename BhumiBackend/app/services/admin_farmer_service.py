@@ -60,7 +60,14 @@ class AdminFarmerService:
     # ── Private helpers ───────────────────────────────────────────────────────
 
     async def _get_farmer(self, farmer_id: str) -> Farmer:
-        farmer = await self._farmers.get_by_id(farmer_id)
+        from bson import ObjectId
+        farmer = None
+        if ObjectId.is_valid(farmer_id):
+            farmer = await self._farmers.get_by_id(farmer_id)
+        if not farmer:
+            farmer = await Farmer.find_one(Farmer.farmer_id == farmer_id)
+        if not farmer:
+            farmer = await Farmer.find_one(Farmer.mobile == farmer_id)
         if not farmer:
             raise FarmerNotFoundException()
         return farmer
@@ -222,6 +229,26 @@ class AdminFarmerService:
             )
             
         # 3. Approved / Rejected Event
+        # Fetch farmer's enrollments to check real project assignment and tree registration
+        assigned_project_name = None
+        assigned_project_id_val = None
+        try:
+            from app.models.project_enrollment import ProjectEnrollment
+            from app.models.project import SustainabilityProject
+            enrollments = await ProjectEnrollment.find({"farmer_id": str(p.farmer_id)}).to_list()
+            assigned_enrollment = next((e for e in enrollments if e.stage_project_assigned), None)
+            if not assigned_enrollment and enrollments:
+                assigned_enrollment = enrollments[0]
+            if assigned_enrollment and assigned_enrollment.project_id:
+                assigned_project_id_val = assigned_enrollment.project_id
+                proj = await SustainabilityProject.find_one({"$or": [{"project_id": assigned_enrollment.project_id}, {"id": assigned_enrollment.project_id}]})
+                if proj and proj.title:
+                    assigned_project_name = proj.title
+                else:
+                    assigned_project_name = f"Project {assigned_enrollment.project_id.replace('-', ' ').title()}"
+        except Exception:
+            enrollments = []
+
         if p.verification_status in (LandVerificationStatus.VERIFIED, LandVerificationStatus.APPROVED):
             history_events.append(
                 LandHistoryEvent(
@@ -231,17 +258,13 @@ class AdminFarmerService:
                 )
             )
             
-            # Fetch farmer's enrollments to check real status of project assignment and tree registration
-            from app.models.project_enrollment import ProjectEnrollment
-            enrollments = await ProjectEnrollment.find({"farmer_id": str(p.farmer_id)}).to_list()
-            
             # 4. Project Assigned Event
             assigned_enrollment = next((e for e in enrollments if e.stage_project_assigned), None)
             if assigned_enrollment:
                 history_events.append(
                     LandHistoryEvent(
                         title="Project Assigned",
-                        desc=f"Assigned to {p.crop_type or 'Agroforestry'} Carbon Project",
+                        desc=f"Assigned to {assigned_project_name or 'Carbon Project'}",
                         date=assigned_enrollment.updated_at or p.updated_at
                     )
                 )
@@ -305,6 +328,8 @@ class AdminFarmerService:
             verified_at=p.verified_at,
             created_at=p.created_at,
             updated_at=p.updated_at,
+            assigned_project=assigned_project_name,
+            assigned_project_id=assigned_project_id_val,
             history=history_events,
         )
 
@@ -398,7 +423,19 @@ class AdminFarmerService:
         )
 
     async def list_land_verification_queue(self) -> list[AdminLandVerificationItem]:
-        parcels = await self._land.list_active()
+        active_farmers = await Farmer.find(Farmer.is_active == True).to_list()
+        valid_farmer_ids = set()
+        for f in active_farmers:
+            valid_farmer_ids.add(str(f.id))
+            if f.farmer_id:
+                valid_farmer_ids.add(f.farmer_id)
+            if f.mobile:
+                valid_farmer_ids.add(f.mobile)
+
+        parcels = await LandParcel.find(
+            {"is_active": True, "farmer_id": {"$in": list(valid_farmer_ids)}}
+        ).sort("-created_at").to_list()
+
         return [await self._to_land_verification_item(parcel) for parcel in parcels]
 
     async def verify_land_parcel(
@@ -505,6 +542,52 @@ class AdminFarmerService:
                 is_verified = bd.is_verified
                 added_at = bd.added_at
 
+        # 4. Fetch all transactions (WalletTransaction + WithdrawalRequest) for this farmer
+        transactions = []
+        try:
+            from app.models.wallet import WalletTransaction, WithdrawalRequest
+            farmer_ids = [str(farmer.id), farmer.farmer_id, farmer.mobile]
+            farmer_ids = [fid for fid in farmer_ids if fid]
+
+            tx_list = await WalletTransaction.find({"farmer_id": {"$in": farmer_ids}}).sort("-created_at").to_list()
+            for tx in tx_list:
+                transactions.append({
+                    "id": str(tx.id),
+                    "amount": tx.amount,
+                    "type": str(tx.type).upper(),
+                    "status": str(tx.status).lower(),
+                    "description": tx.description,
+                    "category": getattr(tx, "category", None) or ("UPI DEBIT" if str(tx.type).lower() == "debit" else "CREDIT"),
+                    "payment_method": getattr(tx, "payment_method", "UPI"),
+                    "bank_name": getattr(tx, "bank_name", None) or (bank_name or "UPI Transfer"),
+                    "upi_id": getattr(tx, "upi_id", None) or upi_id,
+                    "payout_reference": tx.reference_id or getattr(tx, "utr", None) or f"TXN-{str(tx.id)[-6:].upper()}",
+                    "utr": getattr(tx, "utr", None) or tx.reference_id,
+                    "created_at": tx.created_at.isoformat() if tx.created_at else None,
+                })
+
+            withdrawals = await WithdrawalRequest.find({"farmer_id": {"$in": farmer_ids}}).sort("-created_at").to_list()
+            for w in withdrawals:
+                if not any(t["id"] == str(w.id) or t.get("payout_reference") == w.payout_reference for t in transactions):
+                    transactions.append({
+                        "id": str(w.id),
+                        "amount": w.amount,
+                        "type": "DEBIT",
+                        "status": str(w.status).lower(),
+                        "description": f"Withdrawal Payout ({w.payment_method})",
+                        "category": "Withdrawal Payout",
+                        "payment_method": w.payment_method,
+                        "bank_name": w.bank_name or "Bank Account",
+                        "upi_id": w.upi_id or upi_id,
+                        "account_number_masked": w.account_number_masked,
+                        "payout_reference": w.payout_reference or f"WTH-{str(w.id)[-6:].upper()}",
+                        "created_at": w.created_at.isoformat() if w.created_at else None,
+                    })
+
+            transactions.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+        except Exception as tx_err:
+            logger.warning(f"Error fetching transactions for farmer {farmer_id}: {tx_err}")
+
         return AdminBankResponse(
             bank_name=bank_name,
             account_number=account_number,
@@ -513,6 +596,7 @@ class AdminFarmerService:
             upi_id=upi_id,
             is_verified=is_verified,
             added_at=added_at,
+            transactions=transactions,
         )
 
     async def get_farmer_identity(self, farmer_id: str) -> AdminIdentityResponse:
@@ -866,82 +950,169 @@ class AdminFarmerService:
         from app.models.gis_land import GISLandParcel
         from app.models.agri_application import AgriApplication
         from app.models.refresh_token import RefreshTokenSession
+        from app.models.sale import CarbonCreditSale
+        from app.models.marketplace import (
+            MarketplaceSubscription,
+            MarketplaceWishlist,
+            MarketplaceOrder,
+            MarketplaceReview,
+            MarketplacePayment,
+            MarketplaceShipping,
+            MarketplaceReturn,
+        )
+        from app.models.financial_wallet import (
+            Wallet as FinWallet,
+            WalletTransaction as FinWalletTransaction,
+            WalletWithdrawal as FinWalletWithdrawal,
+            FinancialAuditLog,
+            EscrowAccount,
+        )
+        from app.models.mrv_ai import (
+            MRVIOTTelemetry,
+            MRVLidarScan,
+            MRVAuditTrail,
+            MRVDroneFlight,
+            MRVDroneSurvey,
+            MRVSatelliteImage,
+            MRVSatelliteMonitoring,
+            MRVTreeMonitoring,
+            MRVSoilReport,
+            MRVAIDetection,
+            MRVDuplicateDetection,
+            MRVVerificationQueue,
+            MRVMediaEvidence,
+        )
 
-        # 1. Delete land parcels (matches either string or PydanticObjectId)
+        # 1. Fetch land parcel IDs before deleting them
+        land_parcels = await LandParcel.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).to_list()
+        land_ids = [p.id for p in land_parcels]
+        land_pydantic_ids = [PydanticObjectId(str(lid)) for lid in land_ids]
+        all_land_identifiers = land_ids + land_pydantic_ids
+
+        # 2. Delete land parcels (matches either string or PydanticObjectId)
         land_deleted = await LandParcel.find(
             {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 2. Delete GIS land parcels
+        # 3. Delete GIS land parcels
         gis_land_deleted = await GISLandParcel.find(
             {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 3. Delete family members
+        # 4. Clean up MRV collections
+        mrv_telemetry_deleted = await MRVIOTTelemetry.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_lidar_deleted = await MRVLidarScan.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_audit_deleted = await MRVAuditTrail.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_flight_deleted = await MRVDroneFlight.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_survey_deleted = await MRVDroneSurvey.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_sat_image_deleted = await MRVSatelliteImage.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_sat_mon_deleted = await MRVSatelliteMonitoring.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_tree_mon_deleted = await MRVTreeMonitoring.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_soil_rep_deleted = await MRVSoilReport.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_ai_det_deleted = await MRVAIDetection.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_dup_det_deleted = await MRVDuplicateDetection.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_queue_deleted = await MRVVerificationQueue.find({"land_id": {"$in": all_land_identifiers}}).delete()
+        mrv_media_deleted = await MRVMediaEvidence.find(
+            {"$or": [
+                {"land_id": {"$in": all_land_identifiers}},
+                {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
+            ]}
+        ).delete()
+
+        # 5. Delete unmapped trees collection
+        try:
+            db = LandParcel.get_motor_collection().database
+            trees_del_res = await db["trees"].delete_many(
+                {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}
+            )
+            trees_deleted_count = trees_del_res.deleted_count
+        except Exception as te:
+            logger.warning(f"Failed to delete from trees collection: {te}")
+            trees_deleted_count = 0
+
+        # 6. Delete family members
         family_deleted = await FamilyMember.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 4. Delete activity logs
+        # 7. Delete activity logs
         activity_deleted = await FarmerActivityLog.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 5. Delete OTP sessions tied to this mobile
+        # 8. Delete OTP sessions tied to this mobile
         otp_deleted = await OTPSession.find(
             {"mobile": farmer_mobile, "role": "farmer"}
         ).delete()
 
-        # 6. Delete active JWT refresh token sessions
+        # 9. Delete active JWT refresh token sessions
         token_deleted = await RefreshTokenSession.find(
-            {"owner_id": farmer_object_id}
+            {"owner_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 7. Delete registration records
+        # 10. Delete registration records
         reg_deleted = await BhumiCredRegistration.find(
             {"$or": [
-                {"farmer_id": farmer_object_id},
+                {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
                 {"mobile_number": farmer_mobile},
             ]}
         ).delete()
 
-        # 8. Delete project enrollments
+        # 11. Delete project enrollments
         proj_deleted = await ProjectEnrollment.find(
-            {"farmer_id": {"$in": [farmer_object_id, farmer_mobile]}}
+            {"$or": [
+                {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
+                {"farmer_id": farmer_mobile},
+            ]}
         ).delete()
 
-        # 9. Delete notifications
+        # 12. Delete notifications
         notif_deleted = await Notification.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 10. Delete tree registrations
+        # 13. Delete tree registrations
         tree_deleted = await TreeRegistration.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 11. Delete green family covers
+        # 14. Delete green family covers
         gf_deleted = await GreenFamilyCover.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 12. Delete wallet, transactions, bank accounts & withdrawal requests
+        # 15. Delete wallet, transactions, bank accounts, withdrawal requests, and escrow
         wallet_deleted = await Wallet.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
         tx_deleted = await WalletTransaction.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
         bank_acc_deleted = await WalletBankAccount.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
         withdraw_deleted = await WithdrawalRequest.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        escrow_deleted = await EscrowAccount.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 13. Delete marketplace orders, cart items, and wishlist
+        # 15b. Delete financial wallet collections (financial_wallets, financial_wallet_transactions, financial_wallet_withdrawals, financial_audit_logs)
+        try:
+            db = Farmer.get_motor_collection().database
+            await db["financial_wallets"].delete_many({"$or": [{"user_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}, {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}]})
+            await db["financial_wallet_transactions"].delete_many({"$or": [{"user_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}, {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}]})
+            await db["financial_wallet_withdrawals"].delete_many({"$or": [{"user_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}, {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}]})
+            await db["financial_audit_logs"].delete_many({"$or": [{"actor_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}, {"user_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}]})
+        except Exception as fe:
+            logger.warning(f"Error purging financial wallet raw collections: {fe}")
+
+        # 16. Delete marketplace orders, cart items, wishlists, reviews, payments, shippings, returns, and subscriptions
         order_deleted = await Order.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
         cart_deleted = await CartItem.find(
             {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
@@ -949,30 +1120,57 @@ class AdminFarmerService:
         wishlist_deleted = await Wishlist.find(
             {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
-
-        # 14. Delete soil testing bookings
-        soil_deleted = await SoilTestBooking.find(
-            {"farmer_id": farmer_object_id}
+        carbon_sale_deleted = await CarbonCreditSale.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        market_sub_deleted = await MarketplaceSubscription.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        market_wish_deleted = await MarketplaceWishlist.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        market_ord_deleted = await MarketplaceOrder.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        market_rev_deleted = await MarketplaceReview.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        market_pay_deleted = await MarketplacePayment.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        market_ship_deleted = await MarketplaceShipping.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+        market_ret_deleted = await MarketplaceReturn.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 15. Delete gamification badges & referrals
+        # 17. Delete soil testing bookings
+        soil_deleted = await SoilTestBooking.find(
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
+        ).delete()
+
+        # 18. Delete gamification badges & referrals
         badge_deleted = await FarmerBadge.find(
-            {"farmer_id": farmer_object_id}
+            {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
         referral_deleted = await FarmerReferral.find(
             {"$or": [
-                {"referrer_farmer_id": farmer_object_id},
-                {"referred_farmer_id": farmer_object_id},
+                {"referrer_farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
+                {"referred_farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
                 {"referred_farmer_phone": farmer_mobile},
             ]}
         ).delete()
 
-        # 16. Delete support tickets
+        # 19. Delete support tickets
         support_deleted = await SupportTicket.find(
-            {"vendor_id": farmer_object_id}
+            {"$or": [
+                {"vendor_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
+                {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
+            ]}
         ).delete()
 
-        # 17. Delete tree insurance policies, claims, premiums, renewals & settlements
+        # 20. Delete tree insurance policies, claims, premiums, renewals & settlements
         policy_deleted = await TreeInsurancePolicy.find(
             {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
@@ -989,12 +1187,17 @@ class AdminFarmerService:
             {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}
         ).delete()
 
-        # 18. Delete government scheme applications
-        agri_app_deleted = await AgriApplication.find(
-            {"user_id": farmer_object_id}
-        ).delete()
+        # 21. Delete government scheme applications, documents, and timelines
+        agri_apps = await AgriApplication.find({"user_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).to_list()
+        app_ids = [str(a.id) for a in agri_apps] + [PydanticObjectId(str(a.id)) for a in agri_apps if PydanticObjectId.is_valid(str(a.id))]
+        if app_ids:
+            from app.models.agri_application_document import AgriApplicationDocument
+            from app.models.agri_application_timeline import AgriApplicationTimeline
+            await AgriApplicationDocument.find({"application_id": {"$in": app_ids}}).delete()
+            await AgriApplicationTimeline.find({"application_id": {"$in": app_ids}}).delete()
+        agri_app_deleted = await AgriApplication.find({"user_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
 
-        # 19. Hard delete the farmer document last
+        # 22. Hard delete the farmer document last
         await farmer.delete()
 
         # Log the deletion in audit trail
@@ -1029,6 +1232,9 @@ class AdminFarmerService:
             f"transactions={getattr(tx_deleted, 'deleted_count', 0)} "
             f"bank_accounts={getattr(bank_acc_deleted, 'deleted_count', 0)} "
             f"withdrawals={getattr(withdraw_deleted, 'deleted_count', 0)} "
+            f"financial_wallets={getattr(fin_wallet_deleted, 'deleted_count', 0)} "
+            f"financial_transactions={getattr(fin_tx_deleted, 'deleted_count', 0)} "
+            f"financial_withdrawals={getattr(fin_wth_deleted, 'deleted_count', 0)} "
             f"orders={getattr(order_deleted, 'deleted_count', 0)} "
             f"cart={getattr(cart_deleted, 'deleted_count', 0)} "
             f"wishlist={getattr(wishlist_deleted, 'deleted_count', 0)} "
@@ -1061,6 +1267,10 @@ class AdminFarmerService:
                 "transactions": getattr(tx_deleted, 'deleted_count', 0),
                 "bank_accounts": getattr(bank_acc_deleted, 'deleted_count', 0),
                 "withdrawals": getattr(withdraw_deleted, 'deleted_count', 0),
+                "financial_wallets": getattr(fin_wallet_deleted, 'deleted_count', 0),
+                "financial_wallet_transactions": getattr(fin_tx_deleted, 'deleted_count', 0),
+                "financial_wallet_withdrawals": getattr(fin_wth_deleted, 'deleted_count', 0),
+                "financial_audit_logs": getattr(fin_audit_deleted, 'deleted_count', 0),
                 "orders": getattr(order_deleted, 'deleted_count', 0),
                 "cart_items": getattr(cart_deleted, 'deleted_count', 0),
                 "wishlists": getattr(wishlist_deleted, 'deleted_count', 0),

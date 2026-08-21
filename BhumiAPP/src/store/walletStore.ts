@@ -53,6 +53,18 @@ interface WalletState {
   requestWithdrawal: (amount: number, method: 'bank' | 'upi', options?: WithdrawalOptions) => Promise<boolean>;
   creditReward: (amount: number, description: string) => void;
   sellCarbonCredits: (credits: number) => Promise<boolean>;
+  recordPaymentTransaction: (payload: {
+    amount: number;
+    type?: 'debit' | 'credit';
+    description: string;
+    category?: string;
+    paymentMethod?: string;
+    referenceId?: string;
+    status?: 'completed' | 'pending';
+    bankName?: string;
+    upiId?: string;
+    utr?: string;
+  }) => Promise<void>;
   resetWallet: () => void;
 }
 
@@ -316,6 +328,57 @@ export const useWalletStore = create<WalletState>()(
           console.warn('[walletStore] sellCarbonCredits error', error);
           set({ isLoading: false });
           return false;
+        }
+      },
+
+      recordPaymentTransaction: async (payload) => {
+        try {
+          const { data } = await api.post('/farmer/wallet/transaction', {
+            amount: payload.amount,
+            type: payload.type || 'debit',
+            description: payload.description,
+            category: payload.category || 'Tree Insurance & Land Fee',
+            payment_method: payload.paymentMethod || 'UPI',
+            reference_id: payload.referenceId,
+            status: payload.status || 'completed',
+            bank_name: payload.bankName,
+            upi_id: payload.upiId,
+            utr: payload.utr,
+          });
+
+          const tx = data?.data;
+          const newTxn: Transaction = {
+            id: tx?.id || tx?.reference_id || payload.referenceId || `TXN-${Date.now()}`,
+            date: (tx?.created_at ? new Date(tx.created_at).toISOString() : new Date().toISOString()).split('T')[0],
+            description: tx?.description || payload.description,
+            amount: tx?.amount || payload.amount,
+            type: (tx?.type || payload.type || 'debit') as 'credit' | 'debit',
+            status: 'Completed',
+          };
+
+          set((state) => ({
+            transactions: [newTxn, ...state.transactions.filter((t) => t.id !== newTxn.id)],
+            balance: payload.paymentMethod === 'wallet' ? Math.max(0, state.balance - payload.amount) : state.balance,
+          }));
+
+          // Re-fetch transactions and wallet from backend to ensure 100% sync
+          get().fetchWallet().catch(() => {});
+          get().fetchTransactions().catch(() => {});
+        } catch (err) {
+          console.warn('[walletStore] Failed to post transaction to backend:', err);
+          // Fallback optimistic local record
+          const fallbackTxn: Transaction = {
+            id: payload.referenceId || `TXN-${Date.now()}`,
+            date: new Date().toISOString().split('T')[0],
+            description: payload.description,
+            amount: payload.amount,
+            type: (payload.type || 'debit') as 'credit' | 'debit',
+            status: 'Completed',
+          };
+          set((state) => ({
+            transactions: [fallbackTxn, ...state.transactions.filter((t) => t.id !== fallbackTxn.id)],
+            balance: payload.paymentMethod === 'wallet' ? Math.max(0, state.balance - payload.amount) : state.balance,
+          }));
         }
       },
 

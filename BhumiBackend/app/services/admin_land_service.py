@@ -83,6 +83,8 @@ class AdminLandService:
                 soil_type=p.soil_type,
                 soil_organic_carbon=p.soil_organic_carbon,
                 land_document_url=p.land_document_url,
+                land_photo_urls=p.land_photo_urls or [],
+                trees=[t.model_dump() if hasattr(t, "model_dump") else (t.dict() if hasattr(t, "dict") else dict(t)) for t in (p.trees or [])] if p.trees else [],
                 verification_status=p.verification_status,
                 remarks=p.verification_remarks,
                 verified_date=p.verified_at,

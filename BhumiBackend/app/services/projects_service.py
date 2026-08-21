@@ -8,6 +8,7 @@ from app.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
 from app.models.farmer import Farmer
+from app.models.land_parcel import LandParcel, LandVerificationStatus
 from app.models.project_enrollment import (
     EnrollmentStatus,
     InsurancePolicy,
@@ -93,13 +94,23 @@ class ProjectsService:
         self._projects = project_repo
 
     async def _get_farmer(self, farmer_id: str) -> Farmer:
-        farmer = await self._farmers.get_by_id(farmer_id)
+        from bson import ObjectId
+        farmer = None
+        if ObjectId.is_valid(farmer_id):
+            farmer = await self._farmers.get_by_id(farmer_id)
+        if not farmer:
+            farmer = await Farmer.find_one(Farmer.farmer_id == farmer_id)
+        if not farmer:
+            farmer = await Farmer.find_one(Farmer.mobile == farmer_id)
         if not farmer:
             raise NotFoundException("Farmer not found", "FARMER_NOT_FOUND")
         return farmer
 
     async def _project(self, project_id: str) -> SustainabilityProject:
-        project = await self._projects.get_by_project_id(project_id)
+        from bson import ObjectId
+        project = await self._projects.get_by_project_id(project_id, active_only=False)
+        if not project and ObjectId.is_valid(project_id):
+            project = await SustainabilityProject.get(ObjectId(project_id))
         if project:
             return project
         raise NotFoundException("Project not found", "PROJECT_NOT_FOUND")
@@ -489,30 +500,53 @@ class ProjectsService:
         farmer = await self._get_farmer(data.farmer_id)
         project = await self._project(project_id)
 
-        existing = await self._enrollments.get_by_farmer_and_project(data.farmer_id, project_id)
+        canonical_farmer_id = str(farmer.id)
+        canonical_project_id = project.project_id or str(project.id)
+
+        # ── PREREQUISITE: Land must be verified in GIS & Land first ─────────────────
+        verified_parcels = await LandParcel.find(
+            {
+                "farmer_id": {"$in": [canonical_farmer_id, str(farmer.id), farmer.mobile, farmer.farmer_id]},
+                "verification_status": {"$in": [
+                    LandVerificationStatus.VERIFIED,
+                    LandVerificationStatus.APPROVED,
+                    LandVerificationStatus.PROJECT_ASSIGNED,
+                    "verified",
+                    "approved",
+                    "project_assigned",
+                ]},
+                "is_deleted": {"$ne": True},
+            }
+        ).to_list()
+
+        if not verified_parcels:
+            raise BadRequestException(
+                "Land Verification Required: Please verify and approve the farmer's land parcel under GIS & Land before assigning a project. / भूमि सत्यापन आवश्यक: प्रोजेक्ट असाइन करने से पहले कृपया GIS & Land में भूमि पार्सल सत्यापित करें।",
+                "LAND_NOT_VERIFIED",
+            )
+
+        existing = await self._enrollments.get_by_farmer_and_project(canonical_farmer_id, canonical_project_id)
         if existing:
             # Reactivate / refresh the existing enrollment rather than blocking the admin.
-            # This handles both: genuine duplicates (idempotent re-assign) and stale
-            # auto-enrollments that the removed get_hub hack previously created.
             existing.status = EnrollmentStatus.ACTIVE
             existing.current_stage = ProjectStage.REGISTERED
             existing.progress_percent = max(existing.progress_percent, 10)
             existing.land_area_acres = data.land_area_acres
             existing.is_active = True
             existing.stage_project_assigned = True
-            existing.stage_land_registered = await self._land.get_total_acreage(data.farmer_id) > 0 or farmer.total_acreage > 0
+            existing.stage_land_registered = await self._land.get_total_acreage(canonical_farmer_id) > 0 or farmer.total_acreage > 0
             existing.updated_at = datetime.now(timezone.utc)
             await existing.save()
             return EnrollmentResponse(
                 enrollment_id=str(existing.id),
-                project_id=project_id,
+                project_id=canonical_project_id,
                 status=existing.status,
                 current_stage=existing.current_stage,
                 progress_percent=existing.progress_percent,
                 message=f"Farmer re-assigned to project '{project.title}' by admin.",
             )
 
-        land_total = await self._land.get_total_acreage(data.farmer_id)
+        land_total = await self._land.get_total_acreage(canonical_farmer_id)
         registered_land = max(land_total, farmer.total_acreage, data.land_area_acres)
 
         registered_trees = data.tree_count
@@ -520,8 +554,8 @@ class ProjectsService:
         now = datetime.now(timezone.utc)
 
         enrollment = ProjectEnrollment(
-            farmer_id=data.farmer_id,
-            project_id=project_id,
+            farmer_id=canonical_farmer_id,
+            project_id=canonical_project_id,
             status=EnrollmentStatus.ACTIVE,
             current_stage=ProjectStage.REGISTERED,
             progress_percent=10,

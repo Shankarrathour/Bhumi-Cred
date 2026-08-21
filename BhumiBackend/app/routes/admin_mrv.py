@@ -66,8 +66,19 @@ class MrvQueueItemResponse(BaseModel):
     dependencies=[Depends(require_roles(*_MRV_ADMIN_ROLES))],
 )
 async def get_admin_mrv_metrics(current_admin: CurrentAdmin) -> SuccessResponse[MrvMetricsResponse]:
-    enrollments = await ProjectEnrollment.find_all().to_list()
-    bookings = await SoilTestBooking.find_all().to_list()
+    active_farmers = await Farmer.find(Farmer.is_active == True).to_list()
+    active_farmer_ids = set()
+    for f in active_farmers:
+        active_farmer_ids.add(str(f.id))
+        if f.mobile:
+            active_farmer_ids.add(f.mobile)
+
+    all_enrollments = await ProjectEnrollment.find_all().to_list()
+    enrollments = [e for e in all_enrollments if not e.farmer_id or e.farmer_id in active_farmer_ids]
+
+    all_bookings = await SoilTestBooking.find_all().to_list()
+    bookings = [b for b in all_bookings if not b.farmer_id or b.farmer_id in active_farmer_ids]
+
     queue_items = await MRVVerificationQueue.find_all().to_list()
 
     active_mrv = sum(1 for e in enrollments if e.stage_mrv_monitoring_started)
@@ -96,16 +107,17 @@ async def get_admin_mrv_schedules(current_admin: CurrentAdmin) -> SuccessRespons
     enrollments = await ProjectEnrollment.find_all().to_list()
     items: List[MrvScheduleItem] = []
 
-    for en in enrollments[:10]:
-        farmer_name = "Shankar Rathore"
-        if en.farmer_id:
-            try:
-                if PydanticObjectId.is_valid(en.farmer_id):
-                    f = await Farmer.get(PydanticObjectId(en.farmer_id))
-                    if f and f.full_name:
-                        farmer_name = f.full_name
-            except Exception:
-                pass
+    for en in enrollments:
+        if not en.farmer_id:
+            continue
+        try:
+            fid = PydanticObjectId(en.farmer_id) if PydanticObjectId.is_valid(en.farmer_id) else en.farmer_id
+            f = await Farmer.get(fid)
+            if not f:
+                continue
+            farmer_name = f.full_name or f.mobile or "Agri Farmer"
+        except Exception:
+            continue
 
         visit_date = en.joined_at.strftime("%d %b %Y") if en.joined_at else "18 Aug 2026"
         status_label = "Report Submitted" if en.stage_mrv_monitoring_started else "Pending Survey"
@@ -120,12 +132,14 @@ async def get_admin_mrv_schedules(current_admin: CurrentAdmin) -> SuccessRespons
                 status=status_label,
             )
         )
+        if len(items) >= 10:
+            break
 
     if not items:
         items = [
             MrvScheduleItem(
                 id="MRV-001",
-                farmer="Shankar Rathore",
+                farmer="Devendra Sharma",
                 project="Green India Afforestation 2026",
                 visitDate="18 Aug 2026",
                 inspector="Bhopal East Agronomy Unit",
@@ -147,6 +161,16 @@ async def get_admin_mrv_telemetry(current_admin: CurrentAdmin) -> SuccessRespons
     items: List[MrvSoilTelemetryItem] = []
 
     for b in bookings:
+        if not b.farmer_id:
+            continue
+        try:
+            fid = PydanticObjectId(b.farmer_id) if PydanticObjectId.is_valid(b.farmer_id) else b.farmer_id
+            f = await Farmer.get(fid)
+            if not f:
+                continue
+        except Exception:
+            continue
+
         items.append(
             MrvSoilTelemetryItem(
                 id=f"SL-{str(b.id)[-3:].upper()}",
@@ -187,7 +211,17 @@ async def get_admin_mrv_queue(current_admin: CurrentAdmin) -> SuccessResponse[Li
     bookings = await SoilTestBooking.find_all().to_list()
     items: List[MrvQueueItemResponse] = []
 
-    for b in bookings[:6]:
+    for b in bookings:
+        if not b.farmer_id:
+            continue
+        try:
+            fid = PydanticObjectId(b.farmer_id) if PydanticObjectId.is_valid(b.farmer_id) else b.farmer_id
+            f = await Farmer.get(fid)
+            if not f:
+                continue
+        except Exception:
+            continue
+
         report_date = b.schedule_date or "18 Aug 2026"
         status_label = "Approved" if b.status == "report_ready" else "Pending"
 
@@ -201,6 +235,8 @@ async def get_admin_mrv_queue(current_admin: CurrentAdmin) -> SuccessResponse[Li
                 observation=b.observations or "Soil Organic Carbon (SOC) baseline & canopy density verified.",
             )
         )
+        if len(items) >= 6:
+            break
 
     if not items:
         items = [

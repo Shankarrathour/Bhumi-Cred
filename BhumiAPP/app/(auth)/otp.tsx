@@ -34,11 +34,15 @@ export default function OTPScreen() {
   const [countdown, setCountdown] = useState(RESEND_COOLDOWN);
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
-  // Trigger floating SMS notification on load
+  // Trigger floating SMS notification and auto-populate debug OTP on load
   useEffect(() => {
-    const timer = setTimeout(() => setShowNotification(true), 1200);
+    if (otpDebug && String(otpDebug).length === 4) {
+      const digits = String(otpDebug).split('');
+      setOtp(digits);
+    }
+    const timer = setTimeout(() => setShowNotification(true), 600);
     return () => clearTimeout(timer);
-  }, []);
+  }, [otpDebug]);
 
   // Countdown timer — decrements every second while > 0
   useEffect(() => {
@@ -81,20 +85,17 @@ export default function OTPScreen() {
           return;
         }
 
-        // ── Farmer path — unchanged behavior ──────────────────────────────
-        if (flow === 'login') {
-          // Login flow: user has valid tokens — mark authenticated and go straight to dashboard.
-          // verificationStatus is KYC state, not a login gate; pending/rejected users can still use the app.
+        // ── Farmer path ───────────────────────────────────────────────────
+        const currentUser = useAuthStore.getState().user;
+        const currentStatus = currentUser?.verificationStatus || 'unverified';
+
+        if (currentStatus === 'unverified') {
+          // If registration/onboarding is not completed, route to onboarding
+          router.replace('/onboarding');
+        } else {
+          // User has completed registration (pending, approved, or rejected KYC)
           useAuthStore.setState({ isAuthenticated: true });
           router.replace('/(tabs)');
-        } else {
-          // Register flow: route by KYC/verification status (unverified users need onboarding).
-          const currentStatus = useAuthStore.getState().user?.verificationStatus || 'unverified';
-          if (currentStatus === 'approved') {
-            router.replace('/(tabs)');
-          } else {
-            router.replace('/onboarding');
-          }
         }
       } else {
         const errorMsg = englishOnlyMessage(useAuthStore.getState().error, 'Invalid OTP. Please try again.');
@@ -152,18 +153,26 @@ export default function OTPScreen() {
       {/* Floating Simulated SMS Notification */}
       {showNotification && (
         <View style={[styles.smsNotificationContainer, { top: insets.top > 0 ? insets.top + 10 : (Platform.OS === 'ios' ? 50 : 20) }]} pointerEvents="box-none">
-          <View style={styles.smsNotification}>
+          <TouchableOpacity
+            style={styles.smsNotification}
+            activeOpacity={0.9}
+            onPress={() => {
+              if (otpDebug && String(otpDebug).length === 4) {
+                setOtp(String(otpDebug).split(''));
+              }
+            }}
+          >
             <View style={styles.smsIcon}>
               <MaterialCommunityIcons name="message-processing" size={20} color="#FFFFFF" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.smsHeader}>SMS • BhumiCred Secure</Text>
+              <Text style={styles.smsHeader}>SMS • BhumiCred Secure (Tap to Auto-fill)</Text>
               <Text style={styles.smsBody}>Your verification code is {otpDebug ?? '----'}. Do not share this with anyone.</Text>
             </View>
             <TouchableOpacity onPress={() => setShowNotification(false)}>
               <MaterialCommunityIcons name="close" size={16} color="#64748B" />
             </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </View>
       )}
 

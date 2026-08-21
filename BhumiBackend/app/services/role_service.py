@@ -66,7 +66,7 @@ class RoleService:
                 "code": "operations_admin",
                 "description": "Daily operations approval for farmers, land, and projects",
                 "permissions": {
-                    "farmer_management": ModulePermissions(view=True, create=True, edit=True, approve=True, reject=True, assign=True, export=True, download=True, send_notification=True),
+                    "farmer_management": ModulePermissions(view=True, create=True, edit=True, delete=True, approve=True, reject=True, assign=True, export=True, download=True, send_notification=True),
                     "government_management": ModulePermissions(view=True, approve=True, reject=True, export=True),
                     "partner_management": ModulePermissions(view=True, approve=True, reject=True, export=True),
                     "land_management": ModulePermissions(view=True, approve=True, reject=True, assign=True, export=True),

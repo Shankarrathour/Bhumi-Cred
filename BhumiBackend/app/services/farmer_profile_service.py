@@ -420,6 +420,25 @@ class FarmerProfileService:
     ) -> LandParcelResponse:
         farmer = await self._get_farmer(farmer_id)
         now = datetime.now(timezone.utc)
+
+        # Deduplication guard: prevent identical double-submit within 15 seconds
+        from datetime import timedelta
+        from beanie import PydanticObjectId
+        recent_cutoff = now - timedelta(seconds=15)
+        farmer_ids = [farmer_id]
+        if PydanticObjectId.is_valid(farmer_id):
+            farmer_ids.append(PydanticObjectId(farmer_id))
+        existing_duplicate = await LandParcel.find_one(
+            {
+                "farmer_id": {"$in": farmer_ids},
+                "area_acres": data.area_acres,
+                "village": data.village,
+                "created_at": {"$gte": recent_cutoff},
+            }
+        )
+        if existing_duplicate:
+            return self._land_response(existing_duplicate)
+
         parcel = LandParcel(
             farmer_id=farmer_id,
             name=data.name,
@@ -750,16 +769,169 @@ class FarmerProfileService:
 
     async def delete_account(self, farmer_id: str) -> None:
         farmer = await self._get_farmer(farmer_id)
-        farmer.is_active = False
-        farmer.updated_at = datetime.now(timezone.utc)
-        await farmer.save()
+        farmer_object_id = str(farmer.id)
+        farmer_mobile = farmer.mobile
+
+        from beanie import PydanticObjectId
+        farmer_pydantic_id = PydanticObjectId(farmer_object_id)
+
+        from app.models.land_parcel import LandParcel
+        from app.models.project_enrollment import ProjectEnrollment
+        from app.models.notification import Notification
+        from app.models.tree_registration import TreeRegistration
+        from app.models.green_family import GreenFamilyCover
+        from app.models.wallet import Wallet, WalletTransaction, WalletBankAccount, WithdrawalRequest
+        from app.models.order import Order
+        from app.models.cart import CartItem
+        from app.models.wishlist import Wishlist
+        from app.models.soil_test import SoilTestBooking
+        from app.models.farmer_badge import FarmerBadge
+        from app.models.referral import FarmerReferral
+        from app.models.support_ticket import SupportTicket
+        from app.models.tree_insurance import (
+            TreeInsurancePolicy,
+            TreeInsuranceClaim,
+            PolicyPremium,
+            PolicyRenewal,
+            ClaimSettlement,
+        )
+        from app.models.gis_land import GISLandParcel
+        from app.models.agri_application import AgriApplication
+        from app.models.refresh_token import RefreshTokenSession
+        from app.models.sale import CarbonCreditSale
+        from app.models.family_member import FamilyMember
+        from app.models.activity_log import FarmerActivityLog
+        from app.models.otp_session import OTPSession
+        from app.models.registration import BhumiCredRegistration
+        from app.models.marketplace import (
+            MarketplaceSubscription,
+            MarketplaceWishlist,
+            MarketplaceOrder,
+            MarketplaceReview,
+            MarketplacePayment,
+            MarketplaceShipping,
+            MarketplaceReturn,
+        )
+        from app.models.financial_wallet import (
+            Wallet as FinWallet,
+            WalletTransaction as FinWalletTransaction,
+            WalletWithdrawal as FinWalletWithdrawal,
+            FinancialAuditLog,
+            EscrowAccount,
+        )
+        from app.models.mrv_ai import (
+            MRVIOTTelemetry,
+            MRVLidarScan,
+            MRVAuditTrail,
+            MRVDroneFlight,
+            MRVDroneSurvey,
+            MRVSatelliteImage,
+            MRVSatelliteMonitoring,
+            MRVTreeMonitoring,
+            MRVSoilReport,
+            MRVAIDetection,
+            MRVDuplicateDetection,
+            MRVVerificationQueue,
+            MRVMediaEvidence,
+        )
 
         try:
-            parcels = await self._land.get_active_by_farmer(farmer_id)
-            for p in parcels:
-                p.is_active = False
-                p.updated_at = datetime.now(timezone.utc)
-                await p.save()
+            # 1. Fetch land parcel IDs
+            land_parcels = await LandParcel.find(
+                {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}
+            ).to_list()
+            land_ids = [p.id for p in land_parcels]
+            land_pydantic_ids = [PydanticObjectId(str(lid)) for lid in land_ids]
+            all_land_identifiers = land_ids + land_pydantic_ids
+
+            # 2. Delete land parcels & GIS
+            await LandParcel.find(
+                {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}
+            ).delete()
+            await GISLandParcel.find(
+                {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}
+            ).delete()
+
+            # 3. Clean up MRV collections
+            if all_land_identifiers:
+                await MRVIOTTelemetry.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVLidarScan.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVAuditTrail.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVDroneFlight.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVDroneSurvey.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVSatelliteImage.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVSatelliteMonitoring.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVTreeMonitoring.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVSoilReport.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVAIDetection.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVDuplicateDetection.find({"land_id": {"$in": all_land_identifiers}}).delete()
+                await MRVVerificationQueue.find({"land_id": {"$in": all_land_identifiers}}).delete()
+            await MRVMediaEvidence.find(
+                {"$or": [
+                    {"land_id": {"$in": all_land_identifiers}},
+                    {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
+                ]}
+            ).delete()
+
+            # 4. Delete unmapped trees collection
+            try:
+                db = LandParcel.get_motor_collection().database
+                await db["trees"].delete_many(
+                    {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}
+                )
+            except Exception:
+                pass
+
+            # 5. Delete family members & logs & OTPs
+            await FamilyMember.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await FarmerActivityLog.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await OTPSession.find({"mobile": farmer_mobile}).delete()
+            await RefreshTokenSession.find({"owner_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await BhumiCredRegistration.find(
+                {"$or": [
+                    {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
+                    {"mobile_number": farmer_mobile},
+                ]}
+            ).delete()
+
+            # 6. Delete project enrollments & notifications & trees & green family
+            await ProjectEnrollment.find(
+                {"$or": [
+                    {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}},
+                    {"farmer_id": farmer_mobile},
+                ]}
+            ).delete()
+            await Notification.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await TreeRegistration.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await GreenFamilyCover.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+
+            # 7. Delete wallets, financial wallets, escrow
+            await Wallet.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await WalletTransaction.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await WalletBankAccount.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await WithdrawalRequest.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await EscrowAccount.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            try:
+                db = Farmer.get_motor_collection().database
+                await db["financial_wallets"].delete_many({"$or": [{"user_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}, {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}]})
+                await db["financial_wallet_transactions"].delete_many({"$or": [{"user_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}, {"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id, farmer_mobile]}}]})
+            except Exception:
+                pass
+
+            # 8. Delete marketplace & schemes & insurance & support
+            await Order.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await CartItem.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await Wishlist.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await CarbonCreditSale.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await SoilTestBooking.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await FarmerBadge.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await TreeInsurancePolicy.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await TreeInsuranceClaim.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await SupportTicket.find({"farmer_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
+            await AgriApplication.find({"user_id": {"$in": [farmer_object_id, farmer_pydantic_id]}}).delete()
         except Exception as e:
-            logger.warning(f"Error deactivating land parcels on delete_account: {e}")
+            logger.warning(f"Error during dependent collections cleanup on delete_account: {e}")
+
+        # Finally, hard delete the farmer document
+        await farmer.delete()
 

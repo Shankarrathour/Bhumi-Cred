@@ -43,8 +43,8 @@ export const InsuranceDetails = () => {
       return {
         id: liveEnrollment.enrollment_id,
         policyNumber: `POL-SHIELD-${liveEnrollment.enrollment_id.slice(-6).toUpperCase()}`,
-        farmerName: liveEnrollment.farmer_name || 'Shankar Rathore',
-        farmerId: liveEnrollment.farmer_id || 'FAR-000085',
+        farmerName: liveEnrollment.farmer_name || 'Enrolled Farmer',
+        farmerId: liveEnrollment.farmer_id || 'N/A',
         trees: treesCount,
         coverage: coverageAmount,
         premium: premiumAmount,

@@ -107,56 +107,6 @@ async def list_bookings(current_farmer: CurrentFarmer):
         SoilTestBooking.farmer_id == str(current_farmer.id)
     ).sort(-SoilTestBooking.created_at).to_list()
 
-    # If empty, let's auto-generate 2 historical reports so the user can see comparison features immediately
-    if len(bookings) == 0:
-        plots = await LandParcel.find(
-            LandParcel.farmer_id == str(current_farmer.id)
-        ).to_list()
-        
-        if len(plots) > 0:
-            plot_id = str(plots[0].id)
-            hist1 = SoilTestBooking(
-                farmer_id=str(current_farmer.id),
-                land_parcel_id=plot_id,
-                package_name="Standard NPK Audit",
-                is_paid=False,
-                amount_paid=0.0,
-                schedule_date="2026-02-10",
-                schedule_time_slot="09:00 AM - 12:00 PM",
-                status="report_ready",
-                nitrogen=45.2,
-                phosphorus=22.4,
-                potassium=180.5,
-                ph=6.2,
-                organic_carbon=0.85,
-                soil_health_score=6.8,
-                observations="Soil is slightly acidic. Moderate deficiency in Organic Carbon.",
-                recommendations="Add compost/manure. Apply agricultural lime to increase pH level."
-            )
-            await hist1.insert()
-
-            hist2 = SoilTestBooking(
-                farmer_id=str(current_farmer.id),
-                land_parcel_id=plot_id,
-                package_name="Premium Micro-nutrient Scan",
-                is_paid=True,
-                amount_paid=499.0,
-                schedule_date="2025-08-15",
-                schedule_time_slot="02:00 PM - 05:00 PM",
-                status="report_ready",
-                nitrogen=38.1,
-                phosphorus=19.5,
-                potassium=165.2,
-                ph=5.9,
-                organic_carbon=0.72,
-                soil_health_score=5.9,
-                observations="High soil acidity. Nitrogen levels are low.",
-                recommendations="Plant nitrogen-fixing cover crops (soybeans). Use balanced NPK slow-release fertilizers."
-            )
-            await hist2.insert()
-            
-            bookings = [hist1, hist2]
-
     data = []
     for b in bookings:
         parcel = None
@@ -169,10 +119,11 @@ async def list_bookings(current_farmer: CurrentFarmer):
             except Exception:
                 pass
 
+        p_name = parcel.name if (parcel and parcel.name) else ((parcel.village + " Plot") if (parcel and parcel.village) else "Land Parcel")
         data.append({
             "id": str(b.id),
             "land_parcel_id": b.land_parcel_id,
-            "land_parcel_name": parcel.name if (parcel and parcel.name) else "Dewas Sector Plot 1",
+            "land_parcel_name": p_name,
             "package_name": b.package_name,
             "is_paid": b.is_paid,
             "amount_paid": b.amount_paid,
@@ -267,17 +218,25 @@ async def admin_list_all_bookings():
     bookings = await SoilTestBooking.find_all().sort(-SoilTestBooking.created_at).to_list()
     data = []
     for b in bookings:
-        farmer_name = "Shankar Rathore"
-        farmer_phone = "+91 98260 12345"
-        if b.farmer_id:
+        # Ignore legacy auto-seeded mock entries
+        if b.schedule_date in ["2026-02-10", "2025-08-15"] or (b.observations and "Moderate deficiency in Organic Carbon" in b.observations):
             try:
-                if PydanticObjectId.is_valid(b.farmer_id):
-                    f = await Farmer.get(PydanticObjectId(b.farmer_id))
-                    if f:
-                        farmer_name = f.full_name or farmer_name
-                        farmer_phone = f.mobile or farmer_phone
+                await b.delete()
             except Exception:
                 pass
+            continue
+
+        if not b.farmer_id:
+            continue
+        try:
+            fid = PydanticObjectId(b.farmer_id) if PydanticObjectId.is_valid(b.farmer_id) else b.farmer_id
+            f = await Farmer.get(fid)
+            if not f:
+                continue
+            farmer_name = f.full_name or "Agri Farmer"
+            farmer_phone = f.mobile or ""
+        except Exception:
+            continue
 
         parcel = None
         if b.land_parcel_id:
@@ -289,13 +248,14 @@ async def admin_list_all_bookings():
             except Exception:
                 pass
 
+        p_name = parcel.name if (parcel and parcel.name) else ((parcel.village + " Parcel") if (parcel and parcel.village) else "Land Parcel")
         data.append({
             "id": str(b.id),
             "farmer_id": b.farmer_id,
             "farmer_name": farmer_name,
             "farmer_phone": farmer_phone,
             "land_parcel_id": b.land_parcel_id,
-            "land_parcel_name": parcel.name if (parcel and parcel.name) else "Dewas Sector Plot 1",
+            "land_parcel_name": p_name,
             "package_name": b.package_name,
             "is_paid": b.is_paid,
             "amount_paid": b.amount_paid,

@@ -58,23 +58,21 @@ class AuthService:
         return await self._do_send_otp(mobile, role="farmer")
 
     async def register_send_otp(self, mobile: str, role: str = "farmer") -> SendOTPResponse:
-        """Registration flow: mobile must not belong to an active registration."""
+        """Registration flow: send OTP to mobile. Rejects if already registered."""
         existing = await self._farmers.get_by_mobile(mobile)
-        if existing:
+        if existing and existing.is_active:
             if getattr(existing, "role", "farmer") != role:
                 raise AccountRoleMismatchException(getattr(existing, "role", "farmer"))
-            if existing.kyc_status != KYCStatus.UNVERIFIED:
-                raise MobileAlreadyRegisteredException()
+            raise MobileAlreadyRegisteredException()
         return await self._do_send_otp(mobile, role=role)
 
     async def login_send_otp(self, mobile: str, role: str = "farmer") -> SendOTPResponse:
-        """Login flow: mobile must belong to an existing account under the requested role."""
+        """Login flow: mobile must belong to an existing registered account."""
         existing = await self._farmers.get_by_mobile(mobile)
-        if not existing or (
-            existing.kyc_status == KYCStatus.UNVERIFIED
-            and not existing.onboarding_completed
-        ):
+        if not existing or getattr(existing, "is_deleted", False):
             raise MobileNotRegisteredException()
+        if not existing.is_active:
+            raise FarmerBlockedException()
         if getattr(existing, "role", "farmer") != role:
             raise AccountRoleMismatchException(getattr(existing, "role", "farmer"))
         return await self._do_send_otp(mobile, role=role)
@@ -89,7 +87,7 @@ class AuthService:
         await self._otps.create(session)
         await send_otp_sms(mobile, otp)
         response = SendOTPResponse(message=f"OTP sent to {mobile}.", mobile=mobile)
-        if settings.is_development:
+        if settings.is_development or settings.DEBUG or settings.SMS_PROVIDER == "console":
             response.otp_debug = otp
         return response
 

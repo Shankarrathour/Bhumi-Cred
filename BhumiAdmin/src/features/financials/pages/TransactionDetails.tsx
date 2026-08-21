@@ -38,8 +38,8 @@ export const TransactionDetails = () => {
   const transaction = {
     id: safeId,
     txnId: matchedWithdrawal?.id || (safeId.startsWith('TXN-') ? safeId : `TXN-CRB-${safeId.slice(-4).toUpperCase()}`),
-    user_name: matchedWithdrawal?.farmerName || matchedWithdrawal?.account_holder_name || 'Shankar Rathore',
-    user_id: matchedWithdrawal?.farmerId || 'FAR-000085',
+    user_name: matchedWithdrawal?.farmerName || matchedWithdrawal?.account_holder_name || 'Farmer',
+    user_id: matchedWithdrawal?.farmerId || 'N/A',
     user_type: 'Farmer',
     amount: matchedWithdrawal?.amount || 190,
     category: matchedWithdrawal?.bankName?.includes('Marketplace') ? 'Marketplace Purchase' : 'Payout Withdrawal',
@@ -48,8 +48,8 @@ export const TransactionDetails = () => {
     bankName: matchedWithdrawal?.bankName || 'State Bank of India (SBI)',
     bankAccount: matchedWithdrawal?.accountNumber || matchedWithdrawal?.account_number_masked || '#AGR-20260819-2C2PYP',
     ifscCode: matchedWithdrawal?.ifscCode || matchedWithdrawal?.ifsc_code || 'SBIN0001024',
-    upiId: matchedWithdrawal?.upi_id || `${(matchedWithdrawal?.farmerName || 'shankar').toLowerCase().replace(/\s+/g, '')}@upi`,
-    accountHolder: matchedWithdrawal?.account_holder_name || matchedWithdrawal?.farmerName || 'Shankar Rathore',
+    upiId: matchedWithdrawal?.upi_id || (matchedWithdrawal?.farmerName ? `${matchedWithdrawal.farmerName.toLowerCase().replace(/\s+/g, '')}@upi` : 'user@upi'),
+    accountHolder: matchedWithdrawal?.account_holder_name || matchedWithdrawal?.farmerName || 'Farmer',
     requestedAt: matchedWithdrawal?.requestedDate || matchedWithdrawal?.created_at || '19 Aug 2026, 10:30 AM',
     processedAt: matchedWithdrawal?.processedBy || '19 Aug 2026, 11:15 AM',
   };

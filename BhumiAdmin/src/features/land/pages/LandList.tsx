@@ -75,32 +75,32 @@ export const LandList = () => {
   const allParcels = useMemo(() => {
     if (apiQueue && Array.isArray(apiQueue)) {
       return apiQueue.map(item => ({
-        id: item.id || 'LND-1001',
-        parcel_id: `LND-${(item.id || '1001').slice(-4).toUpperCase()}`,
-        farmer_name: item.farmer_name || 'Agri Farmer',
-        farmer_id: item.farmer_id || 'F-1001',
-        farmer_mobile: item.farmer_mobile || '+91 98260 11902',
-        survey_number: item.survey_number || 'SUR-100',
-        area_acres: item.area_acres || 10,
+        id: item.id,
+        parcel_id: `LND-${(item.id || '').slice(-4).toUpperCase()}`,
+        farmer_name: item.farmer_name || 'Farmer',
+        farmer_id: item.farmer_public_id || item.farmer_id,
+        farmer_mobile: item.farmer_mobile || '',
+        survey_number: item.survey_number || item.khasra_number || 'N/A',
+        area_acres: item.area_acres,
         ownership_type: item.ownership_type || 'Self Owned',
         state: item.state || 'Madhya Pradesh',
-        district: item.district || 'Sehore',
-        village: item.village || 'Ichhawar',
+        district: item.district || 'Indore',
+        village: item.village || 'Indore',
         is_irrigated: item.is_irrigated ?? true,
         coordinates: item.coordinates
           ? {
               lat: typeof item.coordinates.lat === 'number' ? item.coordinates.lat : (item.coordinates as any).latitude,
               lng: typeof item.coordinates.lng === 'number' ? item.coordinates.lng : (item.coordinates as any).longitude
             }
-          : { lat: 23.0225, lng: 77.0124 },
+          : { lat: 22.9734, lng: 78.6569 },
         verification_status: (() => {
           const status = (item.verification_status || '').toUpperCase();
           if (status === 'VERIFIED') return 'APPROVED';
           return status || 'PENDING';
         })() as any,
         boundary_polygon: item.boundary_polygon,
-        duplicate_score: item.verification_status === 'pending' ? 45.0 : 0,
-        assigned_project: 'MP Green Afforestation Q1',
+        duplicate_score: 0,
+        assigned_project: item.assigned_project || (String(item.verification_status).toLowerCase() === 'project_assigned' ? 'MP Green Afforestation Q1' : 'Not Assigned'),
         polygon_status: item.boundary_polygon && item.boundary_polygon.length > 0 ? 'Geofenced boundary' : 'Clean Boundary',
         created_at: item.created_at || new Date().toISOString(),
       }));

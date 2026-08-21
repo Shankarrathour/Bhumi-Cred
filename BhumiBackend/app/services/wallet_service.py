@@ -114,8 +114,86 @@ class WalletService:
             status=tx.status,
             description=tx.description,
             reference_id=tx.reference_id,
+            category=getattr(tx, "category", None),
+            payment_method=getattr(tx, "payment_method", None),
+            bank_name=getattr(tx, "bank_name", None),
+            upi_id=getattr(tx, "upi_id", None),
+            utr=getattr(tx, "utr", None),
             created_at=tx.created_at,
         )
+
+    async def record_transaction(
+        self,
+        farmer_id: str,
+        amount: float,
+        description: str,
+        type_: str = "debit",
+        category: Optional[str] = "Payment",
+        payment_method: Optional[str] = "UPI",
+        reference_id: Optional[str] = None,
+        status_: str = "completed",
+        bank_name: Optional[str] = None,
+        upi_id: Optional[str] = None,
+        utr: Optional[str] = None,
+    ) -> TransactionResponse:
+        farmer = await self._get_farmer(farmer_id)
+        canonical_farmer_id = str(farmer.id)
+        wallet = await self._get_or_create_wallet(canonical_farmer_id)
+
+        tx_type = TransactionType.DEBIT if str(type_).lower() == "debit" else TransactionType.CREDIT
+        tx_status = (
+            TransactionStatus.COMPLETED if str(status_).lower() in ("completed", "approved", "success")
+            else (TransactionStatus.REJECTED if str(status_).lower() in ("rejected", "failed") else TransactionStatus.PENDING)
+        )
+
+        now = datetime.now(timezone.utc)
+        ref = reference_id or f"TXN-{int(now.timestamp())}"
+
+        # If payment was made using wallet balance, deduct
+        if str(payment_method).lower() == "wallet" and tx_type == TransactionType.DEBIT and tx_status == TransactionStatus.COMPLETED:
+            wallet.balance = max(0.0, wallet.balance - amount)
+            wallet.total_withdrawn += amount
+            wallet.updated_at = now
+            await wallet.save()
+            farmer.wallet_balance = wallet.balance
+            farmer.updated_at = now
+            await farmer.save()
+        elif tx_type == TransactionType.CREDIT and tx_status == TransactionStatus.COMPLETED:
+            wallet.balance += amount
+            wallet.total_earnings += amount
+            wallet.updated_at = now
+            await wallet.save()
+            farmer.wallet_balance = wallet.balance
+            farmer.updated_at = now
+            await farmer.save()
+
+        # Check existing by reference_id to prevent duplicates
+        existing_tx = await WalletTransaction.find_one({
+            "farmer_id": {"$in": [canonical_farmer_id, farmer.farmer_id, farmer.mobile]},
+            "reference_id": ref
+        })
+        if existing_tx:
+            return self._tx_response(existing_tx)
+
+        tx = WalletTransaction(
+            farmer_id=canonical_farmer_id,
+            wallet_id=str(wallet.id),
+            amount=amount,
+            type=tx_type,
+            status=tx_status,
+            description=description,
+            reference_id=ref,
+            category=category,
+            payment_method=payment_method,
+            bank_name=bank_name,
+            upi_id=upi_id or wallet.upi_id,
+            utr=utr or ref,
+            created_at=now,
+            updated_at=now,
+        )
+        await self._txs.create(tx)
+
+        return self._tx_response(tx)
 
     @staticmethod
     def _withdrawal_response(w: WithdrawalRequest) -> WithdrawalRequestResponse:

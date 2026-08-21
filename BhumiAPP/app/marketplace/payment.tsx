@@ -71,6 +71,20 @@ export default function PaymentScreen() {
 
       const orderId = await checkoutStore('Agri Marketplace Order', selectedMethod);
 
+      // Record transaction to backend and mobile wallet store
+      const methodLabel = selectedMethod === 'upi' ? 'UPI' : selectedMethod === 'credit_card' ? 'Card' : selectedMethod === 'bank' ? 'Net Banking' : 'Wallet';
+      await useWalletStore.getState().recordPaymentTransaction({
+        amount: totalPrice,
+        type: 'debit',
+        description: `Marketplace Purchase (${itemsToCheckout.map(i => i.product.name).join(', ')})`,
+        category: 'Marketplace Purchase',
+        paymentMethod: methodLabel,
+        referenceId: `ORD-${orderId || Date.now()}`,
+        status: 'completed',
+        bankName: selectedMethod === 'upi' ? 'UPI' : (selectedMethod === 'bank' ? 'Net Banking' : 'Eco Wallet'),
+        upiId: selectedMethod === 'upi' ? `${authUser?.mobile || 'farmer'}@upi` : undefined,
+      });
+
       setIsProcessing(false);
       setActiveFlow('none');
       

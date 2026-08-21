@@ -11,6 +11,7 @@ from app.schemas.wallet import (
     AddUpiRequest,
     BankAccountResponse,
     TransactionResponse,
+    CreateTransactionRequest,
     WalletResponse,
     WithdrawRequest,
     WithdrawalRequestResponse,
@@ -70,6 +71,42 @@ async def get_transactions(
 ) -> SuccessResponse[list[TransactionResponse]]:
     items, _total = await svc.get_transactions(str(current_farmer.id), page=page, limit=limit)
     return SuccessResponse(message="Transactions fetched successfully.", data=items)
+
+
+@router.post(
+    "/transaction",
+    response_model=SuccessResponse[TransactionResponse],
+    summary="Record a payment or wallet transaction",
+)
+async def record_transaction(
+    payload: CreateTransactionRequest,
+    current_farmer: CurrentFarmer,
+    svc: WalletService = Depends(get_wallet_service),
+    notification_svc: NotificationService = Depends(get_notification_service),
+) -> SuccessResponse[TransactionResponse]:
+    tx = await svc.record_transaction(
+        farmer_id=str(current_farmer.id),
+        amount=payload.amount,
+        description=payload.description,
+        type_=payload.type or "debit",
+        category=payload.category or "Tree Insurance & Land Fee",
+        payment_method=payload.payment_method or "UPI",
+        reference_id=payload.reference_id,
+        status_=payload.status or "completed",
+        bank_name=payload.bank_name,
+        upi_id=payload.upi_id,
+        utr=payload.utr,
+    )
+    try:
+        await notification_svc.create_admin_notification(
+            "Farmer Payment Received",
+            f"Farmer {current_farmer.mobile or current_farmer.farmer_id} completed payment of ₹{payload.amount} ({payload.description}).",
+            type="payment",
+            actor_type="farmer",
+        )
+    except Exception:
+        pass
+    return SuccessResponse(message="Transaction recorded successfully.", data=tx)
 
 
 # ── Bank accounts (up to 3) ──────────────────────────────────────────────────

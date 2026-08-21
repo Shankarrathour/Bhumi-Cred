@@ -83,8 +83,8 @@ export const TreeInsurance = () => {
       return {
         id: e.enrollment_id,
         policy_number: `POL-SHIELD-${e.enrollment_id.slice(-6).toUpperCase()}`,
-        farmer_name: e.farmer_name || 'Shankar Rathore',
-        farmer_id: e.farmer_id || 'FAR-000085',
+        farmer_name: e.farmer_name || 'Enrolled Farmer',
+        farmer_id: e.farmer_id || 'N/A',
         trees: treesCount,
         coverage: coverageAmount,
         premium: premiumAmount,
@@ -159,8 +159,8 @@ export const TreeInsurance = () => {
       .map((e: any) => ({
         id: `CLM-${e.enrollment_id.slice(-4)}`,
         claim_id: `CLM-SHIELD-${e.enrollment_id.slice(-6).toUpperCase()}`,
-        farmer_name: e.farmer_name || 'Shankar Rathore',
-        farmer_id: e.farmer_id || 'FAR-000085',
+        farmer_name: e.farmer_name || 'Enrolled Farmer',
+        farmer_id: e.farmer_id || 'N/A',
         reason: 'Drought & Heatwave',
         trees_damaged: Math.round((e.registered_trees || 10) * 0.15),
         survey_status: e.mrv_verified ? 'Survey Completed (Drone Verified)' : 'Pending Field Inspection',

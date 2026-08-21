@@ -4,8 +4,8 @@ console.log("[apiClient] Module Start");
 
 // ── API Base URL ────────────────────────────────────────────────────────────
 // Physical device on same Wi-Fi → needs LAN IP (not localhost)
-// Current machine IP: 10.193.52.135
-const _FALLBACK_URL = 'http://10.193.52.135:8000/v1';
+// Current machine IP: 10.179.136.159
+const _FALLBACK_URL = 'http://10.179.136.159:8000/v1';
 
 const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
 const isTunnel = envUrl && (envUrl.includes('loca.lt') || envUrl.includes('localtunnel'));

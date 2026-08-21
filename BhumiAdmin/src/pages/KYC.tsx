@@ -154,7 +154,6 @@ const apiLandToFrontend = (item: ApiLandVerificationItem): Land => {
   }
 
   const farmerName = item.farmer_name || `Unknown Farmer`;
-  const isShankar = farmerName.toLowerCase().includes('shankar') || item.survey_number === '53936678';
 
   return {
     id: item.id,
@@ -167,17 +166,17 @@ const apiLandToFrontend = (item: ApiLandVerificationItem): Land => {
     boundaryPolygon: poly.length > 0 ? poly : [
       [22.7485, 75.8930], [22.7490, 75.8945], [22.7468, 75.8950], [22.7465, 75.8932]
     ],
-    cropType: item.crop_type || (isShankar ? 'Rice' : (item.village ? `Agricultural Land - ${item.village}` : 'Agricultural Land')),
-    soilType: item.soil_type || (isShankar ? 'Mixed Soil' : 'Alluvial Soil'),
+    cropType: item.crop_type || (item.village ? `Agricultural Land - ${item.village}` : 'Agricultural Land'),
+    soilType: item.soil_type || 'Alluvial Soil',
     soilOrganicCarbon: item.soil_organic_carbon || 0.88,
     proofDocumentUrl: item.land_document_url || '#',
     status: statusToFrontend(item.verification_status),
     verifiedDate: item.verified_date?.split('T')[0],
     remarks: item.remarks || undefined,
     fullAddress: item.full_address || [item.village, item.tehsil, item.district, item.state].filter(Boolean).join(', ') || 'N/A',
-    treeStockCount: item.tree_stock_count ?? (isShankar ? 35 : 0),
-    plantationAreaAcres: item.plantation_area_acres ?? (isShankar ? 1.5 : 0),
-    agroforestrySpecies: item.agroforestry_species ?? (isShankar ? 'Bamboo' : undefined),
+    treeStockCount: item.tree_stock_count ?? 0,
+    plantationAreaAcres: item.plantation_area_acres ?? 0,
+    agroforestrySpecies: item.agroforestry_species ?? undefined,
     isIrrigated: item.is_irrigated ?? true,
     belongsToAnotherPerson: item.belongs_to_another_person,
     fathersName: item.fathers_name,
@@ -190,7 +189,6 @@ const apiLandToFrontend = (item: ApiLandVerificationItem): Land => {
 
 const farmerLandToFrontend = (farmer: ApiFarmerListItem, parcel: ApiLandParcel & Record<string, any>): Land => {
   const farmerName = farmer.full_name || `Farmer ${farmer.mobile}`;
-  const isShankar = farmerName.toLowerCase().includes('shankar') || parcel.survey_number === '53936678';
   return {
     id: parcel.id,
     farmerId: farmer.id,
@@ -201,8 +199,8 @@ const farmerLandToFrontend = (farmer: ApiFarmerListItem, parcel: ApiLandParcel &
     boundaryPolygon: [
       [22.7485, 75.8930], [22.7490, 75.8945], [22.7468, 75.8950], [22.7465, 75.8932]
     ],
-    cropType: parcel.crop_type || (isShankar ? 'Rice' : (parcel.village ? `Agricultural Land - ${parcel.village}` : 'Agricultural Land')),
-    soilType: parcel.soil_type || (isShankar ? 'Mixed Soil' : 'Alluvial Soil'),
+    cropType: parcel.crop_type || (parcel.village ? `Agricultural Land - ${parcel.village}` : 'Agricultural Land'),
+    soilType: parcel.soil_type || 'Alluvial Soil',
     soilOrganicCarbon: 0.88,
     proofDocumentUrl: parcel.land_document_url || '#',
     status: statusToFrontend(parcel.verification_status),
@@ -213,9 +211,9 @@ const farmerLandToFrontend = (farmer: ApiFarmerListItem, parcel: ApiLandParcel &
     gramPanchayat: parcel.gram_panchayat || farmer.gram_panchayat || undefined,
     vikashKhand: parcel.vikash_khand || farmer.vikash_khand || undefined,
     belongsToAnotherPerson: parcel.belongs_to_another_person,
-    treeStockCount: parcel.tree_stock_count ?? parcel.tree_count ?? (isShankar ? 35 : 0),
-    plantationAreaAcres: parcel.plantation_area_acres ?? parcel.plantation_area ?? (isShankar ? 1.5 : 0),
-    agroforestrySpecies: parcel.agroforestry_species ?? parcel.species ?? (isShankar ? 'Bamboo' : undefined),
+    treeStockCount: parcel.tree_stock_count ?? parcel.tree_count ?? 0,
+    plantationAreaAcres: parcel.plantation_area_acres ?? parcel.plantation_area ?? 0,
+    agroforestrySpecies: parcel.agroforestry_species ?? parcel.species ?? undefined,
     isIrrigated: parcel.is_irrigated ?? true,
   };
 };

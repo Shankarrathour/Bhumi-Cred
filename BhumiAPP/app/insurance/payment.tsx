@@ -122,24 +122,21 @@ export default function PremiumPaymentScreen() {
         setAppId(newApp);
         setPolicyRef(newPol);
 
-        // Deduct from wallet if wallet is selected
-        if (selectedMethod === 'wallet') {
-          useWalletStore.setState({ balance: walletBalance - finalTotal });
-        }
-
-        // Add payment transaction to wallet store transactions list so it appears in Mobile App Wallet History
+        // Record transaction to backend and mobile wallet store
         const methodLabel = selectedMethod === 'upi' ? 'UPI' : selectedMethod === 'card' ? 'Card' : selectedMethod === 'netbanking' ? 'Net Banking' : 'Wallet';
-        const txnRecord = {
-          id: newTxn,
-          date: new Date().toISOString().split('T')[0],
-          description: mode === 'land_only' ? `Land Parcel Registration Fee - ${plotName}` : `Insurance & Land Fee - ${plotName}`,
+        const txnDesc = mode === 'land_only' ? `Land Parcel Registration Fee - ${plotName}` : `Insurance & Land Fee - ${plotName}`;
+        
+        await useWalletStore.getState().recordPaymentTransaction({
           amount: finalTotal,
-          type: 'debit' as const,
-          status: 'Completed' as const,
-        };
-        const existingTxns = useWalletStore.getState().transactions;
-        useWalletStore.setState({
-          transactions: [txnRecord, ...existingTxns.filter(t => t.id !== newTxn)]
+          type: 'debit',
+          description: txnDesc,
+          category: mode === 'land_only' ? 'Land Registration Fee' : 'Tree Insurance & Land Fee',
+          paymentMethod: methodLabel,
+          referenceId: newTxn,
+          status: 'completed',
+          bankName: selectedMethod === 'netbanking' ? selectedBank : (selectedMethod === 'upi' ? 'UPI / VPA' : (selectedMethod === 'card' ? 'Debit/Credit Card' : 'Eco Wallet')),
+          upiId: selectedMethod === 'upi' ? (upiId || `${authUser?.mobile || '9826011902'}@upi`) : undefined,
+          utr: `UTR-${Date.now().toString().slice(-8)}`,
         });
 
         // Real Backend Tree Registration to MongoDB

@@ -330,9 +330,9 @@ export const ProjectDetails = () => {
                 {projectEnrollments.map((f: any, i: number) => (
                   <div key={i} className="p-3 bg-[#FAFCFF] border border-[#F1F5F9] rounded-xl flex justify-between items-center">
                     <div>
-                      <span className="font-bold text-[#0F172A] block">{f.farmer_name || 'Shankar Rathore'}</span>
+                      <span className="font-bold text-[#0F172A] block">{f.farmer_name || 'Enrolled Farmer'}</span>
                       <span className="text-[11px] text-[#64748B] block font-mono">
-                        {f.farmer_id || 'FAR-000085'} • {f.village || 'Indore'}
+                        {f.farmer_id || 'N/A'}{f.village ? ` • ${f.village}` : ''}
                       </span>
                     </div>
                     <span className="font-bold text-[#16A34A] text-[13px] bg-[#F0FDF4] px-2.5 py-1 rounded-lg border border-[#DCFCE7]">
