@@ -13,7 +13,8 @@ from app.core.exceptions import (
     InsufficientPermissionsException,
     ProfileVerificationPendingException,
     ProfileVerificationRejectedException,
-    AppException
+    AppException,
+    UnauthorizedException
 )
 from app.models.farmer import Farmer, KYCStatus
 from app.models.admin_user import AdminUser, AdminRole
@@ -50,7 +51,7 @@ async def get_current_farmer(
     repo = FarmerRepository()
     farmer = await repo.get_by_id(farmer_id)
     if not farmer or getattr(farmer, "role", "farmer") != "farmer":
-        raise FarmerNotFoundException()
+        raise UnauthorizedException("Farmer account not found or deleted.", "FARMER_NOT_FOUND")
     if not farmer.is_active:
         raise FarmerBlockedException()
 
@@ -116,7 +117,7 @@ async def get_current_govt_body(
     repo = FarmerRepository()
     user = await repo.get_by_id(user_id)
     if not user or getattr(user, "role", "farmer") != "govt_body":
-        raise FarmerNotFoundException()
+        raise UnauthorizedException("Government Body account not found or deleted.", "FARMER_NOT_FOUND")
     if not user.is_active:
         raise FarmerBlockedException()
 
@@ -144,7 +145,7 @@ async def get_current_partner(
     repo = FarmerRepository()
     user = await repo.get_by_id(user_id)
     if not user or getattr(user, "role", "farmer") != "partner":
-        raise FarmerNotFoundException()
+        raise UnauthorizedException("Partner account not found or deleted.", "FARMER_NOT_FOUND")
     if not user.is_active:
         raise FarmerBlockedException()
 
@@ -191,9 +192,11 @@ def require_roles(*roles: AdminRole):
         @router.get("/...", dependencies=[Depends(require_roles(AdminRole.SUPER_ADMIN))])
     """
     async def _checker(admin: CurrentAdmin) -> AdminUser:
-        if admin.role not in roles:
+        admin_role_val = (admin.role.value if hasattr(admin.role, "value") else str(admin.role)).lower()
+        role_vals = [(r.value if hasattr(r, "value") else str(r)).lower() for r in roles]
+        if admin_role_val != "super_admin" and admin.role not in roles and admin_role_val not in role_vals:
             raise InsufficientPermissionsException(
-                f"Required role(s): {', '.join(r.value for r in roles)}."
+                f"Required role(s): {', '.join(r.value if hasattr(r, 'value') else str(r) for r in roles)}."
             )
         return admin
 

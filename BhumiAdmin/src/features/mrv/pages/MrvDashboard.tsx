@@ -36,8 +36,8 @@ type LabReportDetails = {
 
 // ── Real MRV Operations Data ──
 const MOCK_SCHEDULE: ScheduleItem[] = [
-  { id: 'MRV-001', farmer: 'Shankar Rathore', project: 'Green India Afforestation 2026', visitDate: '18 Aug 2026', inspector: 'Bhopal East Agronomy Unit', status: 'Report Submitted' },
-  { id: 'MRV-002', farmer: 'Rajesh Kumar', project: 'MP Agroforestry', visitDate: '15 Aug 2026', inspector: 'Super Admin (Shankar Rathore)', status: 'Pending Survey' },
+  { id: 'MRV-001', farmer: 'Devendra Sharma', project: 'Green India Afforestation 2026', visitDate: '18 Aug 2026', inspector: 'Bhopal East Agronomy Unit', status: 'Report Submitted' },
+  { id: 'MRV-002', farmer: 'Rajesh Kumar', project: 'MP Agroforestry', visitDate: '15 Aug 2026', inspector: 'Super Admin (Field Ops)', status: 'Pending Survey' },
   { id: 'MRV-003', farmer: 'Gopal Verma', project: 'Rajasthan Arid', visitDate: '18 Aug 2026', inspector: 'BhumiCred MRV Lead', status: 'Pending Survey' },
   { id: 'MRV-004', farmer: 'Sita Devi', project: 'MP Agroforestry', visitDate: '10 Aug 2026', inspector: 'District Agronomy Unit', status: 'In Progress' },
 ];
@@ -56,7 +56,7 @@ const MOCK_TREE: TreeData[] = [
 
 const MOCK_QUEUE: QueueItem[] = [
   { id: 'REP-501', project: 'Green India Afforestation 2026 - Dewas Plot 1', reportDate: '18 Aug 2026', inspector: 'Bhopal East Agronomy Unit', status: 'Approved', observation: 'Soil Organic Carbon (SOC) baseline & canopy density verified.' },
-  { id: 'REP-502', project: 'MP Agroforestry - Plot 4A', reportDate: '12 Aug 2026', inspector: 'Super Admin (Shankar Rathore)', status: 'Approved', observation: 'Growth metrics align with baseline.' },
+  { id: 'REP-502', project: 'MP Agroforestry - Plot 4A', reportDate: '12 Aug 2026', inspector: 'Super Admin (Field Ops)', status: 'Approved', observation: 'Growth metrics align with baseline.' },
   { id: 'REP-503', project: 'Rajasthan Arid - Block C', reportDate: '08 Aug 2026', inspector: 'BhumiCred MRV Lead', status: 'Rejected', observation: 'GPS coordinates mismatch with plot boundary. Retake survey.' },
 ];
 
@@ -226,9 +226,9 @@ export const MrvDashboard = () => {
       return saved ? JSON.parse(saved) : {
         'MRV-001': {
           scheduleId: 'MRV-001',
-          farmer: 'Shankar Rathore',
+          farmer: 'Devendra Sharma',
           project: 'Green India Afforestation 2026',
-          inspectorName: 'Bhopal East Agronomy Unit (Shankar Rathore)',
+          inspectorName: 'Bhopal East Agronomy Unit',
           declarationText: 'I verify that the attached field data is accurate and collected on-site.',
           submittedAt: '18 Aug 2026, 10:30 AM',
           gpsCoordinates: '23.2599° N, 77.4126° E (Accuracy: 4m)',
@@ -507,7 +507,7 @@ export const MrvDashboard = () => {
             <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3 flex-wrap gap-2">
               <div>
                 <h3 className="text-[15px] font-bold text-[#0F172A] flex items-center gap-2">
-                  <Database size={18} className="text-[#16A34A]" /> Active Soil Audits ({adminSoilBookings.length || 1})
+                  <Database size={18} className="text-[#16A34A]" /> Active Soil Audits ({adminSoilBookings.length})
                 </h3>
                 <p className="text-[12px] text-[#64748B]">Audit Ground Soil Organic Carbon & Certified Baseline Sample Collections</p>
               </div>
@@ -523,140 +523,143 @@ export const MrvDashboard = () => {
             </div>
 
             {/* Dynamic Active Audits Stepper Cards */}
-            {(adminSoilBookings.length > 0 ? adminSoilBookings.slice(0, 3) : [{
-              id: 'SOIL-098',
-              farmer_name: 'Shankar Rathore',
-              land_parcel_name: 'Dewas Sector Plot 1',
-              package_name: 'Standard NPK Audit',
-              schedule_date: '2026-08-21',
-              status: soilAuditStep >= 4 ? 'report_ready' : 'scheduled'
-            }]).map((b: any, idx: number) => {
-              const currentStepNum = b.status === 'report_ready' ? 4 : b.status === 'lab_processing' ? 3 : b.status === 'sample_collected' ? 2 : 1;
-              return (
-                <div key={b.id || idx} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl space-y-3">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-[14px] font-bold text-[#0F172A]">{b.package_name}</h4>
-                        {b.farmer_name && <span className="text-[11px] bg-[#EFF6FF] text-[#2563EB] px-2 py-0.5 rounded-md font-semibold">{b.farmer_name}</span>}
-                      </div>
-                      <p className="text-[12px] text-[#64748B]">Land Plot: {b.land_parcel_name || 'Dewas Sector Plot 1'}</p>
-                    </div>
-                    <span className="text-[11px] font-bold text-[#16A34A] font-mono">Lab Ref: SOC-2026-BHOPAL-{String(b.id || '098').slice(-3).toUpperCase()}</span>
-                  </div>
-
-                  {/* Interactive 4-step Stepper for this specific booking */}
-                  <div className="grid grid-cols-4 gap-2 pt-2">
-                    {[
-                      { num: 1, label: 'Scheduled', statusKey: 'scheduled' },
-                      { num: 2, label: 'Collected', statusKey: 'sample_collected' },
-                      { num: 3, label: 'Lab Processing', statusKey: 'lab_processing' },
-                      { num: 4, label: 'Ready', statusKey: 'report_ready' },
-                    ].map((st) => {
-                      const isDone = st.num <= currentStepNum;
-                      const isCurrent = st.num === currentStepNum;
-                      return (
-                        <div
-                          key={st.num}
-                          onClick={async () => {
-                            setSoilAuditStep(st.num);
-                            try {
-                              const token = localStorage.getItem('token');
-                              await fetch(`http://localhost:8000/v1/admin/soil-testing/booking/${b.id}/status`, {
-                                method: 'PUT',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                                },
-                                body: JSON.stringify({
-                                  status: st.statusKey,
-                                  soil_health_score: 8.5,
-                                  organic_carbon: 1.45,
-                                  nitrogen: 240,
-                                  phosphorus: 35,
-                                  potassium: 180,
-                                  ph: 7.2,
-                                }),
-                              });
-                              fetchAdminBookings();
-                              toast.success(`Booking ${b.package_name} advanced to ${st.label}! Synced live.`);
-                            } catch (err) {
-                              console.log('Status update error:', err);
-                            }
-                          }}
-                          className="text-center space-y-1 cursor-pointer group"
-                        >
-                          <div className={`w-8 h-8 rounded-full font-bold mx-auto flex items-center justify-center text-[12px] transition-all group-hover:scale-110 ${
-                            isDone
-                              ? 'bg-[#16A34A] text-white shadow-xs'
-                              : isCurrent
-                              ? 'bg-[#2563EB] text-white animate-pulse'
-                              : 'bg-[#E2E8F0] text-[#64748B]'
-                          }`}>
-                            {isDone ? '✓' : st.num}
-                          </div>
-                          <p className={`text-[11px] font-bold ${
-                            isDone ? 'text-[#16A34A]' : isCurrent ? 'text-[#2563EB]' : 'text-[#64748B]'
-                          }`}>
-                            {st.label}
-                          </p>
+            {adminSoilBookings.length > 0 ? (
+              adminSoilBookings.slice(0, 5).map((b: any, idx: number) => {
+                const currentStepNum = b.status === 'report_ready' ? 4 : b.status === 'lab_processing' ? 3 : b.status === 'sample_collected' ? 2 : 1;
+                return (
+                  <div key={b.id || idx} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-[14px] font-bold text-[#0F172A]">{b.package_name}</h4>
+                          {b.farmer_name && <span className="text-[11px] bg-[#EFF6FF] text-[#2563EB] px-2 py-0.5 rounded-md font-semibold">{b.farmer_name}</span>}
                         </div>
-                      );
-                    })}
+                        <p className="text-[12px] text-[#64748B]">Land Plot: {b.land_parcel_name || 'Land Parcel'}</p>
+                      </div>
+                      <span className="text-[11px] font-bold text-[#16A34A] font-mono">Lab Ref: SOC-2026-BHOPAL-{String(b.id || '001').slice(-3).toUpperCase()}</span>
+                    </div>
+
+                    {/* Interactive 4-step Stepper for this specific booking */}
+                    <div className="grid grid-cols-4 gap-2 pt-2">
+                      {[
+                        { num: 1, label: 'Scheduled', statusKey: 'scheduled' },
+                        { num: 2, label: 'Collected', statusKey: 'sample_collected' },
+                        { num: 3, label: 'Lab Processing', statusKey: 'lab_processing' },
+                        { num: 4, label: 'Ready', statusKey: 'report_ready' },
+                      ].map((st) => {
+                        const isDone = st.num <= currentStepNum;
+                        const isCurrent = st.num === currentStepNum;
+                        return (
+                          <div
+                            key={st.num}
+                            onClick={async () => {
+                              setSoilAuditStep(st.num);
+                              try {
+                                const token = localStorage.getItem('token');
+                                await fetch(`http://localhost:8000/v1/admin/soil-testing/booking/${b.id}/status`, {
+                                  method: 'PUT',
+                                  headers: {
+                                     'Content-Type': 'application/json',
+                                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                                  },
+                                  body: JSON.stringify({
+                                    status: st.statusKey,
+                                    soil_health_score: 8.5,
+                                    organic_carbon: 1.45,
+                                    nitrogen: 240,
+                                    phosphorus: 35,
+                                    potassium: 180,
+                                    ph: 7.2,
+                                  }),
+                                });
+                                fetchAdminBookings();
+                                toast.success(`Booking ${b.package_name} advanced to ${st.label}! Synced live.`);
+                              } catch (err) {
+                                console.log('Status update error:', err);
+                              }
+                            }}
+                            className="text-center space-y-1 cursor-pointer group"
+                          >
+                            <div className={`w-8 h-8 rounded-full font-bold mx-auto flex items-center justify-center text-[12px] transition-all group-hover:scale-110 ${
+                              isDone
+                                ? 'bg-[#16A34A] text-white shadow-xs'
+                                : isCurrent
+                                ? 'bg-[#2563EB] text-white animate-pulse'
+                                : 'bg-[#E2E8F0] text-[#64748B]'
+                            }`}>
+                              {isDone ? '✓' : st.num}
+                            </div>
+                            <p className={`text-[11px] font-bold ${
+                              isDone ? 'text-[#16A34A]' : isCurrent ? 'text-[#2563EB]' : 'text-[#64748B]'
+                            }`}>
+                              {st.label}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <div className="p-8 border border-[#E8EDF5] rounded-2xl bg-[#FAFCFF] text-center space-y-2 text-[#94A3B8]">
+                <Database size={32} className="mx-auto text-slate-400" />
+                <p className="text-[13.5px] font-bold text-[#0F172A]">No Active Soil Audits Booked</p>
+                <p className="text-[12px]">When farmers book baseline soil tests or paid audits in Mobile App, they will appear here live.</p>
+              </div>
+            )}
 
             {/* Dynamic Soil Analysis Reports List */}
             <div className="pt-2 space-y-3">
               <h4 className="text-[12px] font-extrabold text-[#0F172A] uppercase tracking-wider">Soil Analysis Reports</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {(adminSoilBookings.length > 0 ? adminSoilBookings : [
-                  { id: 'SOIL-098', schedule_date: '2026-08-18', soil_health_score: 8.5, organic_carbon: 1.45, status: 'report_ready', farmer_name: 'Shankar Rathore' },
-                  { id: 'SOIL-044', schedule_date: '2026-02-10', soil_health_score: 6.8, organic_carbon: 1.45, status: 'report_ready', farmer_name: 'Shankar Rathore' },
-                  { id: 'SOIL-012', schedule_date: '2025-08-15', soil_health_score: 5.9, organic_carbon: 1.10, status: 'report_ready', farmer_name: 'Shankar Rathore' }
-                ]).map((b: any, idx: number) => (
-                  <div
-                    key={b.id || idx}
-                    onClick={() => setSelectedLabReport({
-                      id: b.id,
-                      date: b.schedule_date || '2026-08-18',
-                      healthScore: `${b.soil_health_score || 8.5} / 10`,
-                      soc: `${b.organic_carbon || 1.45}%`,
-                      n: b.nitrogen || 240,
-                      p: b.phosphorus || 35,
-                      k: b.potassium || 180,
-                      ph: b.ph || 7.2,
-                      moisture: '24%',
-                      labRef: `SOC-2026-BHOPAL-${String(b.id).slice(-3).toUpperCase()}`,
-                      status: b.status === 'report_ready' ? 'VERIFIED & READY ✅' : b.status.toUpperCase(),
-                      inspector: 'Bhopal East Agronomy Unit',
-                      remarks: b.observations || 'Core soil NPK baseline sample checks verified by Bhopal East Agronomy Unit.'
-                    })}
-                    className={`p-4 rounded-2xl flex items-center justify-between shadow-xs cursor-pointer transition-all ${
-                      b.status === 'report_ready'
-                        ? 'bg-[#F0FDF4] border border-[#16A34A] hover:bg-[#DCFCE7]/60'
-                        : 'bg-white border border-[#E2E8F0] hover:border-[#2563EB]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
-                        b.status === 'report_ready' ? 'bg-[#16A34A] text-white' : 'bg-[#EFF6FF] text-[#2563EB]'
-                      }`}>
-                        <FileText size={20} />
+              {adminSoilBookings.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {adminSoilBookings.map((b: any, idx: number) => (
+                    <div
+                      key={b.id || idx}
+                      onClick={() => setSelectedLabReport({
+                        id: b.id,
+                        date: b.schedule_date || '2026-08-18',
+                        healthScore: `${b.soil_health_score || 8.5} / 10`,
+                        soc: `${b.organic_carbon || 1.45}%`,
+                        n: b.nitrogen || 240,
+                        p: b.phosphorus || 35,
+                        k: b.potassium || 180,
+                        ph: b.ph || 7.2,
+                        moisture: '24%',
+                        labRef: `SOC-2026-BHOPAL-${String(b.id).slice(-3).toUpperCase()}`,
+                        status: b.status === 'report_ready' ? 'VERIFIED & READY ✅' : b.status.toUpperCase(),
+                        inspector: 'Bhopal East Agronomy Unit',
+                        remarks: b.observations || 'Core soil NPK baseline sample checks verified by Bhopal East Agronomy Unit.'
+                      })}
+                      className={`p-4 rounded-2xl flex items-center justify-between shadow-xs cursor-pointer transition-all ${
+                        b.status === 'report_ready'
+                          ? 'bg-[#F0FDF4] border border-[#16A34A] hover:bg-[#DCFCE7]/60'
+                          : 'bg-white border border-[#E2E8F0] hover:border-[#2563EB]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold ${
+                          b.status === 'report_ready' ? 'bg-[#16A34A] text-white' : 'bg-[#EFF6FF] text-[#2563EB]'
+                        }`}>
+                          <FileText size={20} />
+                        </div>
+                        <div>
+                          <p className="text-[13.5px] font-bold text-[#0F172A]">Report: {b.schedule_date || 'Recent'}</p>
+                          <p className="text-[11.5px] text-[#64748B]">
+                            {b.farmer_name || 'Farmer'} • <strong className="text-[#16A34A]">{b.soil_health_score || 8.5}/10</strong> (SOC: {b.organic_carbon || 1.45}%)
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[13.5px] font-bold text-[#0F172A]">Report: {b.schedule_date || '2026-08-18'}</p>
-                        <p className="text-[11.5px] text-[#64748B]">
-                          {b.farmer_name || 'Farmer'} • <strong className="text-[#16A34A]">{b.soil_health_score || 8.5}/10</strong> (SOC: {b.organic_carbon || 1.45}%)
-                        </p>
-                      </div>
+                      <span className="text-[11px] text-[#2563EB] font-bold underline">View Lab Details →</span>
                     </div>
-                    <span className="text-[11px] text-[#2563EB] font-bold underline">View Lab Details →</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 border border-[#E8EDF5] rounded-xl bg-[#FAFCFF] text-center text-[#94A3B8] text-[12.5px]">
+                  No soil analysis lab reports available yet.
+                </div>
+              )}
             </div>
           </div>
 

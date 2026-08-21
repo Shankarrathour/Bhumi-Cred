@@ -101,13 +101,11 @@ class FarmerRepository(BaseRepository[Farmer]):
                 role_filter,
                 {"$or": search_filter}
             ]
+        deleted_filter = {"is_deleted": {"$ne": True}}
+        if "$and" in query:
+            query["$and"].append(deleted_filter)
         else:
-            # Merge role_filter keys into query dictionary
-            if "$or" in query:
-                # In case any other field dynamically used $or, use $and to be safe
-                query["$and"] = [role_filter]
-            else:
-                query.update(role_filter)
+            query["is_deleted"] = {"$ne": True}
 
         results = await Farmer.find(query).sort("-created_at").skip(skip).limit(limit).to_list()
         total = await Farmer.find(query).count()

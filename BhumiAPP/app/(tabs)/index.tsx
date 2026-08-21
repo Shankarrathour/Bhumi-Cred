@@ -514,7 +514,7 @@ export default function HomeScreen() {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return { uri: url };
     }
-    return { uri: `http://10.193.52.135:8000${url.startsWith('/') ? '' : '/'}${url}` };
+    return { uri: `http://10.179.136.159:8000${url.startsWith('/') ? '' : '/'}${url}` };
   };
 
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
@@ -1150,9 +1150,9 @@ export default function HomeScreen() {
             <View style={styles.timelineFlow}>
               {[
                 { label: 'GIS Geofence', status: 'done', icon: 'map-marker-radius' },
-                { label: 'Soil Baseline', status: plots[0].status === 'Verified' || plots[0].status === 'Approved' || plots[0].status === 'Auditing' ? 'done' : 'current', icon: 'test-tube' },
-                { label: 'Admin Approval', status: plots[0].status === 'Verified' || plots[0].status === 'Approved' ? 'done' : 'pending', icon: 'check-decagram' },
-                { label: 'Enrolled Program', status: plots[0].status === 'Verified' || plots[0].status === 'Approved' ? 'done' : 'pending', icon: 'leaf' },
+                { label: 'Soil Baseline', status: plots[0].status === 'Verified' || plots[0].status === 'Approved' || plots[0].status === 'Project Assigned' || plots[0].status === 'Auditing' ? 'done' : 'current', icon: 'test-tube' },
+                { label: 'Admin Approval', status: plots[0].status === 'Verified' || plots[0].status === 'Approved' || plots[0].status === 'Project Assigned' ? 'done' : 'pending', icon: 'check-decagram' },
+                { label: 'Enrolled Program', status: plots[0].status === 'Project Assigned' ? 'done' : 'pending', icon: 'leaf' },
               ].map((step, idx) => {
                 const isDone = step.status === 'done';
                 const isCurrent = step.status === 'current';

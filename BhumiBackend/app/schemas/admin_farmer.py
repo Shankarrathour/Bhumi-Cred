@@ -90,7 +90,7 @@ class AdminFarmerDetailResponse(BaseModel):
 
 
 class AdminBankResponse(BaseModel):
-    """Bank details with full (unmasked) account number — admin only."""
+    """Bank details with full (unmasked) account number and full transaction history — admin only."""
     bank_name: Optional[str] = None
     ifsc_code: Optional[str] = None
     account_number: Optional[str] = None
@@ -98,6 +98,7 @@ class AdminBankResponse(BaseModel):
     upi_id: Optional[str] = None
     is_verified: bool = False
     added_at: Optional[datetime] = None
+    transactions: Optional[list[dict]] = None
 
 
 class AdminIdentityResponse(BaseModel):

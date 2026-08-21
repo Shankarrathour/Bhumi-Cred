@@ -100,7 +100,25 @@ class TransactionResponse(BaseModel):
     status: TransactionStatus
     description: str
     reference_id: Optional[str] = None
+    category: Optional[str] = None
+    payment_method: Optional[str] = None
+    bank_name: Optional[str] = None
+    upi_id: Optional[str] = None
+    utr: Optional[str] = None
     created_at: Optional[datetime] = None
+
+
+class CreateTransactionRequest(BaseModel):
+    amount: float
+    type: Optional[str] = "debit"
+    description: str
+    category: Optional[str] = "Tree Insurance & Land Registration"
+    payment_method: Optional[str] = "UPI"
+    reference_id: Optional[str] = None
+    status: Optional[str] = "completed"
+    bank_name: Optional[str] = None
+    upi_id: Optional[str] = None
+    utr: Optional[str] = None
 
 
 # ── Farmer: wallet ────────────────────────────────────────────────────────────

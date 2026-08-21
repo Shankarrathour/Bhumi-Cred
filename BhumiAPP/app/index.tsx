@@ -125,7 +125,11 @@ export default function SplashScreen() {
       if (!_hasHydrated) return;
 
       if (isAuthenticated) {
-        router.replace('/(tabs)');
+        if (role === 'farmer' && (!user || user.verificationStatus === 'unverified')) {
+          router.replace('/onboarding');
+        } else {
+          router.replace('/(tabs)');
+        }
       } else if (user && user.verificationStatus !== 'unverified') {
         router.replace('/onboarding'); // Onboarding step verification pending
       } else {

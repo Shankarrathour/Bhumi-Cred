@@ -11,10 +11,22 @@ class SustainabilityProjectRepository(BaseRepository[SustainabilityProject]):
     async def get_by_project_id(
         self, project_id: str, active_only: bool = True
     ) -> Optional[SustainabilityProject]:
+        from bson import ObjectId
         filters = [SustainabilityProject.project_id == project_id]
         if active_only:
             filters.append(SustainabilityProject.is_active == True)
-        return await SustainabilityProject.find_one(*filters)
+        proj = await SustainabilityProject.find_one(*filters)
+        if proj:
+            return proj
+        
+        if ObjectId.is_valid(project_id):
+            oid_filters = [SustainabilityProject.id == ObjectId(project_id)]
+            if active_only:
+                oid_filters.append(SustainabilityProject.is_active == True)
+            proj = await SustainabilityProject.find_one(*oid_filters)
+            if proj:
+                return proj
+        return None
 
     async def list_public(self, search: Optional[str] = None) -> list[SustainabilityProject]:
         filters = [

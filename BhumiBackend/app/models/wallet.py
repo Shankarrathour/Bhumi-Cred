@@ -57,6 +57,11 @@ class WalletTransaction(Document):
     status: TransactionStatus
     description: str
     reference_id: Optional[str] = None
+    category: Optional[str] = None
+    payment_method: Optional[str] = None
+    bank_name: Optional[str] = None
+    upi_id: Optional[str] = None
+    utr: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

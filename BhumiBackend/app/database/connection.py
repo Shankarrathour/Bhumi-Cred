@@ -129,6 +129,14 @@ async def connect_db() -> None:
     from app.models.carbon_registry import (
         RegistryProject, CreditIssuance, CreditRetirement, CreditTransfer, CarbonBuyer, CarbonDeveloper
     )
+    from app.models.gis_land import GISLandParcel
+    from app.models.farmer_badge import FarmerBadge
+    from app.models.mrv_ai import (
+        MRVIOTTelemetry, MRVLidarScan, MRVAuditTrail, MRVDroneFlight,
+        MRVDroneSurvey, MRVSatelliteImage, MRVSatelliteMonitoring,
+        MRVTreeMonitoring, MRVSoilReport, MRVAIDetection,
+        MRVDuplicateDetection, MRVVerificationQueue, MRVMediaEvidence
+    )
 
     # Rebuild Pydantic forward references for models using Link
     AdminUser.model_rebuild()
@@ -286,6 +294,21 @@ async def connect_db() -> None:
                     CreditTransfer,
                     CarbonBuyer,
                     CarbonDeveloper,
+                    GISLandParcel,
+                    FarmerBadge,
+                    MRVIOTTelemetry,
+                    MRVLidarScan,
+                    MRVAuditTrail,
+                    MRVDroneFlight,
+                    MRVDroneSurvey,
+                    MRVSatelliteImage,
+                    MRVSatelliteMonitoring,
+                    MRVTreeMonitoring,
+                    MRVSoilReport,
+                    MRVAIDetection,
+                    MRVDuplicateDetection,
+                    MRVVerificationQueue,
+                    MRVMediaEvidence,
                 ],
                 allow_index_dropping=True,
             )

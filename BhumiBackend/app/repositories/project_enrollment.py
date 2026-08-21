@@ -14,9 +14,11 @@ class ProjectEnrollmentRepository(BaseRepository[ProjectEnrollment]):
         self, farmer_id: str, project_id: str
     ) -> Optional[ProjectEnrollment]:
         return await ProjectEnrollment.find_one(
-            ProjectEnrollment.farmer_id == farmer_id,
-            ProjectEnrollment.project_id == project_id,
-            ProjectEnrollment.is_active == True,
+            {"$and": [
+                {"$or": [{"farmer_id": farmer_id}, {"farmer_id": str(farmer_id)}]},
+                {"$or": [{"project_id": project_id}, {"project_id": str(project_id)}]},
+                {"is_active": True},
+            ]}
         )
 
     async def get_active_by_farmer(self, farmer_id: str) -> list[ProjectEnrollment]:
@@ -27,9 +29,20 @@ class ProjectEnrollmentRepository(BaseRepository[ProjectEnrollment]):
         flow) do NOT auto-appear as an active project in the Projects Hub before
         admin explicitly approves/assigns them.
         """
+        from app.models.farmer import Farmer
+        farmer_ids = [farmer_id, str(farmer_id)]
+        farmer = None
+        if ObjectId.is_valid(farmer_id):
+            farmer = await Farmer.get(ObjectId(farmer_id))
+        if not farmer:
+            farmer = await Farmer.find_one(Farmer.farmer_id == farmer_id)
+        if farmer:
+            farmer_ids.extend([str(farmer.id), farmer.farmer_id, farmer.mobile])
+            farmer_ids = list(set([fid for fid in farmer_ids if fid]))
+
         return await (
             ProjectEnrollment.find(
-                ProjectEnrollment.farmer_id == farmer_id,
+                {"farmer_id": {"$in": farmer_ids}},
                 ProjectEnrollment.is_active == True,
                 ProjectEnrollment.status == EnrollmentStatus.ACTIVE,
             )

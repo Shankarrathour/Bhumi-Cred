@@ -19,11 +19,11 @@ async def get_reports_stats(admin: CurrentAdmin):
     Returns live counts from MongoDB collections.
     """
     # Farmer Report
-    total_farmers = await Farmer.count()
-    land_parcels = await LandParcel.find_all().to_list()
+    total_farmers = await Farmer.find(Farmer.is_active == True).count()
+    land_parcels = await LandParcel.find(LandParcel.is_active == True).to_list()
     total_acres = sum(p.area_acres or 0.0 for p in land_parcels)
 
-    # Govt Report — MoUs based on distinct states in land parcels
+    # Govt Report — MoUs based on distinct states in active land parcels
     states = set(p.state for p in land_parcels if p.state)
     total_mous = max(1, len(states))
 
@@ -40,7 +40,7 @@ async def get_reports_stats(admin: CurrentAdmin):
     revenue_lakhs = round(total_acres * 0.42, 2)
 
     # Insurance — from TreeInsurancePolicy collection
-    insurance_policies = await TreeInsurancePolicy.find(TreeInsurancePolicy.is_deleted == False).to_list()
+    insurance_policies = await TreeInsurancePolicy.find_all().to_list()
     total_insurance_trees = sum(p.trees_insured_count or 0 for p in insurance_policies)
     insurance_coverage_lakhs = round(sum(p.sum_insured_inr or 0.0 for p in insurance_policies) / 100000, 2)
 

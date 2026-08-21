@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.dependencies.auth import CurrentAdmin, require_roles
-from app.schemas.response import SuccessResponse
+from app.schemas.common import SuccessResponse
 from app.models.sustainability_project import SustainabilityProject
 from app.models.farmer import Farmer
 from app.models.land_parcel import LandParcel
@@ -182,13 +182,13 @@ async def upload_csr_doc(
     if not found:
         _CSR_DOCS_STORE[company_name].append({
             "type": doc_type,
-            "name": f{company_name.replace(' ', '_')}_{doc_type.replace(' ', '_')}.pdf,
+            "name": f"{company_name.replace(' ', '_')}_{doc_type.replace(' ', '_')}.pdf",
             "size": "2.4 MB",
             "date": now_str,
             "isUploaded": True,
         })
 
     return SuccessResponse(
-        message=f{doc_type} successfully recorded for {company_name}.,
+        message=f"{doc_type} successfully recorded for {company_name}.",
         data={"company_name": company_name, "doc_type": doc_type, "date": now_str},
     )

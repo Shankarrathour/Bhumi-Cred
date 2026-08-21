@@ -5,7 +5,7 @@ import {
   User, ShieldCheck, Landmark, FileText, Cloud,
   Clock, Folder, Ban, Unlock, Trash2,
   Download, CheckSquare, Layers, AlertTriangle, Phone, Mail,
-  Activity, Trees, Home, Calendar, Globe, Zap, Plus
+  Activity, Trees, Home, Calendar, Globe, Zap, Plus, ShieldAlert, MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StatusBadge } from '../../../components/ui/StatusBadge';
@@ -116,6 +116,16 @@ export const FarmerProfile = () => {
     treeCount: 40,
   });
 
+  const verifiedLandParcels = useMemo(() => {
+    return (landData?.parcels || []).filter((p: any) =>
+      ['verified', 'approved', 'project_assigned'].includes((p.verification_status || '').toLowerCase())
+    );
+  }, [landData]);
+  const hasVerifiedLand = verifiedLandParcels.length > 0;
+  const verifiedLandAcres = useMemo(() => {
+    return verifiedLandParcels.reduce((sum: number, p: any) => sum + (Number(p.area_acres) || 0), 0);
+  }, [verifiedLandParcels]);
+
   const farmerEnrollment = useMemo(() => {
     if (!enrollmentsData || !farmerDetail) return null;
     const fId = String(farmerDetail.id || farmerDetail._id || '').toLowerCase();
@@ -143,6 +153,12 @@ export const FarmerProfile = () => {
 
   const farmerTransactions = useMemo(() => {
     if (!farmerDetail) return [];
+
+    // 1. Transactions directly from Bank / Wallet query
+    if (bankData?.transactions && bankData.transactions.length > 0) {
+      return bankData.transactions;
+    }
+
     const fId = String(farmerDetail.id || farmerDetail._id || id || '').toLowerCase();
     const fPublicId = String(farmerDetail.farmer_id || '').toLowerCase();
     const mobile = String(farmerDetail.mobile || '').toLowerCase();
@@ -154,7 +170,7 @@ export const FarmerProfile = () => {
     });
 
     return matched;
-  }, [allWithdrawalsData, farmerDetail, id]);
+  }, [bankData, allWithdrawalsData, farmerDetail, id]);
 
   const effectiveBank = useMemo(() => {
     if (bankData && (bankData.bank_name || bankData.account_number || bankData.ifsc_code || bankData.upi_id)) {
@@ -907,10 +923,43 @@ export const FarmerProfile = () => {
                         </div>
                       </div>
                     )}
+                    {parcel.land_photo_urls && parcel.land_photo_urls.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">
+                          Ground Photos ({parcel.land_photo_urls.length})
+                        </span>
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                          {parcel.land_photo_urls.map((pUrl: string, pIdx: number) => {
+                            const fullUrl = pUrl.startsWith('http') || pUrl.startsWith('data:') 
+                              ? pUrl 
+                              : `http://localhost:8000${pUrl.startsWith('/') ? '' : '/'}${pUrl}`;
+                            return (
+                              <a
+                                key={pIdx}
+                                href={fullUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0 relative group block shadow-2xs"
+                              >
+                                <img
+                                  src={fullUrl}
+                                  alt={`Land Photo #${pIdx + 1}`}
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&auto=format&fit=crop&q=60';
+                                  }}
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                />
+                              </a>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {parcel.land_document_url && (
                       <a href={parcel.land_document_url} target="_blank" rel="noopener noreferrer"
-                        className="text-[11px] text-[#2563EB] underline flex items-center gap-1">
-                        <Download size={11} /> View Land Document
+                        className="text-[11px] text-[#2563EB] underline flex items-center gap-1 font-semibold">
+                        <Download size={11} /> View Land Document / Khasra Proof
                       </a>
                     )}
                   </div>
@@ -949,17 +998,31 @@ export const FarmerProfile = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
+                    if (!hasVerifiedLand) {
+                      toast.error('Land Verification Required: Please verify and approve the farmer\'s land parcel under GIS & Land first. / भूमि सत्यापन आवश्यक: प्रोजेक्ट असाइन करने से पहले कृपया GIS & Land में भूमि पार्सल सत्यापित करें।');
+                      return;
+                    }
                     const defaultProj = allProjectsList?.[0]?.id || allProjectsList?.[0]?.project_id || '';
                     setAssignForm({
                       projectId: defaultProj,
-                      landAreaAcres: farmerDetail.total_acreage || 10,
+                      landAreaAcres: verifiedLandAcres || farmerDetail.total_acreage || 10,
                       treeCount: farmerDetail.total_trees || 40,
                     });
                     setShowAssignProjectModal(true);
                   }}
-                  className="px-3 py-1.5 bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] border border-[#DCFCE7] rounded-xl text-[12px] font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  className={`px-3 py-1.5 rounded-xl text-[12px] font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer ${
+                    hasVerifiedLand
+                      ? 'bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#16A34A] border border-[#DCFCE7]'
+                      : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                  }`}
+                  title={hasVerifiedLand ? 'Assign carbon project' : 'Land must be verified under GIS & Land before assigning project'}
                 >
                   <Plus size={14} /> {farmerEnrollment ? 'Switch / Change Project' : 'Assign Project'}
+                  {!hasVerifiedLand && (
+                    <span className="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-1.5 py-0.5 rounded-md ml-1">
+                      Land Unverified
+                    </span>
+                  )}
                 </button>
                 {farmerEnrollment && (
                   <button
@@ -1608,30 +1671,73 @@ export const FarmerProfile = () => {
               </>
             ) : (
               /* Show Clean Empty State if Not Enrolled */
-              <div className="flex flex-col items-center justify-center py-16 bg-white border border-[#E2E8F0] rounded-3xl text-[#94A3B8] space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-[#F0FDF4] border border-[#DCFCE7] text-[#16A34A] flex items-center justify-center shadow-xs">
-                  <Trees size={32} />
+              <div className="space-y-4">
+                {!hasVerifiedLand && (
+                  <div className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-3xl text-slate-800 space-y-3.5 shadow-xs">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold shrink-0 shadow-xs">
+                        <ShieldAlert size={22} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-[15px] font-extrabold text-amber-950">GIS & Land Verification Required / भूमि सत्यापन अनिवार्य</h4>
+                        <p className="text-[12.5px] text-amber-800 leading-relaxed max-w-3xl">
+                          Is farmer ka land parcel abhi verify nahi hua hai. Project assign karne se pahle <strong>GIS and LAND</strong> section se land boundary, polygon aur khasra documents ko verify & approve karein. Land verify hone ke baad hi yaha se carbon project assign ho sakega.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 pt-1">
+                      <button
+                        onClick={() => setActiveTab('land')}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-[12px] font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <MapPin size={14} /> Open Land Details ({landData?.parcels?.length || 0} Parcels)
+                      </button>
+                      <button
+                        onClick={() => navigate('/land')}
+                        className="px-4 py-2 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 text-[12px] font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Layers size={14} /> Open GIS Verification Directory
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col items-center justify-center py-12 bg-white border border-[#E2E8F0] rounded-3xl text-[#94A3B8] space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-[#F0FDF4] border border-[#DCFCE7] text-[#16A34A] flex items-center justify-center shadow-xs">
+                    <Trees size={32} />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-[16px] font-bold text-[#0F172A]">No Enrolled Carbon or Forestry Projects</p>
+                    <p className="text-[12.5px] text-[#64748B] max-w-md">
+                      {hasVerifiedLand 
+                        ? `This farmer has ${verifiedLandAcres} acres of verified land ready to be enrolled in a carbon mission.`
+                        : 'Land must be verified and approved under GIS & Land verification before assigning a carbon mission.'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!hasVerifiedLand) {
+                        toast.error('Land Verification Required: Please verify and approve the farmer\'s land parcel under GIS & Land first. / भूमि सत्यापन आवश्यक: प्रोजेक्ट असाइन करने से पहले कृपया GIS & Land में भूमि पार्सल सत्यापित करें।');
+                        return;
+                      }
+                      const defaultProj = allProjectsList?.[0]?.id || allProjectsList?.[0]?.project_id || '';
+                      setAssignForm({
+                        projectId: defaultProj,
+                        landAreaAcres: verifiedLandAcres || farmerDetail.total_acreage || 10,
+                        treeCount: farmerDetail.total_trees || 40,
+                      });
+                      setShowAssignProjectModal(true);
+                    }}
+                    disabled={!hasVerifiedLand}
+                    className={`px-5 py-2.5 font-bold text-[13px] rounded-xl shadow-xs flex items-center gap-2 transition-colors ${
+                      hasVerifiedLand
+                        ? 'bg-[#16A34A] hover:bg-[#15803D] text-white cursor-pointer'
+                        : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                    }`}
+                  >
+                    <Plus size={15} /> {hasVerifiedLand ? 'Assign Carbon Project Now' : 'Land Verification Required to Assign'}
+                  </button>
                 </div>
-                <div className="text-center space-y-1">
-                  <p className="text-[16px] font-bold text-[#0F172A]">No Enrolled Carbon or Forestry Projects</p>
-                  <p className="text-[12.5px] text-[#64748B] max-w-sm">
-                    This farmer has not enrolled in any carbon programs or boundary tree forestry missions yet.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    const defaultProj = allProjectsList?.[0]?.id || allProjectsList?.[0]?.project_id || '';
-                    setAssignForm({
-                      projectId: defaultProj,
-                      landAreaAcres: farmerDetail.total_acreage || 10,
-                      treeCount: farmerDetail.total_trees || 40,
-                    });
-                    setShowAssignProjectModal(true);
-                  }}
-                  className="px-4 py-2 bg-[#16A34A] hover:bg-[#15803D] text-white font-bold text-[13px] rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-colors"
-                >
-                  <Plus size={15} /> Assign Carbon Project Now
-                </button>
               </div>
             )}
 
@@ -1659,6 +1765,10 @@ export const FarmerProfile = () => {
                   <form
                     onSubmit={async (e) => {
                       e.preventDefault();
+                      if (!hasVerifiedLand) {
+                        toast.error('Land Verification Required: Please verify and approve the farmer\'s land parcel under GIS & Land first. / भूमि सत्यापन आवश्यक: प्रोजेक्ट असाइन करने से पहले कृपया GIS & Land में भूमि पार्सल सत्यापित करें।');
+                        return;
+                      }
                       if (!assignForm.projectId) {
                         toast.error('Please select a project.');
                         return;
@@ -1671,7 +1781,7 @@ export const FarmerProfile = () => {
                           landAreaAcres: Number(assignForm.landAreaAcres),
                           treeCount: Number(assignForm.treeCount),
                         });
-                        toast.success(`Farmer successfully assigned to project! Live updated in app.`);
+                        toast.success('Farmer successfully assigned to project! Live updated in app. / किसान को सफलतापूर्वक प्रोजेक्ट असाइन कर दिया गया है!');
                         setShowAssignProjectModal(false);
                       } catch (err: any) {
                         toast.error(err?.response?.data?.message || err?.message || 'Failed to assign project.');
@@ -1679,13 +1789,34 @@ export const FarmerProfile = () => {
                     }}
                     className="space-y-4 text-[12.5px] text-slate-800"
                   >
+                    {!hasVerifiedLand ? (
+                      <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 space-y-1 text-[12px]">
+                        <p className="font-extrabold text-rose-900 flex items-center gap-1.5">
+                          <ShieldAlert size={16} className="text-rose-600" /> Land Verification Incomplete
+                        </p>
+                        <p className="leading-relaxed text-rose-700">
+                          Is farmer ka koi bhi land parcel verified nahi hai. Kripya pahle 'Land & GIS' section se parcel approve karein.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11.5px] text-emerald-800 space-y-0.5">
+                        <p className="font-bold flex items-center gap-1">
+                          <CheckCircle size={14} className="text-emerald-600" /> Verified Land: {verifiedLandAcres} Acres Eligible
+                        </p>
+                        <p className="text-emerald-700 leading-relaxed">
+                          Assigning will immediately generate this mission on the farmer's mobile dashboard and initialize the roadmap.
+                        </p>
+                      </div>
+                    )}
+
                     <div>
                       <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Select Carbon Project *</label>
                       <select
                         value={assignForm.projectId}
                         onChange={(e) => setAssignForm({ ...assignForm, projectId: e.target.value })}
                         required
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 outline-none focus:border-emerald-600"
+                        disabled={!hasVerifiedLand}
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 outline-none focus:border-emerald-600 disabled:opacity-60"
                       >
                         <option value="">-- Choose a Project --</option>
                         {(allProjectsList || []).map((p: any) => {
@@ -1709,9 +1840,10 @@ export const FarmerProfile = () => {
                           step="0.1"
                           min={0.1}
                           required
+                          disabled={!hasVerifiedLand}
                           value={assignForm.landAreaAcres}
                           onChange={(e) => setAssignForm({ ...assignForm, landAreaAcres: parseFloat(e.target.value) || 0 })}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-900 outline-none focus:border-emerald-600"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-900 outline-none focus:border-emerald-600 disabled:opacity-60"
                         />
                       </div>
                       <div>
@@ -1720,18 +1852,12 @@ export const FarmerProfile = () => {
                           type="number"
                           min={1}
                           required
+                          disabled={!hasVerifiedLand}
                           value={assignForm.treeCount}
                           onChange={(e) => setAssignForm({ ...assignForm, treeCount: parseInt(e.target.value) || 0 })}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-900 outline-none focus:border-emerald-600"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold font-mono text-slate-900 outline-none focus:border-emerald-600 disabled:opacity-60"
                         />
                       </div>
-                    </div>
-
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11.5px] text-emerald-800 space-y-0.5">
-                      <p className="font-bold flex items-center gap-1">⚡ Automatic Synchronization</p>
-                      <p className="text-emerald-700 leading-relaxed">
-                        Assigning will immediately generate this mission on the farmer's mobile dashboard and initialize the 9-stage verification roadmap.
-                      </p>
                     </div>
 
                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
@@ -1744,7 +1870,7 @@ export const FarmerProfile = () => {
                       </button>
                       <button
                         type="submit"
-                        disabled={assignProjectMutation.isPending}
+                        disabled={assignProjectMutation.isPending || !hasVerifiedLand}
                         className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold rounded-xl text-[12.5px] shadow-sm flex items-center gap-1.5 cursor-pointer"
                       >
                         {assignProjectMutation.isPending ? 'Assigning...' : 'Assign to Farmer'}

@@ -545,73 +545,145 @@ export const LandDetails = () => {
         )}
 
         {/* 4. PHOTOS TAB */}
-        {activeTab === 'Photos' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3 flex-wrap gap-2">
-              <div>
-                <h3 className="text-[15px] font-bold text-[#0F172A] flex items-center gap-2">
-                  <Camera size={18} className="text-[#16A34A]" /> Ground Inspection & Land Photos (F21)
-                </h3>
-                <p className="text-[12px] text-[#64748B]">Geotagged & Timestamped Land Verification Evidence Uploaded from Mobile App</p>
-              </div>
-              <span className="px-3 py-1 bg-[#F0FDF4] text-[#16A34A] text-[11px] font-bold rounded-lg border border-[#DCFCE7] flex items-center gap-1">
-                <ShieldCheck size={13} /> GEOTAG METADATA VERIFIED
-              </span>
-            </div>
+        {activeTab === 'Photos' && (() => {
+          const getFullMediaUrl = (url?: string | null) => {
+            if (!url) return '';
+            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+            const backendBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const cleanBase = backendBase.replace(/\/v1\/?$/, '').replace(/\/$/, '');
+            return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
+          };
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {liveLand?.land_photo_urls && liveLand.land_photo_urls.length > 0 ? (
-                liveLand.land_photo_urls.map((url, idx) => {
-                  const categories = [
-                    'Entrance / Boundary (प्रवेश द्वार / सीमा)',
-                    'Crop / Field (फसल / खेत)',
-                    'Trees / Plantation (पेड़ / वृक्षारोपण)',
-                    'Water Source (जल स्रोत)',
-                    'Surrounding Area (आसपास का क्षेत्र)'
-                  ];
-                  const title = categories[idx % categories.length];
-                  const latStr = (safeLat + (idx * 0.0003)).toFixed(4);
-                  const lonStr = (safeLng + (idx * 0.0003)).toFixed(4);
-                  const formattedDate = liveLand.created_at
-                    ? new Date(liveLand.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                    : '18 Aug 2026';
+          const allPhotos: { url: string; title: string; category: string; date?: string; isDoc?: boolean }[] = [];
+          
+          if (liveLand?.land_photo_urls && Array.isArray(liveLand.land_photo_urls)) {
+            liveLand.land_photo_urls.forEach((u, idx) => {
+              if (u) {
+                const categories = [
+                  'Entrance / Boundary (प्रवेश द्वार / सीमा)',
+                  'Crop / Field (फसल / खेत)',
+                  'Trees / Plantation (पेड़ / वृक्षारोपण)',
+                  'Water Source (जल स्रोत)',
+                  'Surrounding Area (आसपास का क्षेत्र)'
+                ];
+                allPhotos.push({
+                  url: u,
+                  title: categories[idx % categories.length],
+                  category: categories[idx % categories.length].split(' ')[0],
+                  date: liveLand.created_at,
+                });
+              }
+            });
+          }
 
-                  return (
-                    <div key={idx} className="border border-[#E8EDF5] rounded-2xl overflow-hidden bg-white p-3 space-y-2.5 shadow-xs hover:border-[#16A34A] transition-all">
-                      <div className="w-full h-44 rounded-xl overflow-hidden border border-[#CBD5E1] relative group">
-                        <img src={url} alt={title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                        <span className="absolute top-2 right-2 px-2 py-0.5 text-[10px] font-bold bg-[#16A34A] text-white rounded-md shadow-xs flex items-center gap-1">
-                          <CheckCircle size={10} /> GEOTAGGED
-                        </span>
-                        <span className="absolute bottom-2 left-2 px-2 py-0.5 text-[10px] font-mono font-bold bg-black/70 text-white rounded-md">
-                          Lat {latStr}°, Lon {lonStr}°
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-md border border-[#DBEAFE] inline-block mb-1">
-                          Category: {title.split(' ')[0]}
-                        </span>
-                        <div className="text-[13px] font-bold text-[#0F172A]">{title}</div>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-[#64748B] pt-1 border-t border-[#F1F5F9]">
-                        <span className="text-[#16A34A] font-semibold flex items-center gap-1">
-                          <ShieldCheck size={11} /> Camera & GPS Verified
-                        </span>
-                        <span>{formattedDate}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="col-span-3 py-12 border border-[#E8EDF5] rounded-2xl bg-[#FAFCFF] flex flex-col items-center justify-center space-y-2 text-[#94A3B8]">
-                  <Camera size={36} />
-                  <p className="text-[14px] font-bold text-[#0F172A]">No Land Photos Uploaded Yet</p>
-                  <p className="text-[12px]">The farmer has not uploaded land photos for this parcel yet.</p>
+          if (liveLand?.trees && Array.isArray(liveLand.trees)) {
+            liveLand.trees.forEach((t: any) => {
+              const pUri = t.photo_uri || t.photoUri;
+              if (pUri) {
+                allPhotos.push({
+                  url: pUri,
+                  title: `Tree: ${t.species || 'Agroforestry'} (${t.count || 1} trees)`,
+                  category: 'Tree Plantation',
+                  date: liveLand.created_at,
+                });
+              }
+            });
+          }
+
+          if (liveLand?.land_document_url) {
+            allPhotos.push({
+              url: liveLand.land_document_url,
+              title: 'Land Ownership / Khasra Document',
+              category: 'Ownership Deed',
+              date: liveLand.created_at,
+              isDoc: true,
+            });
+          }
+
+          return (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3 flex-wrap gap-2">
+                <div>
+                  <h3 className="text-[15px] font-bold text-[#0F172A] flex items-center gap-2">
+                    <Camera size={18} className="text-[#16A34A]" /> Ground Inspection & Land Photos ({allPhotos.length} Available)
+                  </h3>
+                  <p className="text-[12px] text-[#64748B]">Geotagged & Timestamped Land Verification Evidence Uploaded from Mobile App</p>
                 </div>
-              )}
+                <span className="px-3 py-1 bg-[#F0FDF4] text-[#16A34A] text-[11px] font-bold rounded-lg border border-[#DCFCE7] flex items-center gap-1">
+                  <ShieldCheck size={13} /> GEOTAG METADATA VERIFIED
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {allPhotos.length > 0 ? (
+                  allPhotos.map((item, idx) => {
+                    const latStr = (safeLat + (idx * 0.0003)).toFixed(4);
+                    const lonStr = (safeLng + (idx * 0.0003)).toFixed(4);
+                    const formattedDate = item.date
+                      ? new Date(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                      : 'Today';
+
+                    const resolvedUrl = getFullMediaUrl(item.url);
+
+                    return (
+                      <div key={idx} className="border border-[#E8EDF5] rounded-2xl overflow-hidden bg-white p-3 space-y-2.5 shadow-xs hover:border-[#16A34A] transition-all">
+                        <div className="w-full h-48 rounded-xl overflow-hidden border border-[#CBD5E1] relative group bg-slate-900 flex items-center justify-center">
+                          {item.url.toLowerCase().endsWith('.pdf') ? (
+                            <div className="flex flex-col items-center justify-center p-4 text-white text-center space-y-2">
+                              <FileText size={36} className="text-emerald-400" />
+                              <span className="text-[11px] font-bold text-slate-200">PDF Land Document</span>
+                              <a
+                                href={resolvedUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg"
+                              >
+                                View PDF
+                              </a>
+                            </div>
+                          ) : (
+                            <img
+                              src={resolvedUrl}
+                              alt={item.title}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&auto=format&fit=crop&q=60';
+                              }}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          )}
+                          <span className="absolute top-2 right-2 px-2 py-0.5 text-[10px] font-bold bg-[#16A34A] text-white rounded-md shadow-xs flex items-center gap-1">
+                            <CheckCircle size={10} /> GEOTAGGED
+                          </span>
+                          <span className="absolute bottom-2 left-2 px-2 py-0.5 text-[10px] font-mono font-bold bg-black/70 text-white rounded-md">
+                            Lat {latStr}°, Lon {lonStr}°
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-md border border-[#DBEAFE] inline-block mb-1">
+                            Category: {item.category}
+                          </span>
+                          <div className="text-[13px] font-bold text-[#0F172A]">{item.title}</div>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-[#64748B] pt-1 border-t border-[#F1F5F9]">
+                          <span className="text-[#16A34A] font-semibold flex items-center gap-1">
+                            <ShieldCheck size={11} /> Camera & GPS Verified
+                          </span>
+                          <span>{formattedDate}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="col-span-3 py-12 border border-[#E8EDF5] rounded-2xl bg-[#FAFCFF] flex flex-col items-center justify-center space-y-2 text-[#94A3B8]">
+                    <Camera size={36} />
+                    <p className="text-[14px] font-bold text-[#0F172A]">No Land Photos Uploaded Yet</p>
+                    <p className="text-[12px]">The farmer has not uploaded land photos for this parcel yet.</p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* 5. OWNERSHIP TAB */}
         {activeTab === 'Ownership' && (

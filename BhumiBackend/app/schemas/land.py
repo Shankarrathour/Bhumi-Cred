@@ -195,6 +195,8 @@ class AdminLandVerificationItem(BaseModel):
     verified_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    assigned_project: Optional[str] = None
+    assigned_project_id: Optional[str] = None
     history: list[LandHistoryEvent] = []
 
     from pydantic import field_validator

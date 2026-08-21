@@ -376,10 +376,10 @@ class BhumiCredRegistrationService:
             from bson import ObjectId
 
             area_acres = 0.0
-            if reg.calculated_area and reg.calculated_area.acre:
-                area_acres = float(reg.calculated_area.acre)
-            elif reg.total_area:
+            if reg.total_area and float(reg.total_area) > 0:
                 area_acres = float(reg.total_area)
+            elif reg.calculated_area and reg.calculated_area.acre:
+                area_acres = float(reg.calculated_area.acre)
 
             # Map boundary points to list of GeoCoords
             coords_list = []
@@ -397,18 +397,20 @@ class BhumiCredRegistrationService:
                 center_coords = GeoCoords(latitude=23.0225, longitude=77.0124)
 
             existing_parcel = await LandParcel.find_one(
-                LandParcel.farmer_id == reg.farmer_id,
-                (LandParcel.survey_number == None) | (LandParcel.survey_number == "")
+                LandParcel.farmer_id == reg.farmer_id
             )
             if existing_parcel:
                 existing_parcel.survey_number = reg_number
                 existing_parcel.khasra_number = reg_number
                 existing_parcel.area_acres = area_acres if area_acres > 0 else existing_parcel.area_acres
-                existing_parcel.coordinates = center_coords
-                existing_parcel.boundary_polygon = coords_list
+                existing_parcel.coordinates = center_coords or existing_parcel.coordinates
+                if coords_list:
+                    existing_parcel.boundary_polygon = coords_list
                 existing_parcel.tree_stock_count = reg.tree_stock_count or existing_parcel.tree_stock_count
                 existing_parcel.plantation_area_acres = reg.plantation_area or existing_parcel.plantation_area_acres
-                existing_parcel.verification_status = LandVerificationStatus.PENDING
+                existing_parcel.state = reg.state or existing_parcel.state
+                existing_parcel.district = reg.district or existing_parcel.district
+                existing_parcel.village = reg.village or existing_parcel.village
                 existing_parcel.updated_at = datetime.now(timezone.utc)
                 await existing_parcel.save()
                 logger.info(f"Updated existing LandParcel for submitted registration: {reg_number}")
@@ -436,6 +438,36 @@ class BhumiCredRegistrationService:
                 )
                 await land_parcel.insert()
                 logger.info(f"Automatically created LandParcel for submitted registration: {reg_number}")
+
+            # 3. Always sync farmer document total_acreage and profile info
+            try:
+                from app.models.farmer import Farmer
+                from beanie import PydanticObjectId
+                farmer = None
+                if reg.farmer_id and PydanticObjectId.is_valid(reg.farmer_id):
+                    farmer = await Farmer.get(PydanticObjectId(reg.farmer_id))
+                if not farmer and reg.farmer_id:
+                    farmer = await Farmer.get(reg.farmer_id)
+                if not farmer and reg.mobile_number:
+                    farmer = await Farmer.find_one(Farmer.mobile == reg.mobile_number)
+                if farmer:
+                    if area_acres > 0:
+                        farmer.total_acreage = area_acres
+                    if reg.farmer_name:
+                        farmer.full_name = reg.farmer_name
+                    if reg.father_guardian_name:
+                        farmer.father_name = reg.father_guardian_name
+                    if reg.state:
+                        farmer.state = reg.state
+                    if reg.district:
+                        farmer.district = reg.district
+                    if reg.village:
+                        farmer.village = reg.village
+                    farmer.updated_at = datetime.now(timezone.utc)
+                    await farmer.save()
+                    logger.info(f"Synced farmer {farmer.id} total_acreage={farmer.total_acreage} on registration submit")
+            except Exception as fe:
+                logger.warning(f"Failed to sync farmer document on registration submission: {fe}")
         except Exception as e:
             logger.error(f"Failed to automatically create LandParcel for registration {reg_number}: {e}", exc_info=True)
 

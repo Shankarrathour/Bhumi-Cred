@@ -17,6 +17,7 @@ import {
   useDeleteProject,
   useAssignFarmerProject,
 } from '../api/useProjects';
+import { useFarmers } from '../../farmers/api/useFarmers';
 import toast from 'react-hot-toast';
 
 export interface AdminProjectItem {
@@ -45,8 +46,13 @@ export const ProjectManagement = () => {
 
   // Modal State for Assigning Project to Farmer
   const [assignModalProject, setAssignModalProject] = useState<AdminProjectItem | null>(null);
-  const [assignFarmerId, setAssignFarmerId] = useState('6a843e2b61baba8ac361df93');
+  const [assignFarmerId, setAssignFarmerId] = useState('');
   const [assigning, setAssigning] = useState(false);
+
+  const { data: apiFarmersData } = useFarmers(1, 50);
+  const activeFarmers = useMemo(() => {
+    return Array.isArray(apiFarmersData?.data) ? apiFarmersData.data : [];
+  }, [apiFarmersData]);
 
   // Modal State for Creating New Project
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -77,11 +83,16 @@ export const ProjectManagement = () => {
   const handleAssignProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assignModalProject) return;
+    const targetFarmerId = assignFarmerId || activeFarmers[0]?.id;
+    if (!targetFarmerId) {
+      toast.error('Please select a farmer to assign.');
+      return;
+    }
     setAssigning(true);
     try {
       await assignProjectMutation.mutateAsync({
         projectId: assignModalProject.id,
-        farmerId: assignFarmerId,
+        farmerId: targetFarmerId,
         landAreaAcres: 10,
         treeCount: 40,
       });
@@ -609,14 +620,19 @@ export const ProjectManagement = () => {
                 <div>
                   <label className="block text-[12px] font-bold text-[#0F172A] mb-1">Select Farmer to Assign</label>
                   <select
-                    value={assignFarmerId}
+                    value={assignFarmerId || (activeFarmers[0]?.id || '')}
                     onChange={(e) => setAssignFarmerId(e.target.value)}
                     className="w-full px-3 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] font-semibold text-[#0F172A] outline-none focus:border-[#4F46E5]"
                   >
-                    <option value="6a843e2b61baba8ac361df93">Shankar Rathore (+91 98260 12345)</option>
-                    <option value="6a82e4f53771f3116c8c3eff">Rajesh Kumar (+91 98930 54321)</option>
-                    <option value="6a84253561baba8ac361df56">Gopal Verma (+91 94250 99887)</option>
-                    <option value="6a84475961baba8ac361dfbe">Amit Patel (+91 97550 11223)</option>
+                    {activeFarmers.length === 0 ? (
+                      <option value="">No active farmers available</option>
+                    ) : (
+                      activeFarmers.map((f: any) => (
+                        <option key={f.id} value={f.id}>
+                          {f.full_name || `Farmer ${f.mobile || f.id}`} ({f.mobile ? `+91 ${f.mobile}` : f.id})
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 

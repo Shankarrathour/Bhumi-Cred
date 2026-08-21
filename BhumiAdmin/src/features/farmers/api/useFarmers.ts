@@ -93,8 +93,10 @@ export interface BankResponse {
   account_number?: string;
   ifsc_code?: string;
   account_holder_name?: string;
+  upi_id?: string;
   is_verified?: boolean;
   added_at?: string;
+  transactions?: any[];
 }
 
 export interface ActivityLogItem {
@@ -409,9 +411,14 @@ export const useDeleteFarmer = () => {
       return response.data;
     },
     onSuccess: () => {
-      // Invalidate entire farmer list — deleted farmer should disappear
+      // Invalidate entire farmer list, land parcels, dashboard metrics, and locations
       queryClient.invalidateQueries({ queryKey: ['farmers'] });
+      queryClient.invalidateQueries({ queryKey: ['landVerificationQueue'] });
+      queryClient.invalidateQueries({ queryKey: ['land-verification'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-project-enrollments'] });
       queryClient.invalidateQueries({ queryKey: ['farmer-locations'] });
+      queryClient.invalidateQueries({ queryKey: ['mrvMetrics'] });
+      queryClient.invalidateQueries({ queryKey: ['reportsStats'] });
     },
   });
 };

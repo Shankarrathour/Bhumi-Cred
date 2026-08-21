@@ -193,6 +193,7 @@ export default function AddLandScreen() {
   }, []);
 
   const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [landType, setLandType] = useState<string | null>(null);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [showNdvi, setShowNdvi] = useState(false);
@@ -691,8 +692,16 @@ export default function AddLandScreen() {
 
     try {
       const filename = uri.split('/').pop() || `${id}.jpg`;
+      const match = /\.(\w+)$/.exec(filename);
+      const mimeType = match ? `image/${match[1]}` : 'image/jpeg';
+      const fileUri = Platform.OS === 'android' ? uri : uri.replace('file://', '');
+      
       const formData = new FormData();
-      formData.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
+      formData.append('file', {
+        uri: fileUri,
+        name: filename,
+        type: mimeType,
+      } as any);
       
       const res = await api.post('/farmer/profile/land/document', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -720,12 +729,14 @@ export default function AddLandScreen() {
       
       triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
     } catch (err) {
+      console.warn('[add-land] Photo upload error fallback:', err);
       const lat = (22.9712 + (Math.random() - 0.5) * 0.01).toFixed(4);
       const lon = (78.6514 + (Math.random() - 0.5) * 0.01).toFixed(4);
       const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
       setLandPhotos(prev => prev.map(p => p.id === id ? {
         ...p,
+        uri,
         status: 'Uploaded',
         progress: 1.0,
         geotag: `Lat ${lat}, Lon ${lon}`,
@@ -936,10 +947,12 @@ export default function AddLandScreen() {
       }
       setCurrentStep(8);
     } else if (currentStep === 8) {
+      if (isSubmitting) return;
       if (wantsInsurance === null) {
         setErrors({ insurance: 'Please select an option to continue / कृपया आगे बढ़ने के लिए एक विकल्प चुनें।' });
         return;
       }
+      setIsSubmitting(true);
 
       const newPlot = {
         id: 'plot_' + Date.now(),
@@ -956,7 +969,12 @@ export default function AddLandScreen() {
         boundaryPolygon,
         documentName: 'Khasra Khatauni',
         landDocumentUrl: landDocumentUrl || undefined,
-        landPhotoUrls: landPhotos.map(p => p.uri).filter(Boolean),
+        landPhotoUrls: Array.from(new Set([
+          ...landPhotos.map(p => p.uri).filter(Boolean),
+          ...(photoUrls ? Object.values(photoUrls).filter(Boolean) : []),
+          ...(docUrls ? Object.values(docUrls).filter(Boolean) : []),
+          ...(landDocumentUrl ? [landDocumentUrl] : []),
+        ])),
         country,
         state: stateName,
         district,
@@ -2115,14 +2133,20 @@ export default function AddLandScreen() {
         )}
 
         <TouchableOpacity 
-          style={[styles.actionBtn, (currentStep === 1 && !landType) && { opacity: 0.5 }]} 
+          style={[styles.actionBtn, ((currentStep === 1 && !landType) || isSubmitting) && { opacity: 0.5 }]} 
           onPress={handleNext} 
           activeOpacity={0.9}
-          disabled={currentStep === 1 && !landType}
+          disabled={(currentStep === 1 && !landType) || isSubmitting}
         >
           <LinearGradient colors={[COLORS.primary, COLORS.secondary]} style={styles.actionBtnGrad}>
-            <Text style={styles.actionBtnLabel}>{currentStep === 8 ? 'Confirm & Register / पुष्टि करें और पंजीकरण करें' : 'Continue / आगे बढ़ें'}</Text>
-            <MaterialCommunityIcons name={currentStep === 8 ? "check" : "arrow-right"} size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
+            {isSubmitting ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Text style={styles.actionBtnLabel}>{currentStep === 8 ? 'Confirm & Register / पुष्टि करें और पंजीकरण करें' : 'Continue / आगे बढ़ें'}</Text>
+                <MaterialCommunityIcons name={currentStep === 8 ? "check" : "arrow-right"} size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
+              </>
+            )}
           </LinearGradient>
         </TouchableOpacity>
 
