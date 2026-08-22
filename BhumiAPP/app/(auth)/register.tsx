@@ -23,7 +23,8 @@ export default function RegisterScreen() {
   const params = useLocalSearchParams();
   const registerMobile = useAuthStore((state) => state.registerMobile);
   const [isLoading, setIsLoading] = useState(false);
-  const [role, setRole] = useState<AuthRole>('farmer');
+  const [role, setRole] = useState<AuthRole | ''>('');
+  const [roleError, setRoleError] = useState<string>('');
 
   // Capture incoming params from OTP/WhatsApp flow securely
   const prefilledMobile = (params?.mobile as string) || '';
@@ -43,6 +44,11 @@ export default function RegisterScreen() {
   }, [prefilledMobile]);
 
   const onSubmit = async (data: any) => {
+    if (!role) {
+      setRoleError('Please select a role.');
+      return;
+    }
+    setRoleError('');
     setIsLoading(true);
     try {
       await registerMobile(data.mobile, role);
@@ -107,13 +113,24 @@ export default function RegisterScreen() {
               ? 'Access the BhumiCred district and regional sustainability dashboard.'
               : role === 'partner'
                 ? 'Onboard your organisation to start sponsoring carbon offsets.'
-                : 'Complete your BhumiCred climate-tech farmer profile in 30 seconds.'}
+                : role === 'farmer'
+                  ? 'Complete your BhumiCred climate-tech farmer profile in 30 seconds.'
+                  : 'Join BhumiCred climate-tech platform in 30 seconds.'}
           </Text>
         </View>
 
         {/* Premium Registration Card Wrapper */}
         <View style={styles.formCard}>
-          <RoleSelectField value={role} onChange={setRole} actionLabel="Register" />
+          <RoleSelectField 
+            value={role} 
+            onChange={(selectedRole) => {
+              setRole(selectedRole);
+              if (roleError) setRoleError('');
+            }} 
+            actionLabel="Register"
+            placeholder="Select Role"
+            error={roleError}
+          />
 
           <View style={{ marginBottom: 28 }}>
             <InputBox

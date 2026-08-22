@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
+import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
@@ -689,9 +690,11 @@ export default function AddLandScreen() {
     try {
       const filename = uri.split('/').pop() || `${id}.jpg`;
       const match = /\.(\w+)$/.exec(filename);
-      const mimeType = match ? `image/${match[1]}` : 'image/jpeg';
-      const fileUri = Platform.OS === 'android' ? uri : uri.replace('file://', '');
+      const mimeType = match ? `image/${match[1] === 'jpg' ? 'jpeg' : match[1]}` : 'image/jpeg';
+      const fileUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
       
+      let serverUrl = uri;
+
       const formData = new FormData();
       formData.append('file', {
         uri: fileUri,
@@ -699,17 +702,41 @@ export default function AddLandScreen() {
         type: mimeType,
       } as any);
       
-      const res = await api.post('/farmer/profile/land/document', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (progressEvent) => {
-          const total = progressEvent.total || 1;
-          const current = progressEvent.loaded;
-          const pct = current / total;
-          setLandPhotos(prev => prev.map(p => p.id === id ? { ...p, progress: pct } : p));
+      try {
+        const res = await api.post('/registration/upload-photo', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (progressEvent) => {
+            const total = progressEvent.total || 1;
+            const current = progressEvent.loaded;
+            const pct = current / total;
+            setLandPhotos(prev => prev.map(p => p.id === id ? { ...p, progress: pct } : p));
+          }
+        });
+        if (res.data?.data?.url) {
+          serverUrl = res.data.data.url;
         }
-      });
-      
-      const serverUrl = res.data?.data?.url || uri;
+      } catch (multipartErr) {
+        console.warn('[add-land] Multipart upload error, attempting Base64 upload:', multipartErr);
+        let base64Data = '';
+        try {
+          base64Data = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } catch (fsErr) {
+          console.warn('[add-land] FileSystem read error:', fsErr);
+        }
+
+        if (base64Data) {
+          const res = await api.post('/registration/upload-photo', {
+            base64_data: `data:${mimeType};base64,${base64Data}`,
+            filename,
+            category,
+          });
+          if (res.data?.data?.url) {
+            serverUrl = res.data.data.url;
+          }
+        }
+      }
       
       let lat = (22.9712 + (Math.random() - 0.5) * 0.005).toFixed(4);
       let lon = (78.6514 + (Math.random() - 0.5) * 0.005).toFixed(4);

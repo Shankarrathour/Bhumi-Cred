@@ -54,13 +54,16 @@ class BhumiCredRegistration(Document):
     calculated_area: Optional[CalculatedAreaModel] = None
     boundary_geojson: Optional[Dict[str, Any]] = None
 
-    # Step 5
+    # Step 5 - Photos
+    land_photo_urls: Optional[List[str]] = None
+
+    # Step 6 - Audit & Slot
     preferred_date: Optional[str] = None
     preferred_time_slot: Optional[str] = None
     landmark: Optional[str] = None
     special_instructions: Optional[str] = None
 
-    # Step 6
+    # Step 7 - Tree Insurance
     tree_insurance: Optional[bool] = None
 
     # Audit & Timestamps
