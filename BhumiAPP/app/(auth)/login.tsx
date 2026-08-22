@@ -14,11 +14,15 @@ export default function LoginScreen() {
   const login = useAuthStore((state) => state.login);
   const [isLoading, setIsLoading] = useState(false);
   const [mobile, setMobile] = useState('');
-  const [role, setRole] = useState<AuthRole>('farmer');
+  const [role, setRole] = useState<AuthRole | ''>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleSendOtp = async () => {
     setErrors({});
+    if (!role) {
+      setErrors({ role: 'Please select a role.' });
+      return;
+    }
     if (!mobile || mobile.length !== 10) {
       setErrors({ mobile: 'Please enter a valid 10-digit mobile number.' });
       return;
@@ -83,27 +87,42 @@ export default function LoginScreen() {
               ? 'Govt Body Login' 
               : role === 'partner' 
                 ? 'Partner Login' 
-                : 'Farmer Login'}
+                : role === 'farmer'
+                  ? 'Farmer Login'
+                  : 'Login'}
           </Text>
 
-          <RoleSelectField value={role} onChange={setRole} actionLabel="Login" />
+          <RoleSelectField 
+            value={role} 
+            onChange={(selectedRole) => {
+              setRole(selectedRole);
+              if (errors.role) setErrors((prev) => ({ ...prev, role: '' }));
+            }} 
+            actionLabel="Login"
+            error={errors.role}
+          />
 
-          <View style={[styles.inputContainer, errors.mobile ? styles.inputError : null]}>
-            <MaterialCommunityIcons name="phone-outline" size={20} color={COLORS.primary} style={styles.inputIcon} />
-            <TextInput 
-              style={styles.textInput}
-              placeholder="Enter 10 digit Mobile Number"
-              placeholderTextColor="#94A3B8"
-              keyboardType="numeric"
-              maxLength={10}
-              value={mobile}
-              onChangeText={(text) => {
-                setMobile(text);
-                if (errors.mobile) setErrors({ ...errors, mobile: '' });
-              }}
-            />
+          <View style={styles.inputWrapper}>
+            <Text style={styles.inputLabel}>Mobile Number</Text>
+            <View style={[styles.inputContainer, errors.mobile ? styles.inputError : null]}>
+              <View style={styles.inputIconWrap}>
+                <MaterialCommunityIcons name="phone-outline" size={17} color="#1565C0" />
+              </View>
+              <TextInput 
+                style={styles.textInput}
+                placeholder="Enter 10 digit number"
+                placeholderTextColor="#94A3B8"
+                keyboardType="numeric"
+                maxLength={10}
+                value={mobile}
+                onChangeText={(text) => {
+                  setMobile(text);
+                  if (errors.mobile) setErrors({ ...errors, mobile: '' });
+                }}
+              />
+            </View>
+            {errors.mobile && <Text style={styles.errorText}>{errors.mobile}</Text>}
           </View>
-          {errors.mobile && <Text style={styles.errorText}>{errors.mobile}</Text>}
 
           <Text style={styles.otpHint}>We will send a 4-digit verification OTP</Text>
 
@@ -202,33 +221,49 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
+  inputWrapper: {
+    marginBottom: 16,
+    width: '100%',
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textDark,
+    marginBottom: 6,
+    marginLeft: 4,
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 56,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    height: 54,
   },
-  inputIcon: {
+  inputIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 10,
+    backgroundColor: '#E3F2FD',
   },
   inputError: {
     borderColor: '#EF4444',
-    borderWidth: 1.5,
   },
   errorText: {
     color: '#EF4444',
     fontSize: 12,
     fontWeight: '600',
-    marginTop: 6,
+    marginTop: 4,
     marginLeft: 4,
   },
   textInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: COLORS.textDark,
   },

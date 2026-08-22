@@ -5,6 +5,7 @@ from app.models.farmer import Farmer
 from app.models.referral import FarmerReferral
 from app.models.wallet import Wallet
 from app.models.tree_insurance import TreeInsurancePolicy
+from app.models.project_enrollment import ProjectEnrollment
 from app.models.admin_user import AdminUser
 from app.models.project_mgmt import Project
 from app.schemas.common import SuccessResponse
@@ -19,9 +20,10 @@ async def get_reports_stats(admin: CurrentAdmin):
     Returns live counts from MongoDB collections.
     """
     # Farmer Report
-    total_farmers = await Farmer.find(Farmer.is_active == True).count()
-    land_parcels = await LandParcel.find(LandParcel.is_active == True).to_list()
-    total_acres = sum(p.area_acres or 0.0 for p in land_parcels)
+    farmers = await Farmer.find(Farmer.is_active == True, Farmer.is_deleted == False).to_list()
+    total_farmers = len(farmers)
+    land_parcels = await LandParcel.find(LandParcel.is_active == True, LandParcel.is_deleted == False).to_list()
+    total_acres = sum(p.area_acres or 0.0 for p in land_parcels) or sum(f.total_acreage or 0.0 for f in farmers)
 
     # Govt Report — MoUs based on distinct states in active land parcels
     states = set(p.state for p in land_parcels if p.state)
@@ -30,19 +32,25 @@ async def get_reports_stats(admin: CurrentAdmin):
     # Partner Report — admin users (non-super admins) as ecosystem partners
     total_partners = await AdminUser.count()
 
-    # Carbon Report — real project carbon data
+    # Carbon Report — real project carbon data and farmer enrollments
     projects = await Project.find_all().to_list()
-    total_projects = len(projects)
-    carbon_generated = sum(p.estimated_carbon_impact or 0.0 for p in projects)
+    enrollments = await ProjectEnrollment.find_all().to_list()
+    total_projects = max(len(projects), len(enrollments))
+    carbon_generated = sum(p.estimated_carbon_impact or 0.0 for p in projects) + sum(e.estimated_carbon_impact or 0.0 for e in enrollments) + sum(f.carbon_credits_generated or 0.0 for f in farmers)
     carbon_issued = round(carbon_generated * 0.70, 2)
 
     # Revenue — from land acres and tree registrations
     revenue_lakhs = round(total_acres * 0.42, 2)
 
-    # Insurance — from TreeInsurancePolicy collection
+    # Insurance — from TreeInsurancePolicy and ProjectEnrollment collections
     insurance_policies = await TreeInsurancePolicy.find_all().to_list()
-    total_insurance_trees = sum(p.trees_insured_count or 0 for p in insurance_policies)
-    insurance_coverage_lakhs = round(sum(p.sum_insured_inr or 0.0 for p in insurance_policies) / 100000, 2)
+    total_policy_trees = sum(p.trees_insured_count or 0 for p in insurance_policies)
+    total_enrollment_trees = sum(e.insured_trees or 0 for e in enrollments)
+    total_insurance_trees = total_policy_trees + total_enrollment_trees
+
+    policy_coverage = sum(p.sum_insured_inr or 0.0 for p in insurance_policies)
+    enrollment_coverage = sum((e.insured_trees or 0) * 1200.0 for e in enrollments)
+    insurance_coverage_lakhs = round((policy_coverage + enrollment_coverage) / 100000, 2)
 
     # Wallet — from wallet transactions
     wallets = await Wallet.find_all().to_list()

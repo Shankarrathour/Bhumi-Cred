@@ -16,6 +16,24 @@ class UpdateProfileRequest(BaseModel):
     email: Optional[EmailStr] = None
     locale: Optional[FarmerLocale] = None
 
+    # Address & Location
+    country: Optional[str] = None
+    state: Optional[str] = None
+    district: Optional[str] = None
+    tehsil: Optional[str] = None
+    city: Optional[str] = None
+    village: Optional[str] = None
+    gram_panchayat: Optional[str] = None
+    vikash_khand: Optional[str] = None
+    full_address: Optional[str] = None
+    pincode: Optional[str] = None
+
+    # Documents & Identity
+    farmer_photo_url: Optional[str] = None
+    id_proof_url: Optional[str] = None
+    aadhaar_number: Optional[str] = None
+    pan_number: Optional[str] = None
+
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, v: Optional[str]) -> Optional[str]:

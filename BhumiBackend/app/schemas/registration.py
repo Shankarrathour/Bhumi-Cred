@@ -83,6 +83,18 @@ class Step5Request(BaseModel):
             raise ValueError("Preferred time slot must be 'Morning', 'Afternoon', or 'Evening'")
         return v
 
+class StepPhotosRequest(BaseModel):
+    land_photo_urls: List[str] = Field(default_factory=list, description="List of uploaded land photo URLs")
+
+class PhotoUploadBase64Request(BaseModel):
+    base64_data: str = Field(..., description="Base64 encoded image string (with or without data:image/... prefix)")
+    filename: Optional[str] = Field(default="land_photo.jpg", description="Filename for the uploaded photo")
+    category: Optional[str] = Field(default=None, description="Photo category")
+
+class RegistrationPhotoUploadResponse(BaseModel):
+    url: str
+    message: str = "Photo uploaded successfully."
+
 class Step6Request(BaseModel):
     tree_insurance: bool
 
@@ -134,6 +146,7 @@ class RegistrationResponse(BaseModel):
     boundary_points: Optional[List[GPSPoint]] = None
     boundary_locked: Optional[bool] = None
     calculated_area: Optional[CalculatedArea] = None
+    land_photo_urls: Optional[List[str]] = None
     preferred_date: Optional[str] = None
     preferred_time_slot: Optional[str] = None
     landmark: Optional[str] = None

@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
+import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
@@ -17,7 +18,7 @@ import AutocompleteDropdown from '../../components/AutocompleteDropdown';
 import CustomCalendarModal from '../../components/CustomCalendarModal';
 import MapView, { Marker, Polyline } from '../../components/MapViewProxy';
 import { isNonEmptyStr } from '../../src/utils/validation';
-import { LOCATION_DATA, COUNTRIES_LIST, getTehsilsForDistrict, getVikasKhandsForDistrict, getGramPanchayatsForDistrict, getVillagesForDistrict } from '../../src/data/locations';
+import { LOCATION_DATA, COUNTRIES_LIST, getTehsilsForDistrict, getVikasKhandsForDistrict, getGramPanchayatsForDistrict, getVillagesForDistrict, getCitiesForDistrict, resolveLocationPincodeAndCity } from '../../src/data/locations';
 import { isFarmerVerified } from '../../src/utils/verificationGuard';
 
 // Mock lists for the text inputs just in case they want to convert them to dropdowns later, but for now we keep them as inputs since there's no data structure for them. Or actually, let's keep them as inputs but they will just be text fields as before.
@@ -415,7 +416,7 @@ export default function AddLandScreen() {
   
   const availableVikasKhands = React.useMemo(() => getVikasKhandsForDistrict(district), [district]);
   const availableGramPanchayats = React.useMemo(() => getGramPanchayatsForDistrict(district), [district]);
-  const availableVillages = React.useMemo(() => getVillagesForDistrict(district), [district]);
+  const availableVillages = React.useMemo(() => getVillagesForDistrict(district, undefined, gramPanchayat), [district, gramPanchayat]);
 
   React.useEffect(() => {
     if (country && LOCATION_DATA[country]) {
@@ -434,12 +435,48 @@ export default function AddLandScreen() {
   }, [country, stateName]);
 
   React.useEffect(() => {
-    if (country && stateName && district && LOCATION_DATA[country]?.[stateName]?.[district]) {
+    if (district) {
+      const cities = getCitiesForDistrict(district);
+      setAvailableCities(cities);
+    } else if (country && stateName && district && LOCATION_DATA[country]?.[stateName]?.[district]) {
       setAvailableCities(LOCATION_DATA[country][stateName][district]);
     } else {
       setAvailableCities([]);
     }
   }, [country, stateName, district]);
+
+  const handleLandStateChange = (val: string) => {
+    setStateName(val);
+    setDistrict('');
+    setVikashKhand('');
+    setGramPanchayat('');
+    setVillage('');
+    setCity('');
+    setErrors(prev => ({ ...prev, stateName: '' }));
+  };
+
+  const handleLandDistrictChange = (val: string) => {
+    setDistrict(val);
+    setVikashKhand('');
+    setGramPanchayat('');
+    setVillage('');
+    setCity('');
+    setErrors(prev => ({ ...prev, district: '' }));
+  };
+
+  const handleLandGramPanchayatChange = (val: string) => {
+    setGramPanchayat(val);
+    setVillage('');
+    setErrors(prev => ({ ...prev, gramPanchayat: '' }));
+  };
+
+  const handleLandVillageChange = (val: string) => {
+    setVillage(val);
+    setErrors(prev => ({ ...prev, village: '' }));
+
+    const resolved = resolveLocationPincodeAndCity(district, undefined, val);
+    if (resolved.city && !city) setCity(resolved.city);
+  };
 
   const uploadAnims = useRef<Record<string, Animated.Value>>({
     landProof: new Animated.Value(0),
@@ -640,47 +677,7 @@ export default function AddLandScreen() {
     );
   };
 
-  const handlePickPhotoSource = async (mode: 'camera' | 'gallery') => {
-    try {
-      let result;
-      if (mode === 'camera') {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission Denied', 'Camera permission is required.');
-          return;
-        }
-        result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.8,
-        });
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission Denied', 'Gallery permission is required.');
-          return;
-        }
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 0.8,
-        });
-      }
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setCategorySelectPhoto({
-          uri: result.assets[0].uri,
-          id: 'photo_' + Date.now()
-        });
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
-    }
-  };
-
-  const handleCategorySelect = async (category: string) => {
-    if (!categorySelectPhoto) return;
-    const { uri, id } = categorySelectPhoto;
-    setCategorySelectPhoto(null);
-
+  const uploadDirectPhoto = async (uri: string, id: string, category: string) => {
     const newPhoto = {
       id,
       uri,
@@ -693,9 +690,11 @@ export default function AddLandScreen() {
     try {
       const filename = uri.split('/').pop() || `${id}.jpg`;
       const match = /\.(\w+)$/.exec(filename);
-      const mimeType = match ? `image/${match[1]}` : 'image/jpeg';
-      const fileUri = Platform.OS === 'android' ? uri : uri.replace('file://', '');
+      const mimeType = match ? `image/${match[1] === 'jpg' ? 'jpeg' : match[1]}` : 'image/jpeg';
+      const fileUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
       
+      let serverUrl = uri;
+
       const formData = new FormData();
       formData.append('file', {
         uri: fileUri,
@@ -703,19 +702,55 @@ export default function AddLandScreen() {
         type: mimeType,
       } as any);
       
-      const res = await api.post('/farmer/profile/land/document', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (progressEvent) => {
-          const total = progressEvent.total || 1;
-          const current = progressEvent.loaded;
-          const pct = current / total;
-          setLandPhotos(prev => prev.map(p => p.id === id ? { ...p, progress: pct } : p));
+      try {
+        const res = await api.post('/registration/upload-photo', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (progressEvent) => {
+            const total = progressEvent.total || 1;
+            const current = progressEvent.loaded;
+            const pct = current / total;
+            setLandPhotos(prev => prev.map(p => p.id === id ? { ...p, progress: pct } : p));
+          }
+        });
+        if (res.data?.data?.url) {
+          serverUrl = res.data.data.url;
         }
-      });
+      } catch (multipartErr) {
+        console.warn('[add-land] Multipart upload error, attempting Base64 upload:', multipartErr);
+        let base64Data = '';
+        try {
+          base64Data = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } catch (fsErr) {
+          console.warn('[add-land] FileSystem read error:', fsErr);
+        }
+
+        if (base64Data) {
+          const res = await api.post('/registration/upload-photo', {
+            base64_data: `data:${mimeType};base64,${base64Data}`,
+            filename,
+            category,
+          });
+          if (res.data?.data?.url) {
+            serverUrl = res.data.data.url;
+          }
+        }
+      }
       
-      const serverUrl = res.data?.data?.url || uri;
-      const lat = (22.9712 + (Math.random() - 0.5) * 0.01).toFixed(4);
-      const lon = (78.6514 + (Math.random() - 0.5) * 0.01).toFixed(4);
+      let lat = (22.9712 + (Math.random() - 0.5) * 0.005).toFixed(4);
+      let lon = (78.6514 + (Math.random() - 0.5) * 0.005).toFixed(4);
+      try {
+        const { status: locStatus } = await Location.getForegroundPermissionsAsync();
+        if (locStatus === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          if (loc && loc.coords) {
+            lat = loc.coords.latitude.toFixed(4);
+            lon = loc.coords.longitude.toFixed(4);
+          }
+        }
+      } catch {}
+
       const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
       setLandPhotos(prev => prev.map(p => p.id === id ? {
@@ -730,8 +765,19 @@ export default function AddLandScreen() {
       triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
     } catch (err) {
       console.warn('[add-land] Photo upload error fallback:', err);
-      const lat = (22.9712 + (Math.random() - 0.5) * 0.01).toFixed(4);
-      const lon = (78.6514 + (Math.random() - 0.5) * 0.01).toFixed(4);
+      let lat = (22.9712 + (Math.random() - 0.5) * 0.005).toFixed(4);
+      let lon = (78.6514 + (Math.random() - 0.5) * 0.005).toFixed(4);
+      try {
+        const { status: locStatus } = await Location.getForegroundPermissionsAsync();
+        if (locStatus === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          if (loc && loc.coords) {
+            lat = loc.coords.latitude.toFixed(4);
+            lon = loc.coords.longitude.toFixed(4);
+          }
+        }
+      } catch {}
+
       const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
       setLandPhotos(prev => prev.map(p => p.id === id ? {
@@ -743,6 +789,63 @@ export default function AddLandScreen() {
         timestamp: nowStr
       } : p));
     }
+  };
+
+  const handlePickPhotoSource = async (mode: 'camera' | 'gallery') => {
+    try {
+      let result;
+      if (mode === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Camera permission is required to take land photos.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsEditing: false,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Gallery permission is required to select land photos.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsMultipleSelection: true,
+          selectionLimit: Math.max(1, 5 - landPhotos.length),
+        });
+      }
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        if (result.assets.length === 1) {
+          setCategorySelectPhoto({
+            uri: result.assets[0].uri,
+            id: 'photo_' + Date.now()
+          });
+        } else {
+          const remainingSlots = 5 - landPhotos.length;
+          const assetsToProcess = result.assets.slice(0, remainingSlots);
+          const defaultCategories = ['Boundary', 'Crop Field', 'Trees', 'Water Source', 'Surrounding'];
+          assetsToProcess.forEach((asset, idx) => {
+            const pId = 'photo_' + (Date.now() + idx);
+            const cat = defaultCategories[idx % defaultCategories.length];
+            uploadDirectPhoto(asset.uri, pId, cat);
+          });
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image from camera/gallery');
+    }
+  };
+
+  const handleCategorySelect = async (category: string) => {
+    if (!categorySelectPhoto) return;
+    const { uri, id } = categorySelectPhoto;
+    setCategorySelectPhoto(null);
+    await uploadDirectPhoto(uri, id, category);
   };
 
   const handleDeleteLandPhoto = (id: string) => {
@@ -757,7 +860,7 @@ export default function AddLandScreen() {
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Take Photo', 
+          text: 'Take Photo (Camera)', 
           onPress: () => handlePickRetakePhotoSource(id, 'camera') 
         },
         { 
@@ -780,6 +883,7 @@ export default function AddLandScreen() {
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.8,
+          allowsEditing: false,
         });
       } else {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -790,6 +894,7 @@ export default function AddLandScreen() {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 0.8,
+          allowsEditing: false,
         });
       }
 
@@ -802,8 +907,20 @@ export default function AddLandScreen() {
           formData.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
           const res = await api.post('/farmer/profile/land/document', formData);
           const serverUrl = res.data?.data?.url || uri;
-          const lat = (22.9712 + (Math.random() - 0.5) * 0.01).toFixed(4);
-          const lon = (78.6514 + (Math.random() - 0.5) * 0.01).toFixed(4);
+          
+          let lat = (22.9712 + (Math.random() - 0.5) * 0.005).toFixed(4);
+          let lon = (78.6514 + (Math.random() - 0.5) * 0.005).toFixed(4);
+          try {
+            const { status: locStatus } = await Location.getForegroundPermissionsAsync();
+            if (locStatus === 'granted') {
+              const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+              if (loc && loc.coords) {
+                lat = loc.coords.latitude.toFixed(4);
+                lon = loc.coords.longitude.toFixed(4);
+              }
+            }
+          } catch {}
+
           const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
           setLandPhotos(prev => prev.map(p => p.id === id ? {
             ...p,
@@ -941,8 +1058,8 @@ export default function AddLandScreen() {
       setCurrentStep(7);
     } else if (currentStep === 7) {
       const photosUploaded = landPhotos.filter(p => p.status === 'Uploaded' || p.status === 'Approved').length;
-      if (photosUploaded < 2) {
-        setErrors({ docs: 'Please upload at least 2 photos of the land.' });
+      if (photosUploaded < 1) {
+        setErrors({ docs: 'Please upload at least 1 photo of the land / कृपया खेत की कम से कम 1 तस्वीर अपलोड करें।' });
         return;
       }
       setCurrentStep(8);
@@ -1695,12 +1812,12 @@ export default function AddLandScreen() {
             <View style={[styles.dualInputsRow, { zIndex: 10 }]}>
               <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 10 }]} onLayout={(e) => fieldPositions.current['country'] = e.nativeEvent.layout.y}>
                 <Text style={styles.label}>Country / देश *</Text>
-                <AutocompleteDropdown data={COUNTRIES_LIST} value={country} onChangeText={(val) => { setCountry(val); setStateName(''); setDistrict(''); setCity(''); setErrors(prev => ({ ...prev, country: '' })); }} placeholder="Country" closeTrigger={closeDropdownsTrigger} style={errors.country ? styles.inputError : {}} />
+                <AutocompleteDropdown data={COUNTRIES_LIST} value={country} onChangeText={(val) => { setCountry(val); setStateName(''); setDistrict(''); setVikashKhand(''); setGramPanchayat(''); setVillage(''); setCity(''); setErrors(prev => ({ ...prev, country: '' })); }} placeholder="Country" closeTrigger={closeDropdownsTrigger} style={errors.country ? styles.inputError : {}} />
                 {errors.country && <Text style={styles.errorText}>{errors.country}</Text>}
               </View>
               <View style={[styles.formField, { flex: 1, zIndex: 10 }]} onLayout={(e) => fieldPositions.current['stateName'] = e.nativeEvent.layout.y}>
                 <Text style={styles.label}>State / राज्य *</Text>
-                <AutocompleteDropdown data={availableStates} value={stateName} onChangeText={(val) => { setStateName(val); setDistrict(''); setCity(''); setErrors(prev => ({ ...prev, stateName: '' })); }} placeholder="State" closeTrigger={closeDropdownsTrigger} style={errors.stateName ? styles.inputError : {}} />
+                <AutocompleteDropdown data={availableStates} value={stateName} onChangeText={handleLandStateChange} placeholder="State" closeTrigger={closeDropdownsTrigger} style={errors.stateName ? styles.inputError : {}} />
                 {errors.stateName && <Text style={styles.errorText}>{errors.stateName}</Text>}
               </View>
             </View>
@@ -1708,7 +1825,7 @@ export default function AddLandScreen() {
             <View style={[styles.dualInputsRow, { zIndex: 9 }]}>
               <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 9 }]} onLayout={(e) => fieldPositions.current['district'] = e.nativeEvent.layout.y}>
                 <Text style={styles.label}>District / जिला *</Text>
-                <AutocompleteDropdown data={availableDistricts} value={district} onChangeText={(val) => { setDistrict(val); setCity(''); setErrors(prev => ({ ...prev, district: '' })); }} placeholder="District" closeTrigger={closeDropdownsTrigger} style={errors.district ? styles.inputError : {}} />
+                <AutocompleteDropdown data={availableDistricts} value={district} onChangeText={handleLandDistrictChange} placeholder="District" closeTrigger={closeDropdownsTrigger} style={errors.district ? styles.inputError : {}} />
                 {errors.district && <Text style={styles.errorText}>{errors.district}</Text>}
               </View>
               <View style={[styles.formField, { flex: 1, zIndex: 9 }]} onLayout={(e) => fieldPositions.current['city'] = e.nativeEvent.layout.y}>
@@ -1721,7 +1838,7 @@ export default function AddLandScreen() {
             <View style={[styles.dualInputsRow, { zIndex: 8 }]}>
               <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 8 }]} onLayout={(e) => fieldPositions.current['gramPanchayat'] = e.nativeEvent.layout.y}>
                 <Text style={styles.label}>Gram Panchayat / ग्राम पंचायत *</Text>
-                <AutocompleteDropdown data={availableGramPanchayats} value={gramPanchayat} onChangeText={(val) => { setGramPanchayat(val); setErrors(prev => ({ ...prev, gramPanchayat: '' })); }} placeholder="Panchayat" closeTrigger={closeDropdownsTrigger} style={errors.gramPanchayat ? styles.inputError : {}} />
+                <AutocompleteDropdown data={availableGramPanchayats} value={gramPanchayat} onChangeText={handleLandGramPanchayatChange} placeholder="Panchayat" closeTrigger={closeDropdownsTrigger} style={errors.gramPanchayat ? styles.inputError : {}} />
                 {errors.gramPanchayat && <Text style={styles.errorText}>{errors.gramPanchayat}</Text>}
               </View>
               <View style={[styles.formField, { flex: 1, zIndex: 8 }]} onLayout={(e) => fieldPositions.current['vikashKhand'] = e.nativeEvent.layout.y}>
@@ -1733,7 +1850,7 @@ export default function AddLandScreen() {
 
             <View style={[styles.formField, { zIndex: 7 }]} onLayout={(e) => fieldPositions.current['village'] = e.nativeEvent.layout.y}>
               <Text style={styles.label}>Village / गांव *</Text>
-              <AutocompleteDropdown data={availableVillages} value={village} onChangeText={(val) => { setVillage(val); setErrors(prev => ({ ...prev, village: '' })); }} placeholder="Village name" closeTrigger={closeDropdownsTrigger} style={errors.village ? styles.inputError : {}} />
+              <AutocompleteDropdown data={availableVillages} value={village} onChangeText={handleLandVillageChange} placeholder="Village name" closeTrigger={closeDropdownsTrigger} style={errors.village ? styles.inputError : {}} />
               {errors.village && <Text style={styles.errorText}>{errors.village}</Text>}
             </View>
 
@@ -1940,14 +2057,82 @@ export default function AddLandScreen() {
               icon: 'sprout-outline',
               mandatory: false
             })}
+
+            {/* Land Ground Photos inside Step 6 */}
+            <View style={{ marginTop: 24, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <Text style={[styles.heading, { fontSize: 16, marginBottom: 0 }]}>Land Photos / खेत की तस्वीरें *</Text>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.primary }}>({landPhotos.length}/5 Uploaded)</Text>
+              </View>
+              <Text style={[styles.subheading, { marginBottom: 12 }]}>Take live photos from Camera or select from Gallery with GPS coordinates.</Text>
+
+              <View style={styles.photoGrid}>
+                {landPhotos.map((photo) => (
+                  <View key={photo.id} style={styles.photoGridCard}>
+                    <Image source={{ uri: photo.uri }} style={styles.photoThumbnail} />
+                    <View style={styles.photoInfoBox}>
+                      <View style={styles.photoCategoryBadge}>
+                        <Text style={styles.photoCategoryText}>{photo.category.toUpperCase()}</Text>
+                      </View>
+                      {photo.geotag && (
+                        <View style={styles.metadataBadge}>
+                          <MaterialCommunityIcons name="map-marker-outline" size={10} color="#059669" />
+                          <Text style={styles.metadataText} numberOfLines={1}>{photo.geotag}</Text>
+                        </View>
+                      )}
+                      {photo.timestamp && (
+                        <View style={styles.metadataBadge}>
+                          <MaterialCommunityIcons name="clock-outline" size={10} color="#64748B" />
+                          <Text style={styles.metadataText} numberOfLines={1}>{photo.timestamp}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {photo.status === 'Uploading' && (
+                      <View style={styles.photoUploadOverlay}>
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <Text style={styles.photoProgressText}>{Math.round(photo.progress * 100)}%</Text>
+                      </View>
+                    )}
+
+                    <View style={{ position: 'absolute', top: 6, right: 6, flexDirection: 'row', gap: 4 }}>
+                      <TouchableOpacity 
+                        style={[styles.photoDeleteBtn, { position: 'relative', top: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)' }]} 
+                        onPress={() => handleRetakeLandPhoto(photo.id)}
+                      >
+                        <MaterialCommunityIcons name="camera-retake" size={12} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.photoDeleteBtn, { position: 'relative', top: 0, right: 0 }]} 
+                        onPress={() => handleDeleteLandPhoto(photo.id)}
+                      >
+                        <MaterialCommunityIcons name="close" size={14} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+
+                {landPhotos.length < 5 && (
+                  <TouchableOpacity 
+                    style={styles.addPhotoPlaceholder} 
+                    onPress={handleAddPhotoChoice}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="camera-plus" size={32} color={COLORS.primary} style={{ marginBottom: 8 }} />
+                    <Text style={styles.addPhotoPlaceholderText}>Add Land Photo</Text>
+                    <Text style={styles.addPhotoPlaceholderSub}>Camera / Gallery</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           </View>
         )}
 
         {/* STEP 7: Photos */}
         {currentStep === 7 && (
           <View style={styles.stepCard}>
-            <Text style={styles.heading}>Photos / तस्वीरें</Text>
-            <Text style={styles.subheading}>Upload dynamic photos of the land. Minimum 2 photos are required, up to a maximum of 5.</Text>
+            <Text style={styles.heading}>Ground Photos / खेत की तस्वीरें</Text>
+            <Text style={styles.subheading}>Upload dynamic photos of the land. Minimum 1 photo is required, up to a maximum of 5.</Text>
             
             {errors.docs && <Text style={[styles.errorText, { marginBottom: 16 }]}>{errors.docs}</Text>}
 

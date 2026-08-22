@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
-import api from '../../src/api/apiClient';
+import api, { API_ROOT_URL } from '../../src/api/apiClient';
 import { useAuthStore } from '../../src/store/authStore';
 import { useLandStore } from '../../src/store/landStore';
 import { useCarbonStore } from '../../src/store/carbonStore';
@@ -514,7 +514,7 @@ export default function HomeScreen() {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return { uri: url };
     }
-    return { uri: `http://10.179.136.159:8000${url.startsWith('/') ? '' : '/'}${url}` };
+    return { uri: `${API_ROOT_URL}${url.startsWith('/') ? '' : '/'}${url}` };
   };
 
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);

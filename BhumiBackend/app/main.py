@@ -249,6 +249,8 @@ def create_app() -> FastAPI:
         upload_dir = Path(settings.LOCAL_UPLOAD_DIR)
         upload_dir.mkdir(parents=True, exist_ok=True)
         app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
+        if settings.API_PREFIX:
+            app.mount(f"{settings.API_PREFIX}/uploads", StaticFiles(directory=str(upload_dir)), name="api_uploads")
 
     banners_dir = Path("uploads/banners")
     banners_dir.mkdir(parents=True, exist_ok=True)

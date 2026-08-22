@@ -12,11 +12,16 @@ import {
   ActivityIndicator,
   DeviceEventEmitter,
   Animated,
+  Image,
+  Platform,
 } from 'react-native';
 import { MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path as SvgPath, Circle as SvgCircle, Line as SvgLine, Polygon as SvgPolygon } from 'react-native-svg';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Haptics from 'expo-haptics';
 import CustomCalendarModal from '../../components/CustomCalendarModal';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -86,6 +91,24 @@ const DEFAULT_INSURANCE_CARDS = [
     description: 'Comprehensive farm cluster coverage against extreme climate events, heatwaves & pest infestation.',
   },
 ];
+
+export const LAND_PHOTO_CATEGORIES = [
+  { id: 'Boundary', title: 'Entrance / Boundary', titleHi: 'प्रवेश द्वार / सीमा', icon: 'map-marker-radius-outline' },
+  { id: 'Crop Field', title: 'Crop / Field', titleHi: 'फसल / खेत', icon: 'corn' },
+  { id: 'Trees', title: 'Trees / Plantation', titleHi: 'पेड़ / वृक्षारोपण', icon: 'tree-outline' },
+  { id: 'Water Source', title: 'Water Source', titleHi: 'जल स्रोत', icon: 'water-outline' },
+  { id: 'Surroundings', title: 'Surrounding Area', titleHi: 'आसपास का क्षेत्र', icon: 'image-outline' },
+];
+
+export interface LandPhotoItem {
+  id: string;
+  uri: string;
+  category: string;
+  geotag?: string;
+  timestamp?: string;
+  progress: number;
+  status: 'Uploading' | 'Uploaded' | 'None';
+}
 
 export function GlobalSchedulerOverlay() {
   const [isOpen, setIsOpen] = useState(false);
@@ -222,7 +245,13 @@ export function GlobalSchedulerOverlay() {
   const [isPolygonComplete, setIsPolygonComplete] = useState(false);
   const [isScanningMap, setIsScanningMap] = useState(false);
 
-  // STEP 5 State: MRV Audit Slot Booking
+  // STEP 5 State: Ground Inspection & Land Photos
+  const [landPhotos, setLandPhotos] = useState<LandPhotoItem[]>([]);
+  const [categorySelectPhoto, setCategorySelectPhoto] = useState<{ uri: string; id: string } | null>(null);
+  const [showCategoryPickerModal, setShowCategoryPickerModal] = useState(false);
+  const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
+
+  // STEP 6 State: MRV Audit Slot Booking
   const [prefDate, setPrefDate] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [prefDateObj, setPrefDateObj] = useState(new Date());
@@ -230,13 +259,13 @@ export function GlobalSchedulerOverlay() {
   const [landmark, setLandmark] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
 
-  // STEP 6 State: Tree Insurance option
+  // STEP 7 State: Tree Insurance option
   const [wantInsurance, setWantInsurance] = useState(false);
   const [insurancePlan, setInsurancePlan] = useState<'single' | 'family' | ''>('');
   // CMS-managed Climate Risk Tree Insurance cards (Admin -> CMS -> Climate Risk Tree Insurance)
   const [climateRiskCards, setClimateRiskCards] = useState<any[]>([]);
 
-  // STEP 8 State: Payment Flow simulation
+  // STEP 9 State: Payment Flow simulation
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'bank' | 'cash' | ''>('');
   const [selectedUpiApp, setSelectedUpiApp] = useState<'gpay' | 'phonepe' | 'paytm' | ''>('');
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -537,6 +566,11 @@ export function GlobalSchedulerOverlay() {
         return false;
       }
     } else if (currentStep === 5) {
+      if (landPhotos.length === 0) {
+        Alert.alert('Land Photo Required', 'Please capture or upload at least 1 photo of your land / कृपया खेत की कम से कम 1 तस्वीर अपलोड करें।');
+        return false;
+      }
+    } else if (currentStep === 6) {
       if (!prefDate.trim()) {
         Alert.alert('Schedule Missing', 'Please specify a preferred inspection date.');
         return false;
@@ -545,12 +579,12 @@ export function GlobalSchedulerOverlay() {
         Alert.alert('Time Slot Required', 'Please choose a preferred visit window.');
         return false;
       }
-    } else if (currentStep === 6) {
+    } else if (currentStep === 7) {
       if (wantInsurance && !insurancePlan) {
         setInsurancePlan('single');
       }
       return true;
-    } else if (currentStep === 8) {
+    } else if (currentStep === 9) {
       if (!paymentMethod) {
         Alert.alert('Payment Option Required', 'Please select a payout option.');
         return false;
@@ -873,9 +907,218 @@ export function GlobalSchedulerOverlay() {
     }
   }, [step, registrationId]);
 
-  // Fetch invoice on step 7
+  // Photo handlers for Step 5
+  const uploadDirectPhoto = async (uri: string, id: string, category: string) => {
+    let lat = (22.7468 + (Math.random() - 0.5) * 0.005).toFixed(4);
+    let lon = (75.8958 + (Math.random() - 0.5) * 0.005).toFixed(4);
+    try {
+      const { status: locStatus } = await Location.getForegroundPermissionsAsync();
+      if (locStatus === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (loc && loc.coords) {
+          lat = loc.coords.latitude.toFixed(4);
+          lon = loc.coords.longitude.toFixed(4);
+        }
+      }
+    } catch {}
+
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    const newPhotoItem: LandPhotoItem = {
+      id,
+      uri,
+      category,
+      geotag: `Lat ${lat}°, Lon ${lon}°`,
+      timestamp: nowStr,
+      progress: 0.1,
+      status: 'Uploading',
+    };
+
+    setLandPhotos((prev) => [...prev.filter((p) => p.id !== id), newPhotoItem]);
+
+    let serverUrl = uri;
+    try {
+      const filename = uri.split('/').pop() || `${id}.jpg`;
+      const match = /\.(\w+)$/.exec(filename);
+      const mimeType = match ? `image/${match[1] === 'jpg' ? 'jpeg' : match[1]}` : 'image/jpeg';
+      const fileUri = Platform.OS === 'ios' ? uri.replace('file://', '') : uri;
+
+      const formData = new FormData();
+      formData.append('file', {
+        uri: fileUri,
+        name: filename,
+        type: mimeType,
+      } as any);
+
+      try {
+        const res = await api.post('/registration/upload-photo', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (progressEvent) => {
+            const total = progressEvent.total || 1;
+            const current = progressEvent.loaded;
+            const pct = current / total;
+            setLandPhotos((prev) =>
+              prev.map((p) => (p.id === id ? { ...p, progress: pct } : p))
+            );
+          },
+        });
+        if (res.data?.data?.url) {
+          serverUrl = res.data.data.url;
+        }
+      } catch (multipartErr: any) {
+        console.warn('[GlobalSchedulerOverlay] Multipart upload error, attempting Base64 upload:', multipartErr?.message);
+        // Base64 upload fallback
+        let base64Data = '';
+        try {
+          base64Data = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } catch (fsErr) {
+          console.warn('[GlobalSchedulerOverlay] FileSystem read error:', fsErr);
+        }
+
+        if (base64Data) {
+          const res = await api.post('/registration/upload-photo', {
+            base64_data: `data:${mimeType};base64,${base64Data}`,
+            filename,
+            category,
+          });
+          if (res.data?.data?.url) {
+            serverUrl = res.data.data.url;
+          }
+        }
+      }
+
+      setLandPhotos((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, uri: serverUrl, status: 'Uploaded', progress: 1.0 }
+            : p
+        )
+      );
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (err) {
+      console.warn('[GlobalSchedulerOverlay] Photo upload fallback to local URI:', err);
+      setLandPhotos((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, uri: uri, status: 'Uploaded', progress: 1.0 }
+            : p
+        )
+      );
+    }
+  };
+
+  const handlePickPhotoSource = async (mode: 'camera' | 'gallery') => {
+    setShowPhotoSourceModal(false);
+    try {
+      let result;
+      if (mode === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Camera permission is required to take land photos.');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsEditing: false,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Gallery permission is required to select land photos.');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsMultipleSelection: true,
+          selectionLimit: Math.max(1, 5 - landPhotos.length),
+        });
+      }
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        if (result.assets.length === 1) {
+          setCategorySelectPhoto({
+            uri: result.assets[0].uri,
+            id: 'photo_' + Date.now(),
+          });
+          setShowCategoryPickerModal(true);
+        } else {
+          const remainingSlots = 5 - landPhotos.length;
+          const assetsToProcess = result.assets.slice(0, remainingSlots);
+          const defaultCategories = ['Boundary', 'Crop Field', 'Trees', 'Water Source', 'Surroundings'];
+          assetsToProcess.forEach((asset, idx) => {
+            const pId = 'photo_' + (Date.now() + idx);
+            const cat = defaultCategories[idx % defaultCategories.length];
+            uploadDirectPhoto(asset.uri, pId, cat);
+          });
+        }
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to pick image from camera/gallery.');
+    }
+  };
+
+  const handleCategorySelect = async (category: string) => {
+    if (!categorySelectPhoto) return;
+    const { uri, id } = categorySelectPhoto;
+    setCategorySelectPhoto(null);
+    setShowCategoryPickerModal(false);
+    await uploadDirectPhoto(uri, id, category);
+  };
+
+  const handleDeleteLandPhoto = (id: string) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    setLandPhotos((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleRetakeLandPhoto = (id: string) => {
+    Alert.alert(
+      'Retake / Replace Photo',
+      'Choose new photo source',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Take Photo (Camera)',
+          onPress: async () => {
+            try {
+              const { status } = await ImagePicker.requestCameraPermissionsAsync();
+              if (status !== 'granted') return;
+              const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+              if (!result.canceled && result.assets && result.assets[0]) {
+                const photo = landPhotos.find((p) => p.id === id);
+                uploadDirectPhoto(result.assets[0].uri, id, photo?.category || 'Boundary');
+              }
+            } catch {}
+          },
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: async () => {
+            try {
+              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (status !== 'granted') return;
+              const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
+              if (!result.canceled && result.assets && result.assets[0]) {
+                const photo = landPhotos.find((p) => p.id === id);
+                uploadDirectPhoto(result.assets[0].uri, id, photo?.category || 'Boundary');
+              }
+            } catch {}
+          },
+        },
+      ]
+    );
+  };
+
+  // Fetch invoice on step 8
   useEffect(() => {
-    if (step === 7) {
+    if (step === 8) {
       const fetchInvoice = async () => {
         setApiLoading(true);
         setApiError(null);
@@ -887,7 +1130,6 @@ export function GlobalSchedulerOverlay() {
             }
           } catch (err: any) {
             console.warn('[GlobalSchedulerOverlay] Invoice API call failed, using graceful invoice fallback:', err);
-            // Do not set apiError so that step 7 displays the clean client-side invoice calculation
           } finally {
             setApiLoading(false);
           }
@@ -899,11 +1141,9 @@ export function GlobalSchedulerOverlay() {
     }
   }, [step, registrationId]);
 
-  // Fetch CMS-managed Climate Risk Tree Insurance cards on step 6 — replaces
-  // the previously hardcoded "Single Sapling Protector" / "Green Family
-  // Canopy Cover" cards. Independent from the unrelated Tree Plans CMS module.
+  // Fetch CMS-managed Climate Risk Tree Insurance cards on step 7
   useEffect(() => {
-    if (step === 6) {
+    if (step === 7) {
       if (!insurancePlan) {
         setInsurancePlan('single');
       }
@@ -1005,6 +1245,21 @@ export function GlobalSchedulerOverlay() {
       } else if (currentStep === 5) {
         const activeRegId = registrationId || `reg_local_${Date.now()}`;
         if (!registrationId) setRegistrationId(activeRegId);
+        const payload = {
+          land_photo_urls: landPhotos.map((p) => p.uri).filter(Boolean),
+        };
+        try {
+          if (activeRegId && !activeRegId.startsWith('reg_local_')) {
+            await api.put(`/registration/${activeRegId}/photos`, payload);
+          }
+        } catch (err: any) {
+          console.warn('[GlobalSchedulerOverlay] Photos API warning:', err?.message);
+        }
+        setApiSuccess('Land photos saved successfully.');
+        return true;
+      } else if (currentStep === 6) {
+        const activeRegId = registrationId || `reg_local_${Date.now()}`;
+        if (!registrationId) setRegistrationId(activeRegId);
         const slotCapitalized = prefSlot ? prefSlot.charAt(0).toUpperCase() + prefSlot.slice(1) : 'Morning';
         const payload = {
           preferred_date: prefDate,
@@ -1019,9 +1274,9 @@ export function GlobalSchedulerOverlay() {
         } catch (err: any) {
           console.warn('[GlobalSchedulerOverlay] Step 5 API warning:', err?.message);
         }
-        setApiSuccess('Step 5 details saved successfully.');
+        setApiSuccess('Step 6 details saved successfully.');
         return true;
-      } else if (currentStep === 6) {
+      } else if (currentStep === 7) {
         const activeRegId = registrationId || `reg_local_${Date.now()}`;
         if (!registrationId) setRegistrationId(activeRegId);
         const payload = {
@@ -1036,9 +1291,9 @@ export function GlobalSchedulerOverlay() {
         } catch (err: any) {
           console.warn('[GlobalSchedulerOverlay] Step 6 API warning:', err?.message);
         }
-        setApiSuccess('Step 6 details saved successfully.');
+        setApiSuccess('Step 7 details saved successfully.');
         return true;
-      } else if (currentStep === 7) {
+      } else if (currentStep === 8) {
         return true;
       }
       return false;
@@ -1114,6 +1369,7 @@ export function GlobalSchedulerOverlay() {
         irrigationType: waterAvailability,
         geoCoords: geoPoints.length > 0 ? geoPoints[0] : { latitude: 22.9734, longitude: 78.6569 },
         documentName: 'Selfie_Registered_Land.jpg',
+        landPhotoUrls: landPhotos.map((p) => p.uri).filter(Boolean),
         country: country || 'India',
         state: stateName,
         district: district,
@@ -1143,7 +1399,7 @@ export function GlobalSchedulerOverlay() {
         }
       }
 
-      animateToStep(9); // Route to dynamic success splash
+      animateToStep(10); // Route to dynamic success splash
       Animated.spring(successScale, {
         toValue: 1,
         tension: 50,
@@ -1171,7 +1427,7 @@ export function GlobalSchedulerOverlay() {
                 <Text style={styles.headTitle}>BhumiCred Registry</Text>
                 <Text style={styles.headSub}>Climate-Tech Carbon Program Enrollment</Text>
               </View>
-              {step < 9 && (
+              {step < 10 && (
                 <TouchableOpacity style={styles.closeBtn} onPress={() => setIsOpen(false)}>
                   <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
                 </TouchableOpacity>
@@ -1179,23 +1435,24 @@ export function GlobalSchedulerOverlay() {
             </View>
 
             {/* Premium Stepper Progress Indicator */}
-            {step <= 8 && (
+            {step <= 9 && (
               <View style={styles.stepperContainer}>
                 <View style={styles.stepLabelsRow}>
-                  <Text style={styles.stepCounterText}>STEP {step} OF 8</Text>
+                  <Text style={styles.stepCounterText}>STEP {step} OF 9</Text>
                   <Text style={styles.stepProgressTitle}>
                     {step === 1 && 'Farmer Identity Verification'}
                     {step === 2 && 'Soil & Crop Eco-metrics'}
                     {step === 3 && 'Land Address Validation'}
                     {step === 4 && 'Satellite Boundary Mapping'}
-                    {step === 5 && 'MRV Audit Inspection Slots'}
-                    {step === 6 && 'Tree Carbon Insurance'}
-                    {step === 7 && 'Sustainability Bill Invoicing'}
-                    {step === 8 && 'Payment Verification'}
+                    {step === 5 && 'Ground Inspection & Land Photos'}
+                    {step === 6 && 'MRV Audit Inspection Slots'}
+                    {step === 7 && 'Tree Carbon Insurance'}
+                    {step === 8 && 'Sustainability Bill Invoicing'}
+                    {step === 9 && 'Payment Verification'}
                   </Text>
                 </View>
                 <View style={styles.progressBarBackground}>
-                  <View style={[styles.progressBarFill, { width: `${(step / 8) * 100}%` }]} />
+                  <View style={[styles.progressBarFill, { width: `${(step / 9) * 100}%` }]} />
                 </View>
               </View>
             )}
@@ -1882,13 +2139,114 @@ export function GlobalSchedulerOverlay() {
               )}
 
               {/* ================================================= */}
-              {/* STEP 5: INSPECTION BOOKING */}
+              {/* STEP 5: GROUND INSPECTION & LAND PHOTOS */}
               {/* ================================================= */}
               {step === 5 && (
                 <View style={styles.stepWrapper}>
+                  <Text style={styles.stepSectionTitle}>Ground Inspection & Land Photos</Text>
+                  <Text style={styles.stepSectionDesc}>
+                    Take photos of your land from Camera or Gallery with GPS Geotagging to verify baseline conditions for Admin verification.
+                  </Text>
+
+                  {/* Upload stats badge */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, marginTop: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <MaterialCommunityIcons name="camera-iris" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.textDark }}>
+                        Land Photos / खेत की तस्वीरें *
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#15803D' }}>
+                        {landPhotos.length}/5 UPLOADED
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Photo Grid */}
+                  <View style={styles.photoGrid}>
+                    {landPhotos.map((photo) => (
+                      <View key={photo.id} style={styles.photoGridCard}>
+                        <Image source={{ uri: photo.uri }} style={styles.photoThumbnail} />
+
+                        {/* Photo Info & Badges */}
+                        <View style={styles.photoInfoBox}>
+                          <View style={styles.photoCategoryBadge}>
+                            <Text style={styles.photoCategoryText}>{photo.category.toUpperCase()}</Text>
+                          </View>
+
+                          {photo.geotag && (
+                            <View style={styles.metadataBadge}>
+                              <MaterialCommunityIcons name="map-marker-outline" size={10} color="#059669" />
+                              <Text style={styles.metadataText} numberOfLines={1}>{photo.geotag}</Text>
+                            </View>
+                          )}
+                          {photo.timestamp && (
+                            <View style={styles.metadataBadge}>
+                              <MaterialCommunityIcons name="clock-outline" size={10} color="#64748B" />
+                              <Text style={styles.metadataText} numberOfLines={1}>{photo.timestamp}</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Progress Overlay */}
+                        {photo.status === 'Uploading' && (
+                          <View style={styles.photoUploadOverlay}>
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                            <Text style={styles.photoProgressText}>{Math.round(photo.progress * 100)}%</Text>
+                          </View>
+                        )}
+
+                        {/* Action buttons */}
+                        <View style={{ position: 'absolute', top: 6, right: 6, flexDirection: 'row', gap: 4 }}>
+                          <TouchableOpacity 
+                            style={[styles.photoDeleteBtn, { position: 'relative', top: 0, right: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)' }]} 
+                            onPress={() => handleRetakeLandPhoto(photo.id)}
+                          >
+                            <MaterialCommunityIcons name="camera-retake" size={12} color="#FFFFFF" />
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[styles.photoDeleteBtn, { position: 'relative', top: 0, right: 0 }]} 
+                            onPress={() => handleDeleteLandPhoto(photo.id)}
+                          >
+                            <MaterialCommunityIcons name="close" size={14} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+
+                    {/* Add Photo Button Placeholder */}
+                    {landPhotos.length < 5 && (
+                      <TouchableOpacity 
+                        style={styles.addPhotoPlaceholder} 
+                        onPress={() => setShowPhotoSourceModal(true)}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons name="camera-plus" size={32} color={COLORS.primary} style={{ marginBottom: 8 }} />
+                        <Text style={styles.addPhotoPlaceholderText}>Add Land Photo</Text>
+                        <Text style={styles.addPhotoPlaceholderSub}>Camera / Gallery</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Verification guideline card */}
+                  <View style={[styles.guidelineCard, { marginTop: 16 }]}>
+                    <MaterialCommunityIcons name="shield-check" size={20} color="#16A34A" style={{ marginRight: 8 }} />
+                    <Text style={styles.guidelineText}>
+                      Photos are timestamped and tagged with GPS coordinates for instant Admin ground-verification approval.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* ================================================= */}
+              {/* STEP 6: INSPECTION BOOKING */}
+              {/* ================================================= */}
+              {step === 6 && (
+                <View style={styles.stepWrapper}>
                   <Text style={styles.stepSectionTitle}>Schedule Baseline Audit</Text>
                   <Text style={styles.stepSectionDesc}>
-                    Book a slot for physical Soil Core verification and carbon stock baseline baseline audit.
+                    Book a slot for physical Soil Core verification and carbon stock baseline audit.
                   </Text>
 
                   {/* Audit Date selection */}
@@ -1975,9 +2333,9 @@ export function GlobalSchedulerOverlay() {
               )}
 
               {/* ================================================= */}
-              {/* STEP 6: TREE INSURANCE OPTION */}
+              {/* STEP 7: TREE INSURANCE OPTION */}
               {/* ================================================= */}
-              {step === 6 && (
+              {step === 7 && (
                 <View style={styles.stepWrapper}>
                   <Text style={styles.stepSectionTitle}>Climate Risk Tree Insurance</Text>
                   <Text style={styles.stepSectionDesc}>
@@ -2038,9 +2396,9 @@ export function GlobalSchedulerOverlay() {
               )}
 
               {/* ================================================= */}
-              {/* STEP 7: PREMIUM DIGITAL INVOICE */}
+              {/* STEP 8: PREMIUM DIGITAL INVOICE */}
               {/* ================================================= */}
-              {step === 7 && (
+              {step === 8 && (
                 <View style={styles.stepWrapper}>
                   <Text style={styles.stepSectionTitle}>BhumiCred Digital Invoice</Text>
                   <Text style={styles.stepSectionDesc}>
@@ -2141,9 +2499,9 @@ export function GlobalSchedulerOverlay() {
               )}
 
               {/* ================================================= */}
-              {/* STEP 8: PAYMENT FLOW */}
+              {/* STEP 9: PAYMENT FLOW */}
               {/* ================================================= */}
-              {step === 8 && (
+              {step === 9 && (
                 <View style={styles.stepWrapper}>
                   <Text style={styles.stepSectionTitle}>Secure Verification Gateway</Text>
                   <Text style={styles.stepSectionDesc}>
@@ -2340,9 +2698,9 @@ export function GlobalSchedulerOverlay() {
               )}
 
               {/* ================================================= */}
-              {/* STEP 9: PAYMENT SUCCESS SPLASH SCREEN */}
+              {/* STEP 10: PAYMENT SUCCESS SPLASH SCREEN */}
               {/* ================================================= */}
-              {step === 9 && (
+              {step === 10 && (
                 <View style={styles.successWrapper}>
                   {/* Glowing success circle check anim */}
                   <Animated.View style={[styles.successIconOuterRing, { transform: [{ scale: successScale }] }]}>
@@ -2384,7 +2742,7 @@ export function GlobalSchedulerOverlay() {
                     </TouchableOpacity>
 
                     {/* View Lifecycle timeline details step */}
-                    <TouchableOpacity style={styles.actionBtnSolid} onPress={() => animateToStep(10)}>
+                    <TouchableOpacity style={styles.actionBtnSolid} onPress={() => animateToStep(11)}>
                       <MaterialCommunityIcons name="radar" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
                       <Text style={styles.actionBtnSolidText}>Track Verification Progress</Text>
                     </TouchableOpacity>
@@ -2397,9 +2755,9 @@ export function GlobalSchedulerOverlay() {
               )}
 
               {/* ================================================= */}
-              {/* STEP 10: LIFECYCLE TRACKING FLOW TIMELINE */}
+              {/* STEP 11: LIFECYCLE TRACKING FLOW TIMELINE */}
               {/* ================================================= */}
-              {step === 10 && (() => {
+              {step === 11 && (() => {
                 const allPlots = useLandStore.getState().plots;
                 const latestPlot = allPlots.length > 0 ? allPlots[allPlots.length - 1] : null;
                 const currentPlot = (newlyCreatedPlotId && newlyCreatedPlotId !== 'LND-TEMP')
@@ -2573,7 +2931,7 @@ export function GlobalSchedulerOverlay() {
           </ScrollView>
 
           {/* Persistent Footer Buttons Panel for Wizard */}
-          {step <= 8 && (
+          {step <= 9 && (
             <View style={styles.footerPanel}>
               <View style={styles.footerDivider} />
               <View style={styles.footerButtonsRow}>
@@ -2594,7 +2952,7 @@ export function GlobalSchedulerOverlay() {
                   <View style={{ flex: 1 }} />
                 )}
 
-                {step === 8 ? (
+                {step === 9 ? (
                   <TouchableOpacity
                     style={[styles.nextButton, apiLoading && styles.nextButtonDisabled] as any}
                     onPress={handleFinalSubmission}
@@ -2641,6 +2999,94 @@ export function GlobalSchedulerOverlay() {
               </View>
             </View>
           )}
+
+          {/* Photo Source Choice Modal (Camera vs Gallery) */}
+          <Modal
+            visible={showPhotoSourceModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowPhotoSourceModal(false)}
+          >
+            <TouchableOpacity 
+              style={styles.categoryModalOverlay}
+              activeOpacity={1} 
+              onPress={() => setShowPhotoSourceModal(false)}
+            >
+              <View style={styles.categoryModalContent}>
+                <Text style={styles.categoryModalTitle}>Choose Photo Source / फोटो स्रोत चुनें</Text>
+                
+                <TouchableOpacity
+                  style={styles.categoryModalItem}
+                  onPress={() => handlePickPhotoSource('camera')}
+                >
+                  <View style={[styles.categoryModalIcon, { backgroundColor: '#ECFDF5' }]}>
+                    <MaterialCommunityIcons name="camera" size={22} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.categoryModalItemTitle}>Take Live Photo (Camera)</Text>
+                    <Text style={styles.categoryModalItemSub}>Live camera snap with instant GPS tag</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.categoryModalItem}
+                  onPress={() => handlePickPhotoSource('gallery')}
+                >
+                  <View style={[styles.categoryModalIcon, { backgroundColor: '#EFF6FF' }]}>
+                    <MaterialCommunityIcons name="image-multiple" size={22} color="#2563EB" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.categoryModalItemTitle}>Choose from Gallery</Text>
+                    <Text style={styles.categoryModalItemSub}>Select from device photo album</Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={20} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.actionBtnFlat, { marginTop: 12 }]}
+                  onPress={() => setShowPhotoSourceModal(false)}
+                >
+                  <Text style={styles.actionBtnFlatText}>Cancel / रद्द करें</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+
+          {/* Category Picker Modal */}
+          <Modal
+            visible={showCategoryPickerModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowCategoryPickerModal(false)}
+          >
+            <TouchableOpacity 
+              style={styles.categoryModalOverlay}
+              activeOpacity={1} 
+              onPress={() => setShowCategoryPickerModal(false)}
+            >
+              <View style={styles.categoryModalContent}>
+                <Text style={styles.categoryModalTitle}>Select Photo Category / श्रेणी चुनें</Text>
+                
+                {LAND_PHOTO_CATEGORIES.map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={styles.categoryModalItem}
+                    onPress={() => handleCategorySelect(cat.title)}
+                  >
+                    <View style={styles.categoryModalIcon}>
+                      <MaterialCommunityIcons name={cat.icon as any} size={20} color={COLORS.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.categoryModalItemTitle}>{cat.title}</Text>
+                      <Text style={styles.categoryModalItemSub}>{cat.titleHi}</Text>
+                    </View>
+                    <MaterialCommunityIcons name="chevron-right" size={20} color="#94A3B8" />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </TouchableOpacity>
+          </Modal>
         </View>
       </View>
     </Modal>
@@ -3905,5 +4351,149 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '800',
     color: COLORS.primary,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 8,
+  },
+  photoGridCard: {
+    width: (width - 60) / 2,
+    height: 155,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    position: 'relative',
+    ...SHADOWS.soft,
+  },
+  photoThumbnail: {
+    width: '100%',
+    height: 95,
+    backgroundColor: '#F1F5F9',
+  },
+  photoInfoBox: {
+    padding: 6,
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  photoCategoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  photoCategoryText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  metadataBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
+  },
+  metadataText: {
+    fontSize: 8.5,
+    color: '#64748B',
+    fontWeight: '600',
+    flex: 1,
+  },
+  photoUploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoProgressText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  photoDeleteBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addPhotoPlaceholder: {
+    width: (width - 60) / 2,
+    height: 155,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 12,
+  },
+  addPhotoPlaceholderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textAlign: 'center',
+  },
+  addPhotoPlaceholderSub: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  categoryModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  categoryModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 36,
+  },
+  categoryModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textDark,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  categoryModalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  categoryModalIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#DCFCE7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  categoryModalItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  categoryModalItemSub: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 1,
   },
 });

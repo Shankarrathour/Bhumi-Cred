@@ -549,7 +549,7 @@ export const LandDetails = () => {
           const getFullMediaUrl = (url?: string | null) => {
             if (!url) return '';
             if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
-            const backendBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            const backendBase = (import.meta as any).env.VITE_API_BASE_URL || (import.meta as any).env.VITE_API_URL || 'http://localhost:8000';
             const cleanBase = backendBase.replace(/\/v1\/?$/, '').replace(/\/$/, '');
             return `${cleanBase}${url.startsWith('/') ? '' : '/'}${url}`;
           };

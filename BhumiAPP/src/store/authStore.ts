@@ -417,6 +417,18 @@ export const useAuthStore = create<AuthState>()(
             category: user.category ? user.category.toLowerCase() : undefined,
             education: user.education ? user.education.toLowerCase() : undefined,
             occupation: user.occupation || undefined,
+            state: user.state || undefined,
+            district: user.district || undefined,
+            tehsil: user.tehsil || undefined,
+            village: user.village || undefined,
+            city: user.city || undefined,
+            pincode: user.pincode || undefined,
+            gram_panchayat: user.gramPanchayat || undefined,
+            vikash_khand: user.vikashKhand || undefined,
+            full_address: user.fullAddress || undefined,
+            farmer_photo_url: user.farmerPhoto || undefined,
+            aadhaar_number: user.identityType === 'Aadhaar' ? user.identityNumber : undefined,
+            pan_number: user.identityType === 'PAN' ? user.identityNumber : undefined,
           };
           if (user.dob) {
             try {
@@ -455,10 +467,10 @@ export const useAuthStore = create<AuthState>()(
 
         if (user.identityNumber) {
           try {
-            const identityPayload =
+            const identityPayload: Record<string, any> =
               user.identityType === 'Aadhaar'
-                ? { aadhaar_number: user.identityNumber }
-                : { pan_number: user.identityNumber };
+                ? { aadhaar_number: user.identityNumber, is_aadhaar_verified: true }
+                : { pan_number: user.identityNumber, is_pan_verified: true };
             await api.put('/farmer/identity', identityPayload);
           } catch (err) {
             console.warn('[authStore] identity save failed:', err);

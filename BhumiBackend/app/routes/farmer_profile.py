@@ -171,7 +171,7 @@ async def get_land(
 )
 async def add_land_parcel(
     payload: CreateLandParcelRequest,
-    current_farmer: VerifiedFarmer,
+    current_farmer: CurrentFarmer,
     svc: FarmerProfileService = Depends(get_farmer_profile_service),
 ) -> SuccessResponse[LandParcelResponse]:
     data = await svc.add_land_parcel(str(current_farmer.id), payload)
@@ -186,7 +186,7 @@ async def add_land_parcel(
 async def update_land_parcel(
     parcel_id: str,
     payload: UpdateLandParcelRequest,
-    current_farmer: VerifiedFarmer,
+    current_farmer: CurrentFarmer,
     svc: FarmerProfileService = Depends(get_farmer_profile_service),
 ) -> SuccessResponse[LandParcelResponse]:
     data = await svc.update_land_parcel(str(current_farmer.id), parcel_id, payload)
@@ -200,7 +200,7 @@ async def update_land_parcel(
 )
 async def delete_land_parcel(
     parcel_id: str,
-    current_farmer: VerifiedFarmer,
+    current_farmer: CurrentFarmer,
     svc: FarmerProfileService = Depends(get_farmer_profile_service),
 ) -> MessageResponse:
     await svc.delete_land_parcel(str(current_farmer.id), parcel_id)

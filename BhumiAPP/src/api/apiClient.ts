@@ -1,17 +1,49 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 console.log("[apiClient] Module Start");
 
-// ── API Base URL ────────────────────────────────────────────────────────────
-// Physical device on same Wi-Fi → needs LAN IP (not localhost)
-// Current machine IP: 10.179.136.159
-const _FALLBACK_URL = 'http://10.179.136.159:8000/v1';
+// ── Dynamic API Base URL ───────────────────────────────────────────────────
+// Automatically detects the development machine's IP address from Expo Metro
+// so you never need to manually update IP addresses when Wi-Fi changes.
+function resolveApiBaseUrl(): string {
+  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
-const isTunnel = envUrl && (envUrl.includes('loca.lt') || envUrl.includes('localtunnel'));
-export const API_BASE_URL = (envUrl && !isTunnel) ? envUrl : _FALLBACK_URL;
+  // If envUrl is a remote cloud URL / domain (e.g. https://api.bhumicred.com)
+  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+    const isIpAddress = /^https?:\/\/\d+\.\d+\.\d+\.\d+/.test(envUrl);
+    if (!isIpAddress) {
+      return envUrl;
+    }
+  }
 
-console.log('[apiClient] API_BASE_URL:', API_BASE_URL);
+  // 1. Auto-detect Metro host IP from Expo Constants (works on physical devices & simulators)
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri ??
+    (Constants as any).manifest?.debuggerHost;
+
+  if (hostUri) {
+    const hostIp = hostUri.split(':')[0];
+    if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
+      return `http://${hostIp}:8000/v1`;
+    }
+  }
+
+  // 2. Android Emulator special alias (10.0.2.2 points to host PC)
+  if (Platform.OS === 'android' && (envUrl?.includes('localhost') || envUrl?.includes('127.0.0.1'))) {
+    return 'http://10.0.2.2:8000/v1';
+  }
+
+  // 3. Fallback
+  return envUrl || 'http://10.34.97.253:8000/v1';
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
+export const API_ROOT_URL = API_BASE_URL.replace(/\/v1\/?$/, '');
+
+console.log('[apiClient] API_BASE_URL resolved:', API_BASE_URL);
 
 // Module-level token state — avoids circular imports with authStore.
 let _accessToken: string | null = null;

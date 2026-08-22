@@ -10,7 +10,7 @@ from app.models.invoice import Invoice, InvoiceItemModel
 from app.models.audit_schedule import AuditSchedule
 from app.repositories.registration import BhumiCredRegistrationRepository, InvoiceRepository, AuditScheduleRepository
 from app.schemas.registration import (
-    Step1Request, Step2Request, Step3Request, Step4Request, Step5Request, Step6Request,
+    Step1Request, Step2Request, Step3Request, Step4Request, StepPhotosRequest, Step5Request, Step6Request,
     CalculatedArea, Step4Response, InvoiceResponse, InvoiceItem, SubmitRegistrationResponse,
     RegistrationResponse, GPSPoint
 )
@@ -214,7 +214,13 @@ class BhumiCredRegistrationService:
         reg.boundary_geojson = None
         reg.updated_at = datetime.now(timezone.utc)
         await self._registrations.save(reg)
-        return {"success": True, "message": "Boundary cleared successfully."}
+    async def process_step_photos(self, reg_id: str, payload: StepPhotosRequest) -> RegistrationResponse:
+        reg = await self.get_registration(reg_id)
+        reg.land_photo_urls = payload.land_photo_urls
+        reg.updated_at = datetime.now(timezone.utc)
+        await self._registrations.save(reg)
+        logger.info(f"Updated registration step photos ({len(payload.land_photo_urls)} photos) for ID: {reg.id}")
+        return self._build_registration_response(reg)
 
     async def process_step_5(self, reg_id: str, payload: Step5Request) -> RegistrationResponse:
         reg = await self.get_registration(reg_id)
@@ -411,6 +417,8 @@ class BhumiCredRegistrationService:
                 existing_parcel.state = reg.state or existing_parcel.state
                 existing_parcel.district = reg.district or existing_parcel.district
                 existing_parcel.village = reg.village or existing_parcel.village
+                if reg.land_photo_urls:
+                    existing_parcel.land_photo_urls = reg.land_photo_urls
                 existing_parcel.updated_at = datetime.now(timezone.utc)
                 await existing_parcel.save()
                 logger.info(f"Updated existing LandParcel for submitted registration: {reg_number}")
@@ -431,6 +439,7 @@ class BhumiCredRegistrationService:
                     boundary_polygon=coords_list,
                     tree_stock_count=reg.tree_stock_count or 0,
                     plantation_area_acres=reg.plantation_area or 0.0,
+                    land_photo_urls=reg.land_photo_urls or [],
                     verification_status=LandVerificationStatus.PENDING,
                     is_active=True,
                     created_at=datetime.now(timezone.utc),
@@ -512,6 +521,7 @@ class BhumiCredRegistrationService:
                 acre=reg.calculated_area.acre,
                 hectare=reg.calculated_area.hectare
             ) if reg.calculated_area else None,
+            land_photo_urls=reg.land_photo_urls,
             preferred_date=reg.preferred_date,
             preferred_time_slot=reg.preferred_time_slot,
             landmark=reg.landmark,

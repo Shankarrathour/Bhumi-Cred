@@ -252,6 +252,37 @@ class FarmerProfileService:
         farmer = await self._get_farmer(farmer_id)
         for field, value in data.model_dump(exclude_none=True).items():
             setattr(farmer, field, value)
+
+        # Sync current_address embedded sub-document if any address field is present
+        address_keys = ["state", "district", "tehsil", "village", "city", "pincode", "gram_panchayat", "vikash_khand", "full_address"]
+        if any(getattr(data, k, None) is not None for k in address_keys):
+            from app.models.farmer import Address as EmbeddedAddress
+            farmer.current_address = EmbeddedAddress(
+                state=farmer.state,
+                district=farmer.district,
+                tehsil=farmer.tehsil,
+                village=farmer.village,
+                city=farmer.city,
+                pincode=farmer.pincode,
+                gram_panchayat=farmer.gram_panchayat,
+                block=farmer.vikash_khand,
+                full_address=farmer.full_address,
+            )
+
+        # Sync identity_details embedded sub-document
+        if data.aadhaar_number or data.pan_number or data.id_proof_url:
+            from app.models.farmer import IdentityDetails
+            if not farmer.identity_details:
+                farmer.identity_details = IdentityDetails()
+            if data.aadhaar_number:
+                farmer.identity_details.aadhaar_number = data.aadhaar_number
+                farmer.identity_details.is_aadhaar_verified = True
+            if data.pan_number:
+                farmer.identity_details.pan_number = data.pan_number
+                farmer.identity_details.is_pan_verified = True
+            if data.id_proof_url:
+                farmer.identity_details.aadhaar_url = data.id_proof_url
+
         farmer.onboarding_completed = self._check_onboarding(farmer)
         farmer.updated_at = datetime.now(timezone.utc)
         await farmer.save()
@@ -324,20 +355,33 @@ class FarmerProfileService:
         self, farmer_id: str, data: UpdateAddressRequest
     ) -> AddressResponse:
         farmer = await self._get_farmer(farmer_id)
+        from app.models.farmer import Address as EmbeddedAddress
 
         if data.current_address is not None:
             ca = data.current_address
-            farmer.state = ca.state
-            farmer.district = ca.district
-            farmer.tehsil = ca.tehsil
-            farmer.village = ca.village
-            farmer.city = ca.city
-            farmer.pincode = ca.pincode
-            farmer.full_address = ca.full_address
+            if ca.state is not None: farmer.state = ca.state
+            if ca.district is not None: farmer.district = ca.district
+            if ca.tehsil is not None: farmer.tehsil = ca.tehsil
+            if ca.village is not None: farmer.village = ca.village
+            if ca.city is not None: farmer.city = ca.city
+            if ca.pincode is not None: farmer.pincode = ca.pincode
+            if ca.full_address is not None: farmer.full_address = ca.full_address
             if ca.gram_panchayat is not None:
                 farmer.gram_panchayat = ca.gram_panchayat
             if ca.vikash_khand is not None:
                 farmer.vikash_khand = ca.vikash_khand
+
+            farmer.current_address = EmbeddedAddress(
+                state=farmer.state,
+                district=farmer.district,
+                tehsil=farmer.tehsil,
+                village=farmer.village,
+                city=farmer.city,
+                pincode=farmer.pincode,
+                gram_panchayat=farmer.gram_panchayat,
+                block=farmer.vikash_khand,
+                full_address=farmer.full_address,
+            )
 
         if data.permanent_address is not None:
             pa = data.permanent_address
@@ -348,6 +392,8 @@ class FarmerProfileService:
                 village=pa.village,
                 city=pa.city,
                 pincode=pa.pincode,
+                gram_panchayat=pa.gram_panchayat,
+                block=pa.vikash_khand,
                 full_address=pa.full_address,
             )
 

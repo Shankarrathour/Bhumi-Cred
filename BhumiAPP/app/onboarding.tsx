@@ -15,7 +15,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isValidEmail, isNonEmptyStr, isValidAadhaar, isValidPAN, isValidDate, isOnlyLettersAndSpaces, sanitizeLettersOnly } from '../src/utils/validation';
 import AutocompleteDropdown from '../components/AutocompleteDropdown';
 import CustomCalendarModal from '../components/CustomCalendarModal';
-import { LOCATION_DATA, COUNTRIES_LIST, getTehsilsForDistrict, getVikasKhandsForDistrict, getGramPanchayatsForDistrict, getVillagesForDistrict } from '../src/data/locations';
+import { 
+  LOCATION_DATA, 
+  COUNTRIES_LIST, 
+  getTehsilsForDistrict, 
+  getVikasKhandsForDistrict, 
+  getGramPanchayatsForDistrict, 
+  getVillagesForDistrict,
+  getCitiesForDistrict,
+  resolveLocationPincodeAndCity,
+  fetchPostalPincodeData,
+} from '../src/data/locations';
 
 
 
@@ -77,10 +87,10 @@ export default function OnboardingScreen() {
   const [availableDistricts, setAvailableDistricts] = useState<string[]>([]);
   const [availableCities, setAvailableCities] = useState<string[]>([]);
   
-  const availableVikasKhands = React.useMemo(() => getVikasKhandsForDistrict(district), [district]);
-  const availableGramPanchayats = React.useMemo(() => getGramPanchayatsForDistrict(district), [district]);
-  const availableVillages = React.useMemo(() => getVillagesForDistrict(district), [district]);
   const availableTehsils = React.useMemo(() => getTehsilsForDistrict(district), [district]);
+  const availableVikasKhands = React.useMemo(() => getVikasKhandsForDistrict(district, tehsil), [district, tehsil]);
+  const availableGramPanchayats = React.useMemo(() => getGramPanchayatsForDistrict(district, tehsil), [district, tehsil]);
+  const availableVillages = React.useMemo(() => getVillagesForDistrict(district, tehsil, gramPanchayat), [district, tehsil, gramPanchayat]);
 
   useEffect(() => {
     if (country && LOCATION_DATA[country]) {
@@ -99,12 +109,90 @@ export default function OnboardingScreen() {
   }, [country, stateName]);
 
   useEffect(() => {
-    if (country && stateName && district && LOCATION_DATA[country]?.[stateName]?.[district]) {
+    if (district) {
+      const cities = getCitiesForDistrict(district, tehsil);
+      setAvailableCities(cities);
+    } else if (country && stateName && district && LOCATION_DATA[country]?.[stateName]?.[district]) {
       setAvailableCities(LOCATION_DATA[country][stateName][district]);
     } else {
       setAvailableCities([]);
     }
-  }, [country, stateName, district]);
+  }, [country, stateName, district, tehsil]);
+
+  const handleStateChange = (val: string) => {
+    setStateName(sanitizeLettersOnly(val));
+    setDistrict('');
+    setTehsil('');
+    setVikashKhand('');
+    setGramPanchayat('');
+    setVillage('');
+    setCity('');
+    setPincode('');
+    setErrors(prev => ({ ...prev, stateName: '' }));
+  };
+
+  const handleDistrictChange = (val: string) => {
+    const cleanDist = sanitizeLettersOnly(val);
+    setDistrict(cleanDist);
+    setTehsil('');
+    setVikashKhand('');
+    setGramPanchayat('');
+    setVillage('');
+    setCity('');
+    setPincode('');
+    setErrors(prev => ({ ...prev, district: '' }));
+  };
+
+  const handleTehsilChange = (val: string) => {
+    const cleanTehsil = sanitizeLettersOnly(val);
+    setTehsil(cleanTehsil);
+    setGramPanchayat('');
+    setVillage('');
+    setErrors(prev => ({ ...prev, tehsil: '' }));
+
+    const khands = getVikasKhandsForDistrict(district, cleanTehsil);
+    if (khands.length > 0) {
+      setVikashKhand(khands[0]);
+    }
+    const resolved = resolveLocationPincodeAndCity(district, cleanTehsil);
+    if (resolved.city && !city) setCity(resolved.city);
+    if (resolved.pincode && !pincode) setPincode(resolved.pincode);
+  };
+
+  const handleGramPanchayatChange = (val: string) => {
+    setGramPanchayat(sanitizeLettersOnly(val));
+    setVillage('');
+    setErrors(prev => ({ ...prev, gramPanchayat: '' }));
+  };
+
+  const handleVillageChange = (val: string) => {
+    const cleanVil = sanitizeLettersOnly(val);
+    setVillage(cleanVil);
+    setErrors(prev => ({ ...prev, village: '' }));
+
+    const resolved = resolveLocationPincodeAndCity(district, tehsil, cleanVil);
+    if (resolved.city) setCity(resolved.city);
+    if (resolved.pincode) setPincode(resolved.pincode);
+  };
+
+  const handlePincodeChange = async (val: string) => {
+    const cleanPin = val.replace(/[^0-9]/g, '');
+    setPincode(cleanPin);
+    setErrors(prev => ({ ...prev, pincode: '' }));
+
+    if (cleanPin.length === 6) {
+      try {
+        const postOffices = await fetchPostalPincodeData(cleanPin);
+        if (postOffices && postOffices.length > 0) {
+          const po = postOffices[0];
+          if (!district && po.District) setDistrict(po.District);
+          if (!stateName && po.State) setStateName(po.State);
+          if (!city && (po.Division || po.District || po.Name)) setCity(po.Division || po.District || po.Name);
+          if (!tehsil && po.Block && po.Block !== 'None') setTehsil(po.Block);
+        }
+      } catch {}
+    }
+  };
 
   // Fetch fresh verification status from backend whenever step 4 (result screen) is shown.
   useEffect(() => {
@@ -275,6 +363,30 @@ export default function OnboardingScreen() {
         return;
       }
       updateOnboardingData({ fullName: fullName.trim(), fatherName: fatherName.trim(), dob, gender, email });
+      
+      // Auto-save Step 1 to backend
+      try {
+        const step1Payload: Record<string, any> = {
+          full_name: fullName.trim(),
+          father_name: fatherName.trim(),
+          gender: gender ? gender.toLowerCase() : undefined,
+          email: email.trim() || undefined,
+        };
+        if (dob) {
+          try {
+            if (dob.includes('/')) {
+              const [d, m, y] = dob.split('/');
+              step1Payload.dob = new Date(Number(y), Number(m) - 1, Number(d)).toISOString();
+            } else {
+              step1Payload.dob = new Date(dob).toISOString();
+            }
+          } catch {}
+        }
+        api.put('/farmer/profile', step1Payload).catch(err => {
+          console.warn('[onboarding] Step 1 auto-save notice:', err?.response?.data || err?.message);
+        });
+      } catch {}
+
       setOnboardingStep(2);
     } 
     else if (currentStep === 2) {
@@ -320,6 +432,29 @@ export default function OnboardingScreen() {
       updateOnboardingData({ 
         state: stateName, district, tehsil, village, city, country, gramPanchayat, vikashKhand, fullAddress, pincode 
       });
+
+      // Auto-save Step 2 to backend
+      try {
+        const addressObj = {
+          state: stateName,
+          district,
+          tehsil,
+          village,
+          city,
+          country,
+          gram_panchayat: gramPanchayat,
+          vikash_khand: vikashKhand,
+          full_address: fullAddress,
+          pincode,
+        };
+        api.put('/farmer/address', { current_address: addressObj }).catch(err => {
+          console.warn('[onboarding] Step 2 address auto-save notice:', err?.response?.data || err?.message);
+        });
+        api.put('/farmer/profile', addressObj).catch(err => {
+          console.warn('[onboarding] Step 2 profile auto-save notice:', err?.response?.data || err?.message);
+        });
+      } catch {}
+
       setOnboardingStep(3);
     } 
     else if (currentStep === 3) {
@@ -598,60 +733,60 @@ export default function OnboardingScreen() {
               <Text style={styles.heading}>Address / पते का विवरण</Text>
               <Text style={styles.subheading}>Specify farm district locations to calculate carbon indices.</Text>
               
-              <View style={[styles.dualInputsRow, { zIndex: 10 }]}>
-                <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 10 }]} onLayout={(e) => fieldPositions.current['country'] = e.nativeEvent.layout.y}>
+              <View style={[styles.dualInputsRow, { zIndex: 12 }]}>
+                <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 12 }]} onLayout={(e) => fieldPositions.current['country'] = e.nativeEvent.layout.y}>
                   <Text style={styles.label}>Country / देश *</Text>
-                  <AutocompleteDropdown data={COUNTRIES_LIST} value={country} onChangeText={(val) => { setCountry(sanitizeLettersOnly(val)); setStateName(''); setDistrict(''); setCity(''); setErrors(prev => ({ ...prev, country: '' })); }} placeholder="e.g. India" style={errors.country ? styles.inputError : {}} closeTrigger={closeDropdownsTrigger} />
+                  <AutocompleteDropdown data={COUNTRIES_LIST} value={country} onChangeText={(val) => { setCountry(sanitizeLettersOnly(val)); setStateName(''); setDistrict(''); setTehsil(''); setVikashKhand(''); setGramPanchayat(''); setVillage(''); setCity(''); setPincode(''); setErrors(prev => ({ ...prev, country: '' })); }} placeholder="e.g. India" style={errors.country ? styles.inputError : {}} closeTrigger={closeDropdownsTrigger} />
                   {errors.country && <Text style={styles.errorText}>{errors.country}</Text>}
                 </View>
-                <View style={[styles.formField, { flex: 1, zIndex: 10 }]} onLayout={(e) => fieldPositions.current['stateName'] = e.nativeEvent.layout.y}>
+                <View style={[styles.formField, { flex: 1, zIndex: 12 }]} onLayout={(e) => fieldPositions.current['stateName'] = e.nativeEvent.layout.y}>
                   <Text style={styles.label}>State / राज्य *</Text>
-                  <AutocompleteDropdown data={availableStates} value={stateName} onChangeText={(val) => { setStateName(sanitizeLettersOnly(val)); setDistrict(''); setCity(''); setErrors(prev => ({ ...prev, stateName: '' })); }} placeholder="e.g. Madhya Pradesh" style={errors.stateName ? styles.inputError : {}} closeTrigger={closeDropdownsTrigger} />
+                  <AutocompleteDropdown data={availableStates} value={stateName} onChangeText={handleStateChange} placeholder="e.g. Madhya Pradesh" style={errors.stateName ? styles.inputError : {}} closeTrigger={closeDropdownsTrigger} />
                   {errors.stateName && <Text style={styles.errorText}>{errors.stateName}</Text>}
                 </View>
               </View>
 
-              <View style={[styles.dualInputsRow, { zIndex: 9 }]}>
-                <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 9 }]} onLayout={(e) => fieldPositions.current['district'] = e.nativeEvent.layout.y}>
+              <View style={[styles.dualInputsRow, { zIndex: 11 }]}>
+                <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 11 }]} onLayout={(e) => fieldPositions.current['district'] = e.nativeEvent.layout.y}>
                   <Text style={styles.label}>District / जिला *</Text>
-                  <AutocompleteDropdown data={availableDistricts} value={district} onChangeText={(val) => { setDistrict(sanitizeLettersOnly(val)); setCity(''); setErrors(prev => ({ ...prev, district: '' })); }} placeholder="e.g. Sehore" style={errors.district ? styles.inputError : {}} closeTrigger={closeDropdownsTrigger} />
+                  <AutocompleteDropdown data={availableDistricts} value={district} onChangeText={handleDistrictChange} placeholder="e.g. Anuppur" style={errors.district ? styles.inputError : {}} closeTrigger={closeDropdownsTrigger} />
                   {errors.district && <Text style={styles.errorText}>{errors.district}</Text>}
                 </View>
-                <View style={[styles.formField, { flex: 1, zIndex: 9 }]} onLayout={(e) => fieldPositions.current['city'] = e.nativeEvent.layout.y}>
-                  <Text style={styles.label}>City / शहर *</Text>
-                  <AutocompleteDropdown data={availableCities} value={city} onChangeText={(val) => { setCity(sanitizeLettersOnly(val)); setErrors(prev => ({ ...prev, city: '' })); }} placeholder="e.g. Bhopal" style={errors.city ? styles.inputError : {}} closeTrigger={closeDropdownsTrigger} />
-                  {errors.city && <Text style={styles.errorText}>{errors.city}</Text>}
+                <View style={[styles.formField, { flex: 1, zIndex: 11 }]} onLayout={(e) => fieldPositions.current['tehsil'] = e.nativeEvent.layout.y}>
+                  <Text style={styles.label}>Tehsil / तहसील *</Text>
+                  <AutocompleteDropdown data={availableTehsils} value={tehsil} onChangeText={handleTehsilChange} placeholder="e.g. Jaithari" style={errors.tehsil ? styles.inputError : {}} closeTrigger={closeDropdownsTrigger} />
+                  {errors.tehsil && <Text style={styles.errorText}>{errors.tehsil}</Text>}
                 </View>
               </View>
 
-              <View style={[styles.dualInputsRow, { zIndex: 8 }]}>
-                <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 8 }]} onLayout={(e) => fieldPositions.current['gramPanchayat'] = e.nativeEvent.layout.y}>
-                  <Text style={styles.label}>Gram Panchayat / ग्राम पंचायत *</Text>
-                  <AutocompleteDropdown data={availableGramPanchayats} value={gramPanchayat} onChangeText={(val) => { setGramPanchayat(sanitizeLettersOnly(val)); setErrors(prev => ({ ...prev, gramPanchayat: '' })); }} placeholder="Panchayat" closeTrigger={closeDropdownsTrigger} style={errors.gramPanchayat ? styles.inputError : {}} />
-                  {errors.gramPanchayat && <Text style={styles.errorText}>{errors.gramPanchayat}</Text>}
-                </View>
-                <View style={[styles.formField, { flex: 1, zIndex: 8 }]} onLayout={(e) => fieldPositions.current['vikashKhand'] = e.nativeEvent.layout.y}>
+              <View style={[styles.dualInputsRow, { zIndex: 10 }]}>
+                <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 10 }]} onLayout={(e) => fieldPositions.current['vikashKhand'] = e.nativeEvent.layout.y}>
                   <Text style={styles.label}>Vikas Khand / विकास खंड *</Text>
-                  <AutocompleteDropdown data={availableVikasKhands} value={vikashKhand} onChangeText={(val) => { setVikashKhand(sanitizeLettersOnly(val)); setErrors(prev => ({ ...prev, vikashKhand: '' })); }} placeholder="Vikash Khand" closeTrigger={closeDropdownsTrigger} style={errors.vikashKhand ? styles.inputError : {}} />
+                  <AutocompleteDropdown data={availableVikasKhands} value={vikashKhand} onChangeText={(val) => { setVikashKhand(sanitizeLettersOnly(val)); setErrors(prev => ({ ...prev, vikashKhand: '' })); }} placeholder="e.g. Jaithari Vikas Khand" closeTrigger={closeDropdownsTrigger} style={errors.vikashKhand ? styles.inputError : {}} />
                   {errors.vikashKhand && <Text style={styles.errorText}>{errors.vikashKhand}</Text>}
                 </View>
+                <View style={[styles.formField, { flex: 1, zIndex: 10 }]} onLayout={(e) => fieldPositions.current['gramPanchayat'] = e.nativeEvent.layout.y}>
+                  <Text style={styles.label}>Gram Panchayat / ग्राम पंचायत *</Text>
+                  <AutocompleteDropdown data={availableGramPanchayats} value={gramPanchayat} onChangeText={handleGramPanchayatChange} placeholder="Panchayat" closeTrigger={closeDropdownsTrigger} style={errors.gramPanchayat ? styles.inputError : {}} />
+                  {errors.gramPanchayat && <Text style={styles.errorText}>{errors.gramPanchayat}</Text>}
+                </View>
               </View>
 
-              <View style={[styles.formField, { zIndex: 7 }]} onLayout={(e) => fieldPositions.current['village'] = e.nativeEvent.layout.y}>
+              <View style={[styles.formField, { zIndex: 9 }]} onLayout={(e) => fieldPositions.current['village'] = e.nativeEvent.layout.y}>
                 <Text style={styles.label}>Village / गांव *</Text>
-                <AutocompleteDropdown data={availableVillages} value={village} onChangeText={(val) => { setVillage(sanitizeLettersOnly(val)); setErrors(prev => ({ ...prev, village: '' })); }} placeholder="Village name" closeTrigger={closeDropdownsTrigger} style={errors.village ? styles.inputError : {}} />
+                <AutocompleteDropdown data={availableVillages} value={village} onChangeText={handleVillageChange} placeholder="Village name" closeTrigger={closeDropdownsTrigger} style={errors.village ? styles.inputError : {}} />
                 {errors.village && <Text style={styles.errorText}>{errors.village}</Text>}
               </View>
 
-              <View style={[styles.dualInputsRow, { zIndex: 6 }]}>
-                <View style={[styles.formField, { flex: 1, marginRight: 10 }]} onLayout={(e) => fieldPositions.current['tehsil'] = e.nativeEvent.layout.y}>
-                  <Text style={styles.label}>Tehsil / तहसील *</Text>
-                  <TextInput style={[styles.input, errors.tehsil && styles.inputError]} placeholder="e.g. Jaithari" placeholderTextColor="#64748B" value={tehsil} onChangeText={(val) => { setTehsil(sanitizeLettersOnly(val)); setErrors(prev => ({ ...prev, tehsil: '' })); }} />
-                  {errors.tehsil && <Text style={styles.errorText}>{errors.tehsil}</Text>}
+              <View style={[styles.dualInputsRow, { zIndex: 8 }]}>
+                <View style={[styles.formField, { flex: 1, marginRight: 10, zIndex: 8 }]} onLayout={(e) => fieldPositions.current['city'] = e.nativeEvent.layout.y}>
+                  <Text style={styles.label}>City / शहर *</Text>
+                  <AutocompleteDropdown data={availableCities} value={city} onChangeText={(val) => { setCity(sanitizeLettersOnly(val)); setErrors(prev => ({ ...prev, city: '' })); }} placeholder="e.g. Jaithari" style={errors.city ? styles.inputError : {}} closeTrigger={closeDropdownsTrigger} />
+                  {errors.city && <Text style={styles.errorText}>{errors.city}</Text>}
                 </View>
                 <View style={[styles.formField, { flex: 1 }]} onLayout={(e) => fieldPositions.current['pincode'] = e.nativeEvent.layout.y}>
                   <Text style={styles.label}>PIN Code / पिनकोड *</Text>
-                  <TextInput style={[styles.input, errors.pincode && styles.inputError]} placeholder="e.g. 484224" placeholderTextColor="#64748B" value={pincode} onChangeText={(val) => { setPincode(val.replace(/[^0-9]/g, '')); setErrors(prev => ({ ...prev, pincode: '' })); }} keyboardType="numeric" maxLength={6} />
+                  <TextInput style={[styles.input, errors.pincode && styles.inputError]} placeholder="e.g. 484330" placeholderTextColor="#64748B" value={pincode} onChangeText={handlePincodeChange} keyboardType="numeric" maxLength={6} />
                   {errors.pincode && <Text style={styles.errorText}>{errors.pincode}</Text>}
                 </View>
               </View>

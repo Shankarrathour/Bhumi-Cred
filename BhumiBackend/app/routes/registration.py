@@ -1,16 +1,76 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status, Request
 from typing import Optional
+import base64
+import uuid
+from pathlib import Path
 
+from app.config.settings import settings
 from app.dependencies.auth import CurrentFarmer
 from app.dependencies.services import get_registration_service
 from app.schemas.common import SuccessResponse
 from app.schemas.registration import (
-    Step1Request, Step2Request, Step3Request, Step4Request, Step5Request, Step6Request,
-    Step4Response, InvoiceResponse, SubmitRegistrationResponse, RegistrationResponse
+    Step1Request, Step2Request, Step3Request, Step4Request, StepPhotosRequest,
+    PhotoUploadBase64Request, RegistrationPhotoUploadResponse,
+    Step5Request, Step6Request, Step4Response, InvoiceResponse, SubmitRegistrationResponse, RegistrationResponse
 )
 from app.services.registration import BhumiCredRegistrationService
+from app.utils.upload import upload_file, ALLOWED_IMAGE_TYPES, MAX_PHOTO_BYTES
 
 router = APIRouter(prefix="/registration", tags=["BhumiCred Registry Registration"])
+
+@router.post(
+    "/upload-photo",
+    response_model=SuccessResponse[RegistrationPhotoUploadResponse],
+    summary="Upload Land Photo for Registration (Multipart or Base64)",
+)
+async def upload_registration_photo(
+    request: Request,
+) -> SuccessResponse[RegistrationPhotoUploadResponse]:
+    content_type = request.headers.get("content-type", "")
+    url = ""
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        file_obj = form.get("file")
+        if file_obj and hasattr(file_obj, "read"):
+            url = await upload_file(
+                file_obj,
+                folder="farmers/land_photos",
+                allowed_types=ALLOWED_IMAGE_TYPES,
+                max_bytes=MAX_PHOTO_BYTES,
+            )
+        else:
+            from app.core.exceptions import BadRequestException
+            raise BadRequestException("No valid file found in multipart upload.")
+    else:
+        try:
+            body = await request.json()
+            b64_data = body.get("base64_data") or body.get("image_base64")
+            if not b64_data:
+                from app.core.exceptions import BadRequestException
+                raise BadRequestException("No image file or base64_data provided.")
+            
+            if "," in b64_data:
+                b64_data = b64_data.split(",", 1)[1]
+            
+            img_bytes = base64.b64decode(b64_data)
+            photo_id = uuid.uuid4().hex
+            ext = "jpg"
+            key = f"farmers/land_photos/{photo_id}.{ext}"
+            dest = Path(settings.LOCAL_UPLOAD_DIR) / key
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(img_bytes)
+            url = f"/uploads/{key}"
+        except Exception as e:
+            from app.core.exceptions import BadRequestException
+            raise BadRequestException(f"Failed to process image upload: {str(e)}")
+
+    if not url.startswith("http") and not url.startswith("/"):
+        url = f"/{url}"
+
+    return SuccessResponse(
+        message="Land photo uploaded successfully.",
+        data=RegistrationPhotoUploadResponse(url=url, message="Photo uploaded successfully."),
+    )
 
 @router.post(
     "/step-1",
@@ -89,6 +149,20 @@ async def delete_step_4(
     svc: BhumiCredRegistrationService = Depends(get_registration_service),
 ) -> dict:
     return await svc.clear_step_4_boundary(registration_id)
+
+@router.put(
+    "/{registration_id}/photos",
+    response_model=SuccessResponse[RegistrationResponse],
+    summary="Upload & save land ground photos",
+)
+async def save_photos(
+    registration_id: str,
+    payload: StepPhotosRequest,
+    current_farmer: CurrentFarmer,
+    svc: BhumiCredRegistrationService = Depends(get_registration_service),
+) -> SuccessResponse[RegistrationResponse]:
+    data = await svc.process_step_photos(registration_id, payload)
+    return SuccessResponse(message="Land photos saved successfully.", data=data)
 
 @router.put(
     "/{registration_id}/step-5",
