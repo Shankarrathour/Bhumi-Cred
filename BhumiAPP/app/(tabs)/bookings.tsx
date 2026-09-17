@@ -5,6 +5,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
 import { SevaBotModal } from '../../src/components/SevaBotModal';
+import { useAuthStore } from '../../src/store/authStore';
+import { GovtSoilTestingView } from '../../src/components/GovtSoilTestingView';
 
 const MOCK_BOOKINGS = [
   {
@@ -38,8 +40,13 @@ const MOCK_BOOKINGS = [
 
 export default function BookingsScreen() {
   const router = useRouter();
+  const role = useAuthStore((state) => state.role);
   const [activeTab, setActiveTab] = useState('upcoming');
   const [isBotVisible, setBotVisible] = useState(false);
+
+  if (role === 'govt_body') {
+    return <GovtSoilTestingView />;
+  }
 
   const filteredBookings = MOCK_BOOKINGS.filter(b => 
     activeTab === 'upcoming' ? b.status === 'Upcoming' : b.status !== 'Upcoming'

@@ -14,6 +14,8 @@ import { ProductSkeleton } from '../../src/components/SkeletonLoader';
 import { EmptyState } from '../../src/components/EmptyState';
 import { SuccessOverlay } from '../../src/components/SuccessOverlay';
 import { AmbientEcoBackground } from '../../src/components/AmbientEcoBackground';
+import { GovtMarketplaceView } from '../../src/components/GovtMarketplaceView';
+import AppSafeArea from '../../src/components/AppSafeArea';
 
 const { width, height } = Dimensions.get('window');
 
@@ -72,7 +74,18 @@ const getOrderStatusDetails = (status: string) => {
 };
 
 export default function MarketplaceScreen() {
+  const role = useAuthStore((state) => state.role);
+
+  if (role === 'govt_body') {
+    return (
+      <AppSafeArea edges={['top']}>
+        <GovtMarketplaceView />
+      </AppSafeArea>
+    );
+  }
+
   // Zustand store
+
   const categories = useMarketplaceStore((state) => state.categories);
   const fetchCategories = useMarketplaceStore((state) => state.fetchCategories);
   const fetchWishlist = useMarketplaceStore((state) => state.fetchWishlist);

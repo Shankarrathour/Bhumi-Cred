@@ -50,6 +50,13 @@ class WorkflowStatus(str, Enum):
     REVERTED = "reverted"
 
 
+class ApprovalStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CLARIFICATION_REQUIRED = "CLARIFICATION_REQUIRED"
+
+
 # ── Embedded Sub-Document Schemas ───────────────────────────────────────────
 
 class Address(BaseModel):
@@ -81,15 +88,42 @@ class WorkflowStep(BaseModel):
 # ── Top-Level Beanie Document Collections ───────────────────────────────────
 
 class GovtOrganization(Document):
-    org_id: str = Field(..., description="Unique Org ID, e.g., GOV-MP-AGRI-001")
+    org_id: str = Field(..., description="Unique Org ID / Registration Code, e.g., GOV-MP-AGRI-001")
     org_name: str = Field(..., min_length=2, max_length=200)
     org_type: OrgType
+    department: Optional[str] = None
+    registration_code: Optional[str] = None
     jurisdiction_level: JurisdictionLevel
     state: str
     district: Optional[str] = None
+    block_tehsil: Optional[str] = None
+    village_ward: Optional[str] = None
     headquarters_address: Address
     contact_email: EmailStr
     contact_phone: str = Field(..., pattern=r"^[6-9]\d{9}$")
+
+    # Personnel Details
+    authorized_person_name: Optional[str] = None
+    authorized_person_designation: Optional[str] = None
+    authorized_person_email: Optional[EmailStr] = None
+    authorized_person_phone: Optional[str] = None
+
+    nodal_person_name: Optional[str] = None
+    nodal_person_designation: Optional[str] = None
+    nodal_person_email: Optional[EmailStr] = None
+    nodal_person_phone: Optional[str] = None
+
+    # Documents
+    mou_document_url: Optional[str] = None
+    authority_document_url: Optional[str] = None
+
+    # Approval Workflow & Status
+    approval_status: ApprovalStatus = ApprovalStatus.PENDING
+    status_remarks: Optional[str] = None
+    clarification_notes: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    audit_trail: List[Dict[str, Any]] = Field(default_factory=list)
+
     state_portal_integration_id: Optional[str] = None
     is_active: bool = True
 
@@ -118,6 +152,7 @@ class GovtOrganization(Document):
         name = "govt_organizations"
         indexes = [
             IndexModel([("org_id", ASCENDING)], unique=True),
+            IndexModel([("approval_status", ASCENDING)]),
             IndexModel([("is_deleted", ASCENDING), ("is_active", ASCENDING)]),
             IndexModel([("state", ASCENDING), ("district", ASCENDING)])
         ]

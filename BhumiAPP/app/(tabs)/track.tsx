@@ -8,6 +8,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
 
+import { useAuthStore } from '../../src/store/authStore';
+import { GovtAssetGISView } from '../../src/components/GovtAssetGISView';
+
 const MOCK_LOCATION = {
   latitude: 23.2599,
   longitude: 77.4126, // Bhopal Rural Plot
@@ -28,6 +31,11 @@ const HOME_LOCATION = {
 export default function TrackScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const role = useAuthStore((state) => state.role);
+
+  if (role === 'govt_body') {
+    return <GovtAssetGISView />;
+  }
 
   return (
     <View style={styles.container}>

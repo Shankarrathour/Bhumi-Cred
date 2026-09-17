@@ -22,6 +22,8 @@ from app.routes.admin_notifications import router as admin_notifications_router
 from app.routes.admin_activity_logs import router as admin_activity_logs_router
 from app.routes.admin_roles import router as admin_roles_router
 from app.routes.locations import router as locations_router
+from app.routes.admin_govt import router as admin_govt_router
+from app.routes.govt import router as govt_router
 
 api_router = APIRouter()
 
@@ -29,6 +31,11 @@ api_router = APIRouter()
 api_router.include_router(auth_router)
 api_router.include_router(admin_auth_router)
 api_router.include_router(admin_roles_router)
+api_router.include_router(admin_govt_router)
+api_router.include_router(govt_router, prefix="/govt")
+api_router.include_router(govt_router, prefix="/v1/govt")
+api_router.include_router(govt_router, prefix="/api/v1/govt")
+
 
 # ── Phase 2: Farmer Profile & Onboarding ─────────────────────────────────────
 api_router.include_router(farmer_profile_router)
