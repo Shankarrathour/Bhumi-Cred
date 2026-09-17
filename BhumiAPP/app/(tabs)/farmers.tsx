@@ -16,6 +16,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
 import AppSafeArea from '../../src/components/AppSafeArea';
+import { useAuthStore } from '../../src/store/authStore';
+import { GovtFarmerManagementView } from '../../src/components/GovtFarmerManagementView';
+import { GovtCampaignManagementView } from '../../src/components/GovtCampaignManagementView';
 
 const { width } = Dimensions.get('window');
 
@@ -86,8 +89,65 @@ const MOCK_FARMERS: AssignedFarmer[] = [
 ];
 
 export default function FarmersTabScreen() {
+  const role = useAuthStore((state) => state.role);
+  const [govtSegment, setGovtSegment] = useState<'farmers' | 'campaigns'>('farmers');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFarmer, setSelectedFarmer] = useState<AssignedFarmer | null>(null);
+
+  if (role === 'govt_body') {
+    return (
+      <AppSafeArea edges={['top']}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>Jurisdiction Desk</Text>
+              <Text style={styles.subtitle}>Farmer Management & Outreach Campaigns</Text>
+            </View>
+          </View>
+
+          {/* Segment Switcher Bar */}
+          <View style={govtStyles.segmentContainer}>
+            <TouchableOpacity
+              style={[govtStyles.segmentTab, govtSegment === 'farmers' && govtStyles.segmentTabActive]}
+              onPress={() => setGovtSegment('farmers')}
+            >
+              <MaterialCommunityIcons
+                name="account-group"
+                size={16}
+                color={govtSegment === 'farmers' ? '#FFFFFF' : '#64748B'}
+              />
+              <Text style={[govtStyles.segmentTabText, govtSegment === 'farmers' && govtStyles.segmentTabTextActive]}>
+                Farmers Directory
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[govtStyles.segmentTab, govtSegment === 'campaigns' && govtStyles.segmentTabActive]}
+              onPress={() => setGovtSegment('campaigns')}
+            >
+              <MaterialCommunityIcons
+                name="bullhorn"
+                size={16}
+                color={govtSegment === 'campaigns' ? '#FFFFFF' : '#64748B'}
+              />
+              <Text style={[govtStyles.segmentTabText, govtSegment === 'campaigns' && govtStyles.segmentTabTextActive]}>
+                Outreach Drives
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Render Active View */}
+          {govtSegment === 'farmers' ? (
+            <GovtFarmerManagementView />
+          ) : (
+            <GovtCampaignManagementView />
+          )}
+        </View>
+      </AppSafeArea>
+    );
+  }
 
   const filteredFarmers = MOCK_FARMERS.filter(
     (f) =>
@@ -540,5 +600,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0F172A',
     marginLeft: 10,
+  },
+});
+
+const govtStyles = StyleSheet.create({
+  segmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 4,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  segmentTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  segmentTabActive: {
+    backgroundColor: '#0F766E',
+  },
+  segmentTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  segmentTabTextActive: {
+    color: '#FFFFFF',
   },
 });

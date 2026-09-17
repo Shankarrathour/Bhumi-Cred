@@ -27,6 +27,8 @@ import { useAuthStore } from '../../src/store/authStore';
 import { useLandStore } from '../../src/store/landStore';
 import { useSchemeStore, GovtScheme } from '../../src/store/schemeStore';
 import { useAgriStore } from '../../src/store/agriStore';
+import { GovtTreasuryView } from '../../src/components/GovtTreasuryView';
+import AppSafeArea from '../../src/components/AppSafeArea';
 
 const { width, height } = Dimensions.get('window');
 
@@ -191,6 +193,17 @@ const MAIN_CATEGORIES = [
 
 export default function GovtSchemesDashboard() {
   const router = useRouter();
+
+  // Role check for Government Body
+  const role = useAuthStore((state) => state.role);
+  if (role === 'govt_body') {
+    return (
+      <AppSafeArea edges={['top']}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+        <GovtTreasuryView />
+      </AppSafeArea>
+    );
+  }
 
   // Zustand State hooks
   const authUser = useAuthStore((state) => state.user);

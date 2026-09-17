@@ -31,6 +31,7 @@ import { useInsuranceStore } from '../../src/store/insuranceStore';
 import api from '../../src/api/apiClient';
 import { isFarmerVerified } from '../../src/utils/verificationGuard';
 import { getEnglishApiErrorMessage } from '../../src/utils/apiErrorMessage';
+import { GovtProjectInstallationView } from '../../src/components/GovtProjectInstallationView';
 
 const { width, height } = Dimensions.get('window');
 
@@ -299,6 +300,11 @@ export default function ProjectsScreen() {
   const greenFamily = useInsuranceStore((state) => state.greenFamily);
 
   const authUser = useAuthStore((state) => state.user);
+  const role = useAuthStore((state) => state.role);
+
+  if (role === 'govt_body') {
+    return <GovtProjectInstallationView />;
+  }
 
   // App States
   const [activeTab, setActiveTab] = useState<'projects' | 'lands'>('projects');

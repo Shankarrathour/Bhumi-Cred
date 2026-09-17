@@ -53,7 +53,7 @@ const SEARCH_SUGGESTIONS = [
 ];
 
 export const Header = () => {
-  const { toggleSidebar, collapsed } = useSidebar();
+  const { toggleSidebar, collapsed, isMobile } = useSidebar();
   const [search,            setSearch]          = useState('');
   const [showSearchDrop,    setShowSearchDrop]  = useState(false);
   const [showNotif,         setShowNotif]       = useState(false);
@@ -154,7 +154,7 @@ export const Header = () => {
         </button>
 
         {collapsed && (
-          <BhumiLogo size="sm" showSubtitle={false} className="hidden sm:flex" />
+          <BhumiLogo size="sm" showSubtitle={false} showIcon={isMobile} className="hidden sm:flex" />
         )}
       </div>
 

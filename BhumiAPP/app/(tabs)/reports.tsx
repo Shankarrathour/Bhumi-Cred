@@ -7,6 +7,8 @@ import * as Haptics from 'expo-haptics';
 import { COLORS, TYPOGRAPHY, SHADOWS } from '../../src/theme/theme';
 import { MOCK_REPORTS_DETAILS } from '../../src/mock/reportMockData';
 import { downloadAndShareReportPDF } from '../../src/utils/pdfGenerator';
+import { useAuthStore } from '../../src/store/authStore';
+import { GovtTreeInsuranceView } from '../../src/components/GovtTreeInsuranceView';
 
 const MOCK_REPORTS = [
   {
@@ -32,13 +34,18 @@ const MOCK_REPORTS = [
     status: 'Processing',
     abnormal: false,
     flags: [],
-  }
+  },
 ];
 
 export default function ReportsScreen() {
   const router = useRouter();
+  const role = useAuthStore((state) => state.role);
   const [activeTab, setActiveTab] = useState('all');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  if (role === 'govt_body') {
+    return <GovtTreeInsuranceView />;
+  }
 
   const triggerHaptic = (style: Haptics.ImpactFeedbackStyle) => {
     if (Platform.OS !== 'web') {

@@ -3,6 +3,7 @@ import React from 'react';
 interface BhumiLogoProps {
   showSubtitle?: boolean;
   isCollapsed?: boolean;
+  showIcon?: boolean;
   className?: string;
   size?: 'sm' | 'md' | 'lg';
 }
@@ -57,6 +58,7 @@ export const BhumiTreeEmblem: React.FC<{ className?: string }> = ({ className = 
 export const BhumiLogo: React.FC<BhumiLogoProps> = ({
   showSubtitle = true,
   isCollapsed = false,
+  showIcon = true,
   className = "",
   size = 'md'
 }) => {
@@ -66,7 +68,7 @@ export const BhumiLogo: React.FC<BhumiLogoProps> = ({
 
   return (
     <div className={`flex items-center gap-3 overflow-hidden select-none ${className}`}>
-      <BhumiTreeEmblem className={iconSize} />
+      {showIcon && <BhumiTreeEmblem className={iconSize} />}
       
       {!isCollapsed && (
         <div className="flex flex-col min-w-0">
